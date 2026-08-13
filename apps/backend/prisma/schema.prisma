@@ -1,0 +1,96 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AccountType {
+  CREATOR
+  LEARNER
+  ORGANIZATION
+  PARTNER
+  ADMIN
+}
+
+enum ResourceType {
+  PDF
+  TEMPLATE
+  CONTRACT
+  GUIDE
+  VIDEO
+  PODCAST
+}
+
+model User {
+  id        String          @id @default(cuid())
+  email     String          @unique
+  firstName String
+  lastName  String
+  phone     String?
+  type      AccountType     @default(CREATOR)
+  profile   CreativeProfile?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+}
+
+model CreativeProfile {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  country        String
+  city           String
+  profession     String
+  discipline     String
+  bio            String?
+  portfolioUrl   String?
+  websiteUrl     String?
+  avatarUrl      String?
+  cvUrl          String?
+  memberNumber   String   @unique
+  qrCodeUrl      String?
+  skills         String[] @default([])
+  languages      String[] @default([])
+  availability   String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Event {
+  id               String   @id @default(cuid())
+  title            String
+  slug             String   @unique
+  description      String
+  startsAt         DateTime
+  endsAt           DateTime
+  location         String
+  coverImageUrl    String?
+  whatsappUrl      String?
+  facebookEventUrl String?
+  published        Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model Resource {
+  id          String       @id @default(cuid())
+  title       String
+  description String?
+  type        ResourceType
+  url         String
+  published   Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Partner {
+  id        String   @id @default(cuid())
+  name      String
+  logoUrl   String?
+  website   String?
+  order     Int      @default(0)
+  published Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

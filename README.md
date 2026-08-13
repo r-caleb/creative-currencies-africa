@@ -1,23 +1,47 @@
 # Creative Currencies Africa
 
-Phase 1 public website for Creative Currencies Africa.
+Local monorepo for the Creative Currencies Africa platform.
 
-## Scope
+## Stack
 
-- Premium responsive homepage
-- Dark and light visual modes
-- Hero, vision, teaser, event, creative industries, gallery, community preview, partners and contact sections
-- Client assets stored in `public/assets`
-- Build and rendered HTML tests
+- `apps/frontend`: Next.js public website
+- `apps/backend`: NestJS API
+- Prisma ORM
+- PostgreSQL local database, managed through pgAdmin
+
+## Frontend Architecture
+
+The frontend follows the same shape as `guichet-ressources-numeriques`:
+
+- `apps/frontend/src/app`: Next.js App Router pages and global styles
+- `apps/frontend/src/components`: shared layout and UI components
+- `apps/frontend/public/assets`: public visual assets
+- `@/*`: alias to `apps/frontend/src/*`
+
+## Local Database
+
+Create a PostgreSQL database in pgAdmin, for example:
+
+```text
+creative_currencies
+```
+
+Then copy the backend environment example:
+
+```bash
+cp apps/backend/.env.example apps/backend/.env
+```
+
+Update `DATABASE_URL` with your local PostgreSQL credentials.
 
 ## Commands
 
 ```bash
-npm run dev
-npm run build
-npm test
+npm install
+npm run dev:frontend
+npm run dev:backend
+npm run prisma:generate
+npm run db:migrate
 ```
 
-## Notes
-
-The current implementation is the public-facing foundation. The future community platform can extend this base with member profiles, resources, agenda, certificates, forum and administration modules.
+No Docker setup is required.

@@ -1,0 +1,39 @@
+{
+  "name": "@cca/backend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "prebuild": "prisma generate",
+    "start": "nest start",
+    "start:dev": "nest start --watch",
+    "start:prod": "node dist/src/main",
+    "build": "nest build",
+    "test": "node --test tests/schema.test.mjs",
+    "lint": "eslint src --ext .ts",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
+    "prisma:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@nestjs/common": "11.1.9",
+    "@nestjs/config": "4.0.2",
+    "@nestjs/core": "11.1.9",
+    "@nestjs/platform-express": "11.1.9",
+    "@prisma/adapter-pg": "^7.3.0",
+    "@prisma/client": "^7.3.0",
+    "pg": "^8.18.0",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "11.0.14",
+    "@nestjs/schematics": "11.0.9",
+    "@types/node": "22.19.19",
+    "@types/pg": "^8.15.6",
+    "eslint": "9.39.4",
+    "prisma": "^7.3.0",
+    "source-map-support": "0.5.21",
+    "typescript": "5.9.3"
+  }
+}
