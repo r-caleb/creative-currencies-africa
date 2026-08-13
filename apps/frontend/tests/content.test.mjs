@@ -103,14 +103,16 @@ test("keeps client visual assets available to the frontend", async () => {
 });
 
 test("keeps the approved visual direction on the public page", async () => {
-  const [page, header, footer, styles] = await Promise.all([
+  const [page, layout, header, footer, styles] = await Promise.all([
     readFile(new URL("../src/app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../src/components/cca-header.tsx", import.meta.url), "utf8"),
     readFile(new URL("../src/components/cca-footer.tsx", import.meta.url), "utf8"),
     readFile(new URL("../src/app/globals.css", import.meta.url), "utf8"),
   ]);
 
   assert.match(page, /cca-hero-art\.png/);
+  assert.match(layout, /cca-mask-gold-transparent\.png/);
   assert.match(header, /cca-logo-full-transparent-web\.png/);
   assert.match(footer, /cca-logo-full-transparent-web\.png/);
   assert.match(footer, /footer-art/);

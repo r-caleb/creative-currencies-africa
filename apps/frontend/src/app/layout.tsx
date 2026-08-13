@@ -8,8 +8,8 @@ export const metadata: Metadata = {
   description:
     "Plateforme éducative et communautaire dédiée aux industries créatives africaines.",
   icons: {
-    icon: "/assets/cca-mask-gold.jpg",
-    shortcut: "/assets/cca-mask-gold.jpg",
+    icon: "/assets/cca-mask-gold-transparent.png",
+    shortcut: "/assets/cca-mask-gold-transparent.png",
   },
   openGraph: {
     title: "Creative Currencies Africa",
