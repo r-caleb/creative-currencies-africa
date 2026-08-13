@@ -145,11 +145,11 @@ img {
 .brand-lockup {
   display: inline-flex;
   align-items: center;
-  width: 198px;
+  width: 212px;
 }
 
 .brand-lockup img {
-  width: 190px;
+  width: 204px;
   height: auto;
   object-fit: contain;
 }
@@ -2046,11 +2046,11 @@ html[data-theme="dark"] .partner-logo-card {
   }
 
   .brand-lockup {
-    width: 146px;
+    width: 154px;
   }
 
   .brand-lockup img {
-    width: 140px;
+    width: 148px;
   }
 
   .header-actions {

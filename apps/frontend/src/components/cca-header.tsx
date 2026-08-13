@@ -3,7 +3,9 @@
 import { Menu, Moon, Sun, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
-const themeStorageKey = "cca-theme-v2";
+type Theme = "dark" | "light";
+
+const themeStorageKey = "cca-theme-v3";
 
 const navItems = [
   { label: "Accueil", href: "#accueil" },
@@ -15,7 +17,8 @@ const navItems = [
 ];
 
 export function CcaHeader() {
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [theme, setTheme] = useState<Theme>("dark");
+  const [isThemeReady, setIsThemeReady] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [activeSection, setActiveSection] = useState(navItems[0].href);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -26,19 +29,49 @@ export function CcaHeader() {
 
     if (requestedTheme === "dark" || requestedTheme === "light") {
       setTheme(requestedTheme);
+      setIsThemeReady(true);
       return;
     }
 
     const stored = window.localStorage.getItem(themeStorageKey);
     if (stored === "dark" || stored === "light") {
       setTheme(stored);
+      setIsThemeReady(true);
+      return;
     }
+
+    const systemThemeQuery = window.matchMedia("(prefers-color-scheme: light)");
+    const updateThemeFromSystem = (event?: MediaQueryListEvent) => {
+      const currentStored = window.localStorage.getItem(themeStorageKey);
+
+      if (currentStored === "dark" || currentStored === "light") {
+        return;
+      }
+
+      setTheme((event?.matches ?? systemThemeQuery.matches) ? "light" : "dark");
+    };
+
+    updateThemeFromSystem();
+    setIsThemeReady(true);
+    systemThemeQuery.addEventListener("change", updateThemeFromSystem);
+
+    return () => systemThemeQuery.removeEventListener("change", updateThemeFromSystem);
   }, []);
 
   useEffect(() => {
+    if (!isThemeReady) {
+      return;
+    }
+
     document.documentElement.dataset.theme = theme;
-    window.localStorage.setItem(themeStorageKey, theme);
-  }, [theme]);
+  }, [isThemeReady, theme]);
+
+  const toggleTheme = () => {
+    const nextTheme = theme === "dark" ? "light" : "dark";
+
+    setTheme(nextTheme);
+    window.localStorage.setItem(themeStorageKey, nextTheme);
+  };
 
   useEffect(() => {
     document.body.classList.toggle("is-mobile-menu-open", isMobileMenuOpen);
@@ -96,7 +129,7 @@ export function CcaHeader() {
         aria-label="Creative Currencies Africa"
         onClick={() => setIsMobileMenuOpen(false)}
       >
-        <img src="/assets/cca-logo-full-transparent.png" alt="Creative Currencies Africa" />
+        <img src="/assets/cca-logo-full-transparent-web.png" alt="Creative Currencies Africa" />
       </a>
 
       <nav className="desktop-nav" aria-label="Sections">
@@ -118,7 +151,7 @@ export function CcaHeader() {
           type="button"
           aria-label={`Activer le mode ${theme === "dark" ? "clair" : "sombre"}`}
           aria-pressed={theme === "light"}
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          onClick={toggleTheme}
         >
           {theme === "dark" ? (
             <Sun aria-hidden="true" strokeWidth={1.8} />
@@ -173,7 +206,7 @@ export function CcaHeader() {
             type="button"
             aria-label={`Activer le mode ${theme === "dark" ? "clair" : "sombre"}`}
             aria-pressed={theme === "light"}
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            onClick={toggleTheme}
           >
             {theme === "dark" ? (
               <Sun aria-hidden="true" strokeWidth={1.8} />

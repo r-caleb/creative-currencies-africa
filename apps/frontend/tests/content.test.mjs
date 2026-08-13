@@ -59,6 +59,7 @@ test("keeps client visual assets available to the frontend", async () => {
   await Promise.all([
     access(new URL("../public/assets/cca-hero-art.png", import.meta.url)),
     access(new URL("../public/assets/cca-logo-full-transparent.png", import.meta.url)),
+    access(new URL("../public/assets/cca-logo-full-transparent-web.png", import.meta.url)),
     access(new URL("../public/assets/cca-logo-transparent.png", import.meta.url)),
     access(new URL("../public/assets/cca-mask-transparent.png", import.meta.url)),
     access(new URL("../public/assets/cca-mask-gold-transparent.png", import.meta.url)),
@@ -110,8 +111,8 @@ test("keeps the approved visual direction on the public page", async () => {
   ]);
 
   assert.match(page, /cca-hero-art\.png/);
-  assert.match(header, /cca-logo-full-transparent\.png/);
-  assert.match(footer, /cca-logo-full-transparent\.png/);
+  assert.match(header, /cca-logo-full-transparent-web\.png/);
+  assert.match(footer, /cca-logo-full-transparent-web\.png/);
   assert.match(footer, /footer-art/);
   assert.match(styles, /\.hero-media img/);
   assert.match(styles, /\.about-section/);

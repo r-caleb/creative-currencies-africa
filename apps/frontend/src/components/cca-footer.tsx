@@ -5,7 +5,7 @@ export function CcaFooter() {
     <footer className="footer-band">
       <div className="site-footer">
         <div className="footer-brand">
-          <img src="/assets/cca-logo-full-transparent.png" alt="Creative Currencies Africa" />
+          <img src="/assets/cca-logo-full-transparent-web.png" alt="Creative Currencies Africa" />
           <p>
             La plateforme qui valorise, connecte et propulse les créateurs africains
             à l'échelle mondiale.
