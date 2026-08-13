@@ -176,11 +176,11 @@ img {
 }
 
 :root[data-theme="light"] .desktop-nav a {
-  color: rgba(24, 17, 10, 0.82);
+  color: rgba(255, 248, 235, 0.9);
 }
 
 :root[data-theme="light"] .desktop-nav a:hover {
-  color: var(--purple);
+  color: var(--gold-soft);
 }
 
 .desktop-nav a.is-active,
@@ -190,6 +190,16 @@ img {
 
 :root[data-theme="light"] .desktop-nav a.is-active,
 :root[data-theme="light"] .desktop-nav a:hover {
+  color: var(--gold-soft);
+}
+
+:root[data-theme="light"] .site-header.is-scrolled .desktop-nav a {
+  color: rgba(24, 17, 10, 0.82);
+  text-shadow: none;
+}
+
+:root[data-theme="light"] .site-header.is-scrolled .desktop-nav a.is-active,
+:root[data-theme="light"] .site-header.is-scrolled .desktop-nav a:hover {
   color: var(--purple);
 }
 
@@ -217,6 +227,37 @@ img {
 
 :root[data-theme="light"] .desktop-nav a::after {
   background: linear-gradient(90deg, var(--purple), var(--gold-soft), transparent);
+}
+
+:root[data-theme="light"] .site-header:not(.is-scrolled) .desktop-nav a::after {
+  background: linear-gradient(90deg, var(--gold), rgba(216, 180, 254, 0.7), transparent);
+}
+
+html[data-theme="light"] .site-header:not(.is-scrolled) .desktop-nav a {
+  color: rgba(255, 248, 235, 0.96) !important;
+  text-shadow: none;
+}
+
+html[data-theme="light"] .site-header:not(.is-scrolled) .desktop-nav a.is-active,
+html[data-theme="light"] .site-header:not(.is-scrolled) .desktop-nav a:hover {
+  color: var(--purple) !important;
+}
+
+html[data-theme="light"] .site-header.is-scrolled .desktop-nav a {
+  color: rgba(24, 17, 10, 0.82) !important;
+  text-shadow: none;
+}
+
+html[data-theme="light"] .site-header.is-scrolled .desktop-nav a.is-active,
+html[data-theme="light"] .site-header.is-scrolled .desktop-nav a:hover {
+  color: var(--purple) !important;
+}
+
+html[data-theme="light"] .site-header.is-scrolled .desktop-nav a.is-active::after,
+html[data-theme="light"] .site-header.is-scrolled .desktop-nav a:hover::after {
+  opacity: 1;
+  background: linear-gradient(90deg, var(--purple), var(--gold-soft), transparent);
+  transform: scaleX(1);
 }
 
 .header-actions {
