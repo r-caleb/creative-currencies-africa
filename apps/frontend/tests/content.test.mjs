@@ -43,16 +43,65 @@ test("keeps the Creative Currencies Africa landing page content", async () => {
 });
 
 test("keeps shared frontend layout components in src", async () => {
-  const [layout, header, footer] = await Promise.all([
+  const [layout, chrome, header, footer] = await Promise.all([
     readFile(new URL("../src/app/layout.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/site-chrome.tsx", import.meta.url), "utf8"),
     readFile(new URL("../src/components/cca-header.tsx", import.meta.url), "utf8"),
     readFile(new URL("../src/components/cca-footer.tsx", import.meta.url), "utf8"),
   ]);
 
-  assert.match(layout, /@\/components\/cca-header/);
-  assert.match(layout, /@\/components\/cca-footer/);
+  assert.match(layout, /@\/components\/site-chrome/);
+  assert.match(chrome, /@\/components\/cca-header/);
+  assert.match(chrome, /@\/components\/cca-footer/);
+  assert.match(chrome, /authPathPrefixes/);
   assert.match(header, /cca-theme/);
   assert.match(footer, /Creative Currencies Africa/);
+});
+
+test("keeps the auth and registration entry points available", async () => {
+  const [login, register, registerType, forgot, otp, reset, authUi, wizard] = await Promise.all([
+    readFile(new URL("../src/app/connexion/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/app/inscription/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/app/inscription/[type]/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/app/mot-de-passe-oublie/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/app/verification-otp/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/app/reinitialisation-mot-de-passe/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/auth-ui.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/registration-wizard.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(login, /Accédez à votre espace Creative Currencies/);
+  assert.match(register, /Choisissez votre type de compte/);
+  assert.match(registerType, /Creative ID/);
+  assert.match(forgot, /Recevez un code de vérification/);
+  assert.match(otp, /Vérifiez votre adresse e-mail/);
+  assert.match(reset, /Réinitialisez votre mot de passe/);
+  assert.match(authUi, /Créateur/);
+  assert.match(authUi, /Apprenant/);
+  assert.match(authUi, /Organisation/);
+  assert.match(authUi, /Partenaire/);
+  assert.match(wizard, /Profil Creative ID/);
+  assert.match(wizard, /Autre/);
+  assert.match(wizard, /Objectif d'apprentissage/);
+  assert.match(wizard, /Type de partenaire/);
+});
+
+test("keeps the member dashboard preview coherent", async () => {
+  const [dashboardPage, redirectPage, dashboard, chrome] = await Promise.all([
+    readFile(new URL("../src/app/espace-membre/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/app/dashboard/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/member-dashboard.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/site-chrome.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(dashboardPage, /MemberDashboard/);
+  assert.match(redirectPage, /\/espace-membre/);
+  assert.match(chrome, /\/espace-membre/);
+  assert.match(dashboard, /Community Platform/);
+  assert.match(dashboard, /Creative ID/);
+  assert.match(dashboard, /Opportunités pour vous/);
+  assert.match(dashboard, /Ressources récentes/);
+  assert.match(dashboard, /data-dashboard-theme/);
 });
 
 test("keeps client visual assets available to the frontend", async () => {

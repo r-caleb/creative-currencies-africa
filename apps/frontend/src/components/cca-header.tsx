@@ -159,10 +159,10 @@ export function CcaHeader() {
             <Moon aria-hidden="true" strokeWidth={1.8} />
           )}
         </button>
-        <a className="button button-ghost login-preview header-glass-action" href="#">
+        <a className="button button-ghost login-preview header-glass-action" href="/connexion">
           Se connecter
         </a>
-        <a className="button button-gold header-join-action" href="#communaute">
+        <a className="button button-gold header-join-action" href="/inscription">
           Nous rejoindre
         </a>
         <button
@@ -215,10 +215,10 @@ export function CcaHeader() {
             )}
             <span>{theme === "dark" ? "Mode clair" : "Mode sombre"}</span>
           </button>
-          <a className="button button-ghost" href="#" onClick={() => setIsMobileMenuOpen(false)}>
+          <a className="button button-ghost" href="/connexion" onClick={() => setIsMobileMenuOpen(false)}>
             Se connecter
           </a>
-          <a className="button button-gold" href="#communaute" onClick={() => setIsMobileMenuOpen(false)}>
+          <a className="button button-gold" href="/inscription" onClick={() => setIsMobileMenuOpen(false)}>
             Nous rejoindre
           </a>
         </div>

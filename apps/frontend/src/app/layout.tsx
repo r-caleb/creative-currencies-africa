@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { CcaFooter } from "@/components/cca-footer";
-import { CcaHeader } from "@/components/cca-header";
+import { SiteChrome } from "@/components/site-chrome";
 
 export const metadata: Metadata = {
   title: "Creative Currencies Africa",
@@ -27,9 +26,7 @@ export default function RootLayout({
   return (
     <html lang="fr">
       <body>
-        <CcaHeader />
-        {children}
-        <CcaFooter />
+        <SiteChrome>{children}</SiteChrome>
       </body>
     </html>
   );
