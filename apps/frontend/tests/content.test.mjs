@@ -87,21 +87,86 @@ test("keeps the auth and registration entry points available", async () => {
 });
 
 test("keeps the member dashboard preview coherent", async () => {
-  const [dashboardPage, redirectPage, dashboard, chrome] = await Promise.all([
+  const [
+    dashboardPage,
+    redirectPage,
+    creativeIdPage,
+    trainingsPage,
+    opportunitiesPage,
+    resourcesPage,
+    agendaPage,
+    certificatesPage,
+    settingsPage,
+    dashboard,
+    memberShell,
+    creativeId,
+    trainings,
+    opportunities,
+    resources,
+    agenda,
+    certificates,
+    settings,
+    chrome,
+  ] = await Promise.all([
     readFile(new URL("../src/app/espace-membre/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../src/app/dashboard/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/app/espace-membre/creative-id/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/app/espace-membre/formations/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/app/espace-membre/opportunites/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/app/espace-membre/ressources/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/app/espace-membre/agenda/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/app/espace-membre/certificats/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/app/espace-membre/parametres/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../src/components/member-dashboard.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/member-shell.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/creative-id-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/trainings-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/opportunities-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/resources-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/agenda-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/certificates-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/settings-page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../src/components/site-chrome.tsx", import.meta.url), "utf8"),
   ]);
 
   assert.match(dashboardPage, /MemberDashboard/);
   assert.match(redirectPage, /\/espace-membre/);
+  assert.match(creativeIdPage, /CreativeIdPage/);
+  assert.match(trainingsPage, /TrainingsPage/);
+  assert.match(opportunitiesPage, /OpportunitiesPage/);
+  assert.match(resourcesPage, /ResourcesPage/);
+  assert.match(agendaPage, /AgendaPage/);
+  assert.match(certificatesPage, /CertificatesPage/);
+  assert.match(settingsPage, /SettingsPage/);
   assert.match(chrome, /\/espace-membre/);
-  assert.match(dashboard, /Community Platform/);
+  assert.match(memberShell, /Community Platform/);
+  assert.match(memberShell, /\/espace-membre\/formations/);
+  assert.match(memberShell, /\/espace-membre\/opportunites/);
+  assert.match(memberShell, /\/espace-membre\/ressources/);
+  assert.match(memberShell, /\/espace-membre\/agenda/);
+  assert.match(memberShell, /\/espace-membre\/certificats/);
+  assert.match(memberShell, /\/espace-membre\/parametres/);
+  assert.match(memberShell, /data-dashboard-theme/);
   assert.match(dashboard, /Creative ID/);
   assert.match(dashboard, /Opportunités pour vous/);
   assert.match(dashboard, /Ressources récentes/);
-  assert.match(dashboard, /data-dashboard-theme/);
+  assert.match(creativeId, /Carte partageable/);
+  assert.match(creativeId, /Portfolio/);
+  assert.match(creativeId, /Compétences & domaines/);
+  assert.match(trainings, /Formation officielle en cours/);
+  assert.match(trainings, /Journée de formation Creative Currencies 2026/);
+  assert.match(trainings, /Certificat après validation/);
+  assert.match(opportunities, /Recommandées pour vous/);
+  assert.match(opportunities, /Africa Design Fund/);
+  assert.match(opportunities, /Mes candidatures/);
+  assert.match(resources, /Ressources récentes/);
+  assert.match(resources, /Template portfolio créatif/);
+  assert.match(agenda, /Prochains rendez-vous/);
+  assert.match(agenda, /Formation officielle Creative Currencies Africa/);
+  assert.match(certificates, /Mes certificats/);
+  assert.match(certificates, /Badges visibles/);
+  assert.match(settings, /Informations du compte/);
+  assert.match(settings, /Préférences/);
 });
 
 test("keeps client visual assets available to the frontend", async () => {

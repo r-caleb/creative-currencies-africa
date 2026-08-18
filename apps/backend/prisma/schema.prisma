@@ -14,6 +14,37 @@ enum AccountType {
   ADMIN
 }
 
+enum AccountStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum AuthProvider {
+  GOOGLE
+  APPLE
+  FACEBOOK
+}
+
+enum VerificationPurpose {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
+enum Gender {
+  FEMALE
+  MALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
+enum ProfileVisibility {
+  PRIVATE
+  MEMBERS
+  PUBLIC
+}
+
 enum ResourceType {
   PDF
   TEMPLATE
@@ -23,65 +54,482 @@ enum ResourceType {
   PODCAST
 }
 
+enum ResourceAccessLevel {
+  PUBLIC
+  MEMBERS
+  ENROLLED
+  ADMIN_ONLY
+}
+
+enum TrainingStatus {
+  DRAFT
+  PUBLISHED
+  COMPLETED
+  ARCHIVED
+}
+
+enum EnrollmentStatus {
+  ENROLLED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum OpportunityType {
+  CONTEST
+  RESIDENCY
+  MISSION
+  FUNDING
+  CASTING
+  FESTIVAL
+  TRAINING
+}
+
+enum OpportunityStatus {
+  DRAFT
+  OPEN
+  CLOSED
+  ARCHIVED
+}
+
+enum ApplicationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  SELECTED
+  REJECTED
+  WITHDRAWN
+}
+
+enum EventType {
+  WORKSHOP
+  MASTERCLASS
+  CONFERENCE
+  PANEL
+  ACTIVATION
+  VISIT
+  FESTIVAL
+}
+
+enum EventRegistrationStatus {
+  REGISTERED
+  ATTENDED
+  CANCELLED
+}
+
+enum CertificateStatus {
+  PENDING
+  ISSUED
+  REVOKED
+}
+
+enum NotificationType {
+  SYSTEM
+  TRAINING
+  OPPORTUNITY
+  CERTIFICATE
+  MESSAGE
+}
+
 model User {
-  id        String          @id @default(cuid())
-  email     String          @unique
-  firstName String
-  lastName  String
-  phone     String?
-  type      AccountType     @default(CREATOR)
-  profile   CreativeProfile?
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
+  id              String        @id @default(cuid())
+  email           String        @unique
+  passwordHash    String?
+  firstName       String
+  lastName        String
+  phone           String?
+  type            AccountType   @default(LEARNER)
+  status          AccountStatus @default(PENDING)
+  emailVerifiedAt DateTime?
+
+  sessions                AuthSession[]
+  identities              UserIdentity[]
+  verificationTokens      VerificationToken[]
+  profile                 CreativeProfile?
+  organizationProfile     OrganizationProfile?
+  partnerProfile          PartnerProfile?
+  portfolioItems          PortfolioItem[]
+  enrollments             TrainingEnrollment[]
+  opportunityApplications OpportunityApplication[]
+  eventRegistrations      EventRegistration[]
+  certificates            Certificate[]
+  uploadedResources       Resource[]               @relation("ResourceUploader")
+  notifications           Notification[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model AuthSession {
+  id     String @id @default(cuid())
+  userId String
+
+  refreshTokenHash String
+  previousHash     String?
+  rotatedAt        DateTime?
+  deviceId         String?
+  userAgent        String?
+  ip               String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([revokedAt])
+  @@index([expiresAt])
+}
+
+model UserIdentity {
+  id     String @id @default(cuid())
+  userId String
+
+  provider       AuthProvider
+  providerUserId String
+
+  providerEmail         String?
+  providerEmailVerified Boolean @default(false)
+  providerDisplayName   String?
+  providerPhotoUrl      String?
+
+  linkedAt   DateTime  @default(now())
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUserId], name: "user_identity_provider_provider_user_id_unique")
+  @@unique([userId, provider], name: "user_identity_user_provider_unique")
+  @@index([userId])
+  @@index([provider, providerEmail])
+}
+
+model VerificationToken {
+  id     String  @id @default(cuid())
+  userId String?
+  email  String
+
+  purpose     VerificationPurpose
+  tokenHash   String
+  attempts    Int                 @default(0)
+  maxAttempts Int                 @default(5)
+  expiresAt   DateTime
+  consumedAt  DateTime?
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email, purpose])
+  @@index([expiresAt])
+  @@index([consumedAt])
 }
 
 model CreativeProfile {
-  id             String   @id @default(cuid())
-  userId         String   @unique
-  country        String
-  city           String
-  profession     String
-  discipline     String
-  bio            String?
-  portfolioUrl   String?
-  websiteUrl     String?
-  avatarUrl      String?
-  cvUrl          String?
-  memberNumber   String   @unique
-  qrCodeUrl      String?
-  skills         String[] @default([])
-  languages      String[] @default([])
-  availability   String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                String            @id @default(cuid())
+  userId            String            @unique
+  publicName        String?
+  country           String
+  city              String
+  profession        String?
+  birthDate         DateTime?
+  gender            Gender?
+  discipline        String
+  otherDiscipline   String?
+  bio               String?
+  portfolioUrl      String?
+  websiteUrl        String?
+  avatarUrl         String?
+  // CV optionnel du créatif, utile pour les appels à projets, résidences et candidatures.
+  cvUrl             String?
+  memberNumber      String            @unique
+  qrCodeUrl         String?
+  skills            String[]          @default([])
+  languages         String[]          @default([])
+  availability      String?
+  visibility        ProfileVisibility @default(MEMBERS)
+  profileCompletion Int               @default(0)
+  verifiedAt        DateTime?
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  socialLinks SocialLink[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([country, city])
+  @@index([discipline])
+  @@index([visibility])
+}
+
+model OrganizationProfile {
+  id          String    @id @default(cuid())
+  userId      String    @unique
+  name        String
+  legalName   String?
+  sector      String?
+  country     String
+  city        String
+  websiteUrl  String?
+  description String?
+  verifiedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PartnerProfile {
+  id          String    @id @default(cuid())
+  userId      String    @unique
+  name        String
+  partnerType String
+  country     String
+  city        String?
+  websiteUrl  String?
+  description String?
+  verifiedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SocialLink {
+  id        String @id @default(cuid())
+  profileId String
+  network   String
+  url       String
+
+  profile CreativeProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([profileId, network])
+}
+
+model PortfolioItem {
+  id          String  @id @default(cuid())
+  userId      String
+  title       String
+  description String?
+  category    String
+  mediaUrl    String?
+  externalUrl String?
+  year        Int?
+  featured    Boolean @default(false)
+  order       Int     @default(0)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([category])
+}
+
+model Training {
+  id                 String         @id @default(cuid())
+  title              String
+  slug               String         @unique
+  description        String
+  startsAt           DateTime?
+  endsAt             DateTime?
+  location           String?
+  coverImageUrl      String?
+  capacity           Int?
+  priceCents         Int?
+  currency           String         @default("USD")
+  status             TrainingStatus @default(DRAFT)
+  certificateEnabled Boolean        @default(true)
+
+  modules      TrainingModule[]
+  enrollments  TrainingEnrollment[]
+  resources    Resource[]
+  certificates Certificate[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([startsAt])
+}
+
+model TrainingModule {
+  id          String    @id @default(cuid())
+  trainingId  String
+  title       String
+  description String?
+  order       Int       @default(0)
+  startsAt    DateTime?
+  endsAt      DateTime?
+
+  training Training @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([trainingId])
+}
+
+model TrainingEnrollment {
+  id          String           @id @default(cuid())
+  trainingId  String
+  userId      String
+  status      EnrollmentStatus @default(ENROLLED)
+  progress    Int              @default(0)
+  enrolledAt  DateTime         @default(now())
+  completedAt DateTime?
+
+  training Training @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([trainingId, userId])
+  @@index([userId])
+  @@index([status])
+}
+
+model Resource {
+  id           String              @id @default(cuid())
+  title        String
+  description  String?
+  type         ResourceType
+  url          String
+  accessLevel  ResourceAccessLevel @default(MEMBERS)
+  published    Boolean             @default(false)
+  trainingId   String?
+  uploadedById String?
+
+  training   Training? @relation(fields: [trainingId], references: [id], onDelete: SetNull)
+  uploadedBy User?     @relation("ResourceUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type])
+  @@index([accessLevel])
+  @@index([published])
+  @@index([trainingId])
+}
+
+model Opportunity {
+  id             String            @id @default(cuid())
+  title          String
+  slug           String            @unique
+  description    String
+  type           OpportunityType
+  status         OpportunityStatus @default(DRAFT)
+  deadline       DateTime?
+  location       String?
+  eligibilityUrl String?
+  published      Boolean           @default(false)
+
+  applications OpportunityApplication[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type])
+  @@index([status])
+  @@index([deadline])
+  @@index([published])
+}
+
+model OpportunityApplication {
+  id            String            @id @default(cuid())
+  opportunityId String
+  userId        String
+  status        ApplicationStatus @default(DRAFT)
+  motivation    String?
+  portfolioUrl  String?
+  submittedAt   DateTime?
+  reviewedAt    DateTime?
+  adminNote     String?
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([opportunityId, userId])
+  @@index([userId])
+  @@index([status])
 }
 
 model Event {
-  id               String   @id @default(cuid())
+  id               String    @id @default(cuid())
   title            String
-  slug             String   @unique
+  slug             String    @unique
   description      String
+  type             EventType @default(WORKSHOP)
   startsAt         DateTime
   endsAt           DateTime
   location         String
   coverImageUrl    String?
   whatsappUrl      String?
   facebookEventUrl String?
-  published        Boolean  @default(false)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  published        Boolean   @default(false)
+
+  registrations EventRegistration[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type])
+  @@index([startsAt])
+  @@index([published])
 }
 
-model Resource {
-  id          String       @id @default(cuid())
-  title       String
-  description String?
-  type        ResourceType
-  url         String
-  published   Boolean      @default(false)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+model EventRegistration {
+  id           String                  @id @default(cuid())
+  eventId      String
+  userId       String
+  status       EventRegistrationStatus @default(REGISTERED)
+  registeredAt DateTime                @default(now())
+  attendedAt   DateTime?
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([userId])
+  @@index([status])
+}
+
+model Certificate {
+  id         String            @id @default(cuid())
+  userId     String
+  trainingId String?
+  title      String
+  number     String            @unique
+  status     CertificateStatus @default(PENDING)
+  issuedAt   DateTime?
+  expiresAt  DateTime?
+  fileUrl    String?
+  badgeUrl   String?
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  training Training? @relation(fields: [trainingId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([trainingId])
+  @@index([status])
 }
 
 model Partner {
@@ -93,4 +541,25 @@ model Partner {
   published Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([published])
+  @@index([order])
+}
+
+model Notification {
+  id      String           @id @default(cuid())
+  userId  String
+  type    NotificationType @default(SYSTEM)
+  title   String
+  message String
+  href    String?
+  readAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([readAt])
+  @@index([createdAt])
 }

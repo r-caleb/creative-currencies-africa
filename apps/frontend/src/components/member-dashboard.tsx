@@ -1,50 +1,17 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import type { LucideIcon } from "lucide-react";
 import {
   ArrowRight,
   Bell,
   BookOpen,
-  CalendarDays,
   CheckCircle2,
-  ChevronDown,
   FileBadge,
   FileText,
   GraduationCap,
-  Home,
   Lightbulb,
-  LogOut,
-  MessageCircle,
-  Moon,
-  Network,
   Palette,
-  Plus,
-  Search,
-  Settings,
-  ShieldCheck,
-  Sparkles,
-  Sun,
   Target,
   UsersRound,
 } from "lucide-react";
-
-type DashboardTheme = "dark" | "light";
-
-const dashboardThemeKey = "cca-dashboard-theme-v1";
-
-const sidebarItems: Array<{ label: string; icon: LucideIcon; active?: boolean; badge?: string }> = [
-  { label: "Accueil", icon: Home, active: true },
-  { label: "Creative ID", icon: FileBadge },
-  { label: "Réseau", icon: Network },
-  { label: "Messages", icon: MessageCircle, badge: "3" },
-  { label: "Groupes", icon: UsersRound },
-  { label: "Opportunités", icon: Lightbulb },
-  { label: "Ressources", icon: BookOpen },
-  { label: "Agenda", icon: CalendarDays },
-  { label: "Certificats", icon: ShieldCheck },
-  { label: "Paramètres", icon: Settings },
-];
+import { MemberShell } from "@/components/member-shell";
 
 const profileTasks = [
   { label: "Ajouter votre portfolio", state: "Prioritaire", done: false },
@@ -85,95 +52,8 @@ const stats = [
 ];
 
 export function MemberDashboard() {
-  const [theme, setTheme] = useState<DashboardTheme>("dark");
-
-  useEffect(() => {
-    const storedTheme = window.localStorage.getItem(dashboardThemeKey);
-
-    if (storedTheme === "dark" || storedTheme === "light") {
-      setTheme(storedTheme);
-      return;
-    }
-
-    setTheme(window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
-  }, []);
-
-  const toggleTheme = () => {
-    const nextTheme = theme === "dark" ? "light" : "dark";
-    setTheme(nextTheme);
-    window.localStorage.setItem(dashboardThemeKey, nextTheme);
-  };
-
   return (
-    <main className="member-shell" data-dashboard-theme={theme}>
-      <aside className="member-sidebar" aria-label="Navigation espace membre">
-        <a className="member-brand" href="/#accueil" aria-label="Creative Currencies Africa">
-          <img src="/assets/cca-logo-full-transparent-web.png" alt="Creative Currencies Africa" />
-        </a>
-
-        <nav className="member-nav">
-          {sidebarItems.map((item) => {
-            const Icon = item.icon;
-
-            return (
-              <a key={item.label} className={item.active ? "is-active" : undefined} href="#">
-                <Icon aria-hidden="true" strokeWidth={1.8} />
-                <span>{item.label}</span>
-                {item.badge ? <strong>{item.badge}</strong> : null}
-              </a>
-            );
-          })}
-        </nav>
-
-        <div className="member-premium-card">
-          <Sparkles aria-hidden="true" strokeWidth={1.7} />
-          <strong>Complétez votre Creative ID</strong>
-          <span>Un profil précis permet d’être recommandé pour les formations, missions et collaborations.</span>
-          <button type="button">Continuer</button>
-        </div>
-      </aside>
-
-      <section className="member-main">
-        <header className="member-topbar">
-          <div>
-            <strong>Community Platform</strong>
-            <span>Connecter · Collaborer · Créer · Impacter</span>
-          </div>
-
-          <label className="member-search">
-            <Search aria-hidden="true" strokeWidth={1.8} />
-            <input placeholder="Rechercher des créateurs, publications, opportunités..." />
-          </label>
-
-          <div className="member-actions">
-            <button className="member-create-button" type="button">
-              <Plus aria-hidden="true" strokeWidth={1.8} />
-              Publier
-            </button>
-            <button
-              className="member-icon-button"
-              type="button"
-              aria-label={`Activer le mode ${theme === "dark" ? "clair" : "sombre"}`}
-              aria-pressed={theme === "light"}
-              onClick={toggleTheme}
-            >
-              {theme === "dark" ? <Sun aria-hidden="true" strokeWidth={1.8} /> : <Moon aria-hidden="true" strokeWidth={1.8} />}
-            </button>
-            <button className="member-icon-button" type="button" aria-label="Notifications">
-              <Bell aria-hidden="true" strokeWidth={1.8} />
-              <span />
-            </button>
-            <button className="member-profile-chip" type="button">
-              <img src="/assets/cca-hero-art.png" alt="" />
-              <span>
-                Nathan LEKA
-                <small>@nathleka</small>
-              </span>
-              <ChevronDown aria-hidden="true" strokeWidth={1.8} />
-            </button>
-          </div>
-        </header>
-
+    <MemberShell activeItem="Accueil">
         <div className="member-dashboard-grid">
           <section className="member-primary-column" aria-label="Tableau de bord membre">
             <section className="member-hero-card">
@@ -189,7 +69,7 @@ export function MemberDashboard() {
                     Compléter mon profil
                     <ArrowRight aria-hidden="true" strokeWidth={1.8} />
                   </button>
-                  <button className="member-secondary-button" type="button">Voir mon Creative ID</button>
+                  <a className="member-secondary-button" href="/espace-membre/creative-id">Voir mon Creative ID</a>
                 </div>
               </div>
               <div className="member-identity-card">
@@ -336,12 +216,6 @@ export function MemberDashboard() {
             </section>
           </aside>
         </div>
-      </section>
-
-      <button className="member-logout" type="button">
-        <LogOut aria-hidden="true" strokeWidth={1.8} />
-        Sortie démo
-      </button>
-    </main>
+    </MemberShell>
   );
 }
