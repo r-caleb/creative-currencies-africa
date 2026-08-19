@@ -164,7 +164,7 @@ export class VerificationService {
   }
 
   private otpExpiresInMinutes() {
-    return Number(this.config.get<string>("EMAIL_VERIFICATION_OTP_TTL_MINUTES") ?? "15");
+    return Number(this.config.get<string>("EMAIL_VERIFICATION_OTP_TTL_MINUTES") ?? "5");
   }
 
   private maxAttempts() {

@@ -101,10 +101,23 @@ export function AuthBackLink({ href = "/connexion" }: { href?: string }) {
   );
 }
 
+export function AuthFieldLabel({ label, required }: { label: string; required?: boolean }) {
+  return (
+    <span className="auth-field-label">
+      {label}
+      {required ? (
+        <span className="auth-required-star" aria-label="obligatoire">
+          *
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 export function AuthInput({ label, icon: Icon = Mail, actionIcon, ...props }: AuthInputProps) {
   return (
     <label className="auth-field">
-      <span>{label}</span>
+      <AuthFieldLabel label={label} required={props.required} />
       <span className="auth-input-wrap">
         <Icon className="auth-input-icon" aria-hidden={true} strokeWidth={1.7} />
         <input {...props} />

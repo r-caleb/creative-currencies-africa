@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { SiteChrome } from "@/components/site-chrome";
+import { StoreProvider } from "@/store/provider";
 
 export const metadata: Metadata = {
   title: "Creative Currencies Africa",
@@ -26,7 +27,9 @@ export default function RootLayout({
   return (
     <html lang="fr">
       <body>
-        <SiteChrome>{children}</SiteChrome>
+        <StoreProvider>
+          <SiteChrome>{children}</SiteChrome>
+        </StoreProvider>
       </body>
     </html>
   );

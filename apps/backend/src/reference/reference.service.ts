@@ -29,18 +29,21 @@ export class ReferenceService {
 
   getDisciplines() {
     return [
-      "Mode",
-      "Photographie",
-      "Stylisme",
-      "Cinéma et vidéo",
-      "Musique",
-      "Arts visuels",
-      "Design graphique",
-      "Architecture",
-      "Littérature",
-      "Danse",
-      "Théâtre",
+      "Mode, couture & stylisme",
+      "Beauté, coiffure & esthétique",
       "Artisanat",
+      "Arts visuels",
+      "Photographie",
+      "Cinéma & audiovisuel",
+      "Musique",
+      "Arts de la scène",
+      "Danse",
+      "Écriture & littérature",
+      "Design & graphisme",
+      "Architecture & scénographie",
+      "Patrimoine & culture",
+      "Arts numériques",
+      "Communication & médias",
       "Autre",
     ];
   }

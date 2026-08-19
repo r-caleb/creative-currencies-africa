@@ -59,12 +59,13 @@ test("keeps shared frontend layout components in src", async () => {
 });
 
 test("keeps the auth and registration entry points available", async () => {
-  const [login, register, registerType, forgot, otp, reset, authUi, wizard] = await Promise.all([
+  const [login, register, registerType, forgot, otp, otpClient, reset, authUi, wizard] = await Promise.all([
     readFile(new URL("../src/app/connexion/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../src/app/inscription/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../src/app/inscription/[type]/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../src/app/mot-de-passe-oublie/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../src/app/verification-otp/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/verification-otp-client.tsx", import.meta.url), "utf8"),
     readFile(new URL("../src/app/reinitialisation-mot-de-passe/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../src/components/auth-ui.tsx", import.meta.url), "utf8"),
     readFile(new URL("../src/components/registration-wizard.tsx", import.meta.url), "utf8"),
@@ -74,14 +75,46 @@ test("keeps the auth and registration entry points available", async () => {
   assert.match(register, /Choisissez votre type de compte/);
   assert.match(registerType, /Creative ID/);
   assert.match(forgot, /Recevez un code de vérification/);
-  assert.match(otp, /Vérifiez votre adresse e-mail/);
+  assert.match(otp, /VerificationOtpClient/);
+  assert.match(otpClient, /Vérifiez votre adresse e-mail/);
+  assert.match(otpClient, /verifyEmail/);
+  assert.match(otpClient, /resendVerification/);
+  assert.match(otpClient, /onBeforeInput/);
+  assert.match(otpClient, /onPaste/);
+  assert.match(otpClient, /onKeyDown/);
+  assert.match(otpClient, /autoFocus/);
   assert.match(reset, /Réinitialisez votre mot de passe/);
   assert.match(authUi, /Créateur/);
   assert.match(authUi, /Apprenant/);
   assert.match(authUi, /Organisation/);
   assert.match(authUi, /Partenaire/);
   assert.match(wizard, /Profil Creative ID/);
+  assert.match(wizard, /registerMember/);
+  assert.match(wizard, /verification-otp/);
+  assert.match(wizard, /useAppDispatch/);
+  assert.match(wizard, /setPendingVerification/);
+  assert.match(wizard, /Mode, couture & stylisme/);
+  assert.match(wizard, /Beauté, coiffure & esthétique/);
+  assert.match(wizard, /getCountryCallingCode/);
+  assert.match(wizard, /CountryInput/);
+  assert.match(wizard, /PhoneInput/);
+  assert.match(wizard, /CountryPickerModal/);
+  assert.match(wizard, /LanguageMultiSelect/);
+  assert.match(wizard, /avatarFile/);
+  assert.match(wizard, /updateAvatarFile/);
+  assert.match(wizard, /Ajouter un logo/);
+  assert.match(wizard, /Ajouter une photo/);
+  assert.match(wizard, /Rechercher un pays/);
+  assert.match(wizard, /Rechercher une langue/);
+  assert.match(wizard, /Congo RDC/);
+  assert.match(wizard, /Lingala/);
+  assert.match(wizard, /Tshiluba/);
+  assert.match(wizard, /Artisanat/);
+  assert.match(wizard, /Arts visuels/);
+  assert.match(wizard, /Design & graphisme/);
+  assert.match(wizard, /Arts numériques/);
   assert.match(wizard, /Autre/);
+  assert.doesNotMatch(wizard, /Questions\/réponses/);
   assert.match(wizard, /Objectif d'apprentissage/);
   assert.match(wizard, /Type de partenaire/);
 });

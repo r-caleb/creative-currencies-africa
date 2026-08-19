@@ -63,6 +63,7 @@ test("keeps backend bootstrap aligned with the frontend and API contract", async
     emailService,
     memberController,
     referenceController,
+    referenceService,
   ] =
     await Promise.all([
     readFile(new URL("../src/main.ts", import.meta.url), "utf8"),
@@ -75,6 +76,7 @@ test("keeps backend bootstrap aligned with the frontend and API contract", async
     readFile(new URL("../src/email/email.service.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/member/member.controller.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/reference/reference.controller.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/reference/reference.service.ts", import.meta.url), "utf8"),
   ]);
 
   assert.match(main, /setGlobalPrefix\("api"\)/);
@@ -114,6 +116,14 @@ test("keeps backend bootstrap aligned with the frontend and API contract", async
   assert.match(referenceController, /@Controller\("reference"\)/);
   assert.match(referenceController, /@Get\("disciplines"\)/);
   assert.match(referenceController, /@Get\("onboarding-fields"\)/);
+  assert.match(referenceService, /Arts numériques/);
+  assert.match(referenceService, /Mode, couture & stylisme/);
+  assert.match(referenceService, /Beauté, coiffure & esthétique/);
+  assert.match(referenceService, /Artisanat/);
+  assert.match(referenceService, /Arts visuels/);
+  assert.match(referenceService, /Design & graphisme/);
+  assert.match(referenceService, /Autre/);
+  assert.doesNotMatch(referenceService, /Questions\/réponses/);
   assert.match(envExample, /creative_currencies/);
   assert.match(envExample, /https:\/\/\*\.vercel\.app/);
   assert.match(envExample, /JWT_ACCESS_SECRET/);
