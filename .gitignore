@@ -41,9 +41,14 @@ yarn-error.log*
 
 # typescript
 next-env.d.ts
+*.tsbuildinfo
 /dist/
 **/dist/
 /.wrangler/
 /outputs/
 /work/
 .turbo
+
+# local uploaded files
+uploads/
+**/uploads/

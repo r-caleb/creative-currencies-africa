@@ -7,6 +7,7 @@ datasource db {
 }
 
 enum AccountType {
+  PUBLIC
   CREATOR
   LEARNER
   ORGANIZATION
@@ -131,6 +132,90 @@ enum NotificationType {
   MESSAGE
 }
 
+enum PublicationType {
+  PROJECT
+  CREATION
+  QUESTION
+  COLLABORATION
+  OPPORTUNITY
+  JOB
+  RESOURCE
+  GROUP_DISCUSSION
+  TRAINING
+  EVENT
+  ANNOUNCEMENT
+}
+
+enum PublicationStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+  REJECTED
+}
+
+enum PublicationAudience {
+  PRIVATE
+  MEMBERS
+  PUBLIC
+  GROUP
+}
+
+enum PublicationAttachmentType {
+  IMAGE
+  VIDEO
+  PDF
+  DOCUMENT
+  LINK
+  OTHER
+}
+
+enum PublicationReactionType {
+  LIKE
+  SUPPORT
+  SAVE
+}
+
+enum CommunityGroupStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum CommunityGroupVisibility {
+  MEMBERS
+  PUBLIC
+  PRIVATE
+}
+
+enum CommunityGroupRole {
+  OWNER
+  MODERATOR
+  MEMBER
+}
+
+enum CommunityGroupInvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELLED
+}
+
+enum CommunityGroupMessageType {
+  TEXT
+  FILE
+  SYSTEM
+}
+
+enum NetworkConnectionKind {
+  CONNECTION
+  FOLLOW
+}
+
+enum NetworkConnectionStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
 model User {
   id              String        @id @default(cuid())
   email           String        @unique
@@ -142,19 +227,32 @@ model User {
   status          AccountStatus @default(PENDING)
   emailVerifiedAt DateTime?
 
-  sessions                AuthSession[]
-  identities              UserIdentity[]
-  verificationTokens      VerificationToken[]
-  profile                 CreativeProfile?
-  organizationProfile     OrganizationProfile?
-  partnerProfile          PartnerProfile?
-  portfolioItems          PortfolioItem[]
-  enrollments             TrainingEnrollment[]
-  opportunityApplications OpportunityApplication[]
-  eventRegistrations      EventRegistration[]
-  certificates            Certificate[]
-  uploadedResources       Resource[]               @relation("ResourceUploader")
-  notifications           Notification[]
+  sessions                      AuthSession[]
+  identities                    UserIdentity[]
+  verificationTokens            VerificationToken[]
+  profile                       CreativeProfile?
+  organizationProfile           OrganizationProfile?
+  partnerProfile                PartnerProfile?
+  portfolioItems                PortfolioItem[]
+  enrollments                   TrainingEnrollment[]
+  opportunityApplications       OpportunityApplication[]
+  eventRegistrations            EventRegistration[]
+  certificates                  Certificate[]
+  uploadedResources             Resource[]                 @relation("ResourceUploader")
+  notifications                 Notification[]
+  publications                  Publication[]              @relation("PublicationAuthor")
+  publicationComments           PublicationComment[]
+  publicationReactions          PublicationReaction[]
+  networkConnections            NetworkConnection[]        @relation("NetworkConnectionOwner")
+  networkSavedBy                NetworkConnection[]        @relation("NetworkConnectionMember")
+  communityGroupsOwned          CommunityGroup[]           @relation("CommunityGroupOwner")
+  communityGroupMemberships     CommunityGroupMembership[]
+  communityGroupMessages        CommunityGroupMessage[]
+  communityGroupInvitesSent     CommunityGroupInvitation[] @relation("CommunityGroupInvitationInviter")
+  communityGroupInvitesReceived CommunityGroupInvitation[] @relation("CommunityGroupInvitationInvitee")
+  directConversationsCreated    DirectConversation[]       @relation("DirectConversationCreator")
+  directConversationMemberships DirectConversationParticipant[]
+  directMessages                DirectMessage[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -234,6 +332,18 @@ model VerificationToken {
   @@index([consumedAt])
 }
 
+model Discipline {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  slug      String   @unique
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive, sortOrder])
+}
+
 model CreativeProfile {
   id                String            @id @default(cuid())
   userId            String            @unique
@@ -280,6 +390,7 @@ model OrganizationProfile {
   country     String
   city        String
   websiteUrl  String?
+  logoUrl     String?
   description String?
   verifiedAt  DateTime?
 
@@ -297,6 +408,7 @@ model PartnerProfile {
   country     String
   city        String?
   websiteUrl  String?
+  logoUrl     String?
   description String?
   verifiedAt  DateTime?
 
@@ -562,4 +674,282 @@ model Notification {
   @@index([userId])
   @@index([readAt])
   @@index([createdAt])
+}
+
+model NetworkConnection {
+  id          String                  @id @default(cuid())
+  ownerId     String
+  memberId    String
+  kind        NetworkConnectionKind   @default(CONNECTION)
+  status      NetworkConnectionStatus @default(ACCEPTED)
+  note        String?
+  respondedAt DateTime?
+
+  owner  User @relation("NetworkConnectionOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  member User @relation("NetworkConnectionMember", fields: [memberId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([ownerId, memberId])
+  @@index([ownerId])
+  @@index([memberId])
+  @@index([kind])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model DirectConversation {
+  id             String @id @default(cuid())
+  participantKey String @unique
+  createdById    String?
+  lastMessageAt  DateTime @default(now())
+
+  createdBy    User?                           @relation("DirectConversationCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  participants DirectConversationParticipant[]
+  messages     DirectMessage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdById])
+  @@index([lastMessageAt])
+  @@index([createdAt])
+}
+
+model DirectConversationParticipant {
+  id             String @id @default(cuid())
+  conversationId String
+  userId         String
+  lastReadAt     DateTime?
+  archivedAt     DateTime?
+
+  conversation DirectConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+  @@index([lastReadAt])
+}
+
+model DirectMessage {
+  id                 String @id @default(cuid())
+  conversationId     String
+  authorId           String
+  content            String
+  attachmentUrl      String?
+  attachmentName     String?
+  attachmentMimeType String?
+  editedAt           DateTime?
+  deletedAt          DateTime?
+
+  conversation DirectConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  author       User               @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([conversationId, createdAt])
+  @@index([authorId])
+  @@index([deletedAt])
+}
+
+model Publication {
+  id       String @id @default(cuid())
+  authorId String
+
+  type     PublicationType
+  status   PublicationStatus   @default(DRAFT)
+  audience PublicationAudience @default(MEMBERS)
+
+  title   String
+  content String
+  excerpt String?
+
+  category            String?
+  discipline          String?
+  country             String?
+  city                String?
+  tags                String[] @default([])
+  routingDestinations String[] @default([])
+
+  linkUrl             String?
+  coverImageUrl       String?
+  groupId             String?
+  opportunityDeadline DateTime?
+  opportunityLocation String?
+  budgetRange         String?
+  contactEmail        String?
+
+  publishedAt DateTime?
+  expiresAt   DateTime?
+
+  author      User                    @relation("PublicationAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  attachments PublicationAttachment[]
+  comments    PublicationComment[]
+  reactions   PublicationReaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([authorId])
+  @@index([type])
+  @@index([status])
+  @@index([audience])
+  @@index([category])
+  @@index([publishedAt])
+  @@index([createdAt])
+}
+
+model PublicationAttachment {
+  id            String                    @id @default(cuid())
+  publicationId String
+  type          PublicationAttachmentType @default(OTHER)
+  url           String
+  name          String?
+  mimeType      String?
+  sizeBytes     Int?
+  order         Int                       @default(0)
+
+  publication Publication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([publicationId])
+  @@index([type])
+}
+
+model PublicationComment {
+  id            String  @id @default(cuid())
+  publicationId String
+  authorId      String
+  parentId      String?
+  content       String
+
+  publication Publication          @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+  author      User                 @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent      PublicationComment?  @relation("PublicationCommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies     PublicationComment[] @relation("PublicationCommentReplies")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([publicationId])
+  @@index([authorId])
+  @@index([parentId])
+  @@index([createdAt])
+}
+
+model PublicationReaction {
+  id            String                  @id @default(cuid())
+  publicationId String
+  userId        String
+  type          PublicationReactionType @default(LIKE)
+
+  publication Publication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([publicationId, userId, type])
+  @@index([publicationId])
+  @@index([userId])
+  @@index([type])
+}
+
+model CommunityGroup {
+  id          String                   @id @default(cuid())
+  ownerId     String
+  name        String
+  slug        String                   @unique
+  category    String
+  description String
+  avatarUrl   String?
+  city        String?
+  country     String?
+  tags        String[]                 @default([])
+  visibility  CommunityGroupVisibility @default(MEMBERS)
+  status      CommunityGroupStatus     @default(ACTIVE)
+
+  owner       User                       @relation("CommunityGroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  memberships CommunityGroupMembership[]
+  messages    CommunityGroupMessage[]
+  invitations CommunityGroupInvitation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
+  @@index([status])
+  @@index([category])
+  @@index([city])
+  @@index([createdAt])
+}
+
+model CommunityGroupMembership {
+  id         String             @id @default(cuid())
+  groupId    String
+  userId     String
+  role       CommunityGroupRole @default(MEMBER)
+  lastReadAt DateTime?
+
+  group CommunityGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  joinedAt DateTime @default(now())
+
+  @@unique([groupId, userId])
+  @@index([userId])
+  @@index([role])
+  @@index([lastReadAt])
+}
+
+model CommunityGroupInvitation {
+  id        String                         @id @default(cuid())
+  groupId   String
+  inviterId String
+  inviteeId String
+  role      CommunityGroupRole             @default(MEMBER)
+  status    CommunityGroupInvitationStatus @default(PENDING)
+  message   String?
+
+  group   CommunityGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  inviter User           @relation("CommunityGroupInvitationInviter", fields: [inviterId], references: [id], onDelete: Cascade)
+  invitee User           @relation("CommunityGroupInvitationInvitee", fields: [inviteeId], references: [id], onDelete: Cascade)
+
+  respondedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([groupId])
+  @@index([inviteeId, status])
+  @@index([inviterId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model CommunityGroupMessage {
+  id                 String                    @id @default(cuid())
+  groupId            String
+  authorId           String
+  type               CommunityGroupMessageType @default(TEXT)
+  content            String
+  attachmentUrl      String?
+  attachmentName     String?
+  attachmentMimeType String?
+  editedAt           DateTime?
+  deletedAt          DateTime?
+
+  group  CommunityGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  author User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([groupId, createdAt])
+  @@index([authorId])
+  @@index([deletedAt])
 }

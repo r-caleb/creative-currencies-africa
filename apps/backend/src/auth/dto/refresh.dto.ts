@@ -3,6 +3,6 @@ import { IsString } from "class-validator";
 
 export class RefreshDto {
   @ApiProperty({ example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." })
-  @IsString()
+  @IsString({ message: "Votre connexion n'est plus valide. Connectez-vous à nouveau." })
   refreshToken!: string;
 }

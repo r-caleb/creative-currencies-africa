@@ -74,7 +74,7 @@ export class VerificationService {
     });
 
     if (!user) {
-      throw new BadRequestException("Aucun compte en attente ne correspond à cette adresse e-mail");
+      throw new BadRequestException("Aucun compte à vérifier n'a été trouvé avec cette adresse e-mail.");
     }
 
     if (user.emailVerifiedAt || user.status === AccountStatus.ACTIVE) {
@@ -93,10 +93,72 @@ export class VerificationService {
     });
 
     if (lastToken && Date.now() - lastToken.createdAt.getTime() < this.resendCooldownMs()) {
-      throw this.tooManyRequests("Veuillez patienter avant de demander un nouveau code");
+      throw this.tooManyRequests("Trop de codes demandés. Veuillez patienter avant de demander un nouveau code.");
     }
 
     return this.sendEmailVerificationCode(user);
+  }
+
+  async sendPasswordResetCode(user: {
+    id: string;
+    email: string;
+    firstName: string;
+  }) {
+    const lastToken = await this.prisma.verificationToken.findFirst({
+      where: {
+        userId: user.id,
+        email: user.email,
+        purpose: VerificationPurpose.PASSWORD_RESET,
+        consumedAt: null,
+      },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true },
+    });
+
+    if (lastToken && Date.now() - lastToken.createdAt.getTime() < this.passwordResetCooldownMs()) {
+      throw this.tooManyRequests("Trop de codes demandés. Veuillez patienter avant de demander un nouveau code.");
+    }
+
+    const code = this.generateOtpCode();
+    const tokenHash = await argon2.hash(code, { type: argon2.argon2id });
+    const expiresInMinutes = this.passwordResetExpiresInMinutes();
+    const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.verificationToken.updateMany({
+        where: {
+          userId: user.id,
+          email: user.email,
+          purpose: VerificationPurpose.PASSWORD_RESET,
+          consumedAt: null,
+        },
+        data: { consumedAt: new Date() },
+      });
+
+      await tx.verificationToken.create({
+        data: {
+          userId: user.id,
+          email: user.email,
+          purpose: VerificationPurpose.PASSWORD_RESET,
+          tokenHash,
+          expiresAt,
+          maxAttempts: this.passwordResetMaxAttempts(),
+        },
+      });
+    });
+
+    await this.email.sendPasswordResetCode({
+      to: user.email,
+      firstName: user.firstName,
+      code,
+      expiresInMinutes,
+    });
+
+    return { expiresAt };
+  }
+
+  passwordResetFallbackExpiresAt() {
+    return new Date(Date.now() + this.passwordResetExpiresInMinutes() * 60 * 1000);
   }
 
   async verifyEmailCode(email: string, code: string) {
@@ -111,7 +173,7 @@ export class VerificationService {
     });
 
     if (!token || !token.user) {
-      throw new BadRequestException("Code de vérification invalide");
+      throw new BadRequestException("Le code saisi est incorrect.");
     }
 
     const tokenUser = token.user;
@@ -121,11 +183,11 @@ export class VerificationService {
         where: { id: token.id },
         data: { consumedAt: new Date() },
       });
-      throw new BadRequestException("Code de vérification expiré");
+      throw new BadRequestException("Ce code a expiré. Demandez un nouveau code pour continuer.");
     }
 
     if (token.attempts >= token.maxAttempts) {
-      throw this.tooManyRequests("Nombre maximal de tentatives atteint");
+      throw this.tooManyRequests("Trop de tentatives. Demandez un nouveau code pour continuer.");
     }
 
     const valid = await argon2.verify(token.tokenHash, code);
@@ -138,7 +200,7 @@ export class VerificationService {
           consumedAt: nextAttempts >= token.maxAttempts ? new Date() : null,
         },
       });
-      throw new BadRequestException("Code de vérification invalide");
+      throw new BadRequestException("Le code saisi est incorrect.");
     }
 
     const user = await this.prisma.$transaction(async (tx) => {
@@ -159,6 +221,64 @@ export class VerificationService {
     return user;
   }
 
+  async verifyPasswordResetCode(email: string, code: string) {
+    const token = await this.assertPasswordResetCode(email, code);
+
+    await this.prisma.verificationToken.update({
+      where: { id: token.id },
+      data: { consumedAt: new Date() },
+    });
+
+    return token.user;
+  }
+
+  async checkPasswordResetCode(email: string, code: string) {
+    await this.assertPasswordResetCode(email, code);
+  }
+
+  private async assertPasswordResetCode(email: string, code: string) {
+    const token = await this.prisma.verificationToken.findFirst({
+      where: {
+        email,
+        purpose: VerificationPurpose.PASSWORD_RESET,
+        consumedAt: null,
+      },
+      orderBy: { createdAt: "desc" },
+      include: { user: true },
+    });
+
+    if (!token || !token.user || token.user.status !== AccountStatus.ACTIVE) {
+      throw new BadRequestException("Le code saisi est incorrect ou n'est plus valide.");
+    }
+
+    if (token.expiresAt <= new Date()) {
+      await this.prisma.verificationToken.update({
+        where: { id: token.id },
+        data: { consumedAt: new Date() },
+      });
+      throw new BadRequestException("Ce code a expiré. Demandez un nouveau code pour continuer.");
+    }
+
+    if (token.attempts >= token.maxAttempts) {
+      throw this.tooManyRequests("Trop de tentatives. Demandez un nouveau code pour continuer.");
+    }
+
+    const valid = await argon2.verify(token.tokenHash, code);
+    if (!valid) {
+      const nextAttempts = token.attempts + 1;
+      await this.prisma.verificationToken.update({
+        where: { id: token.id },
+        data: {
+          attempts: nextAttempts,
+          consumedAt: nextAttempts >= token.maxAttempts ? new Date() : null,
+        },
+      });
+      throw new BadRequestException("Le code saisi est incorrect ou n'est plus valide.");
+    }
+
+    return { ...token, user: token.user };
+  }
+
   private generateOtpCode() {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
@@ -171,8 +291,20 @@ export class VerificationService {
     return Number(this.config.get<string>("EMAIL_VERIFICATION_MAX_ATTEMPTS") ?? "5");
   }
 
+  private passwordResetExpiresInMinutes() {
+    return Number(this.config.get<string>("PASSWORD_RESET_OTP_TTL_MINUTES") ?? "5");
+  }
+
+  private passwordResetMaxAttempts() {
+    return Number(this.config.get<string>("PASSWORD_RESET_MAX_ATTEMPTS") ?? "5");
+  }
+
   private resendCooldownMs() {
     return Number(this.config.get<string>("EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS") ?? "60") * 1000;
+  }
+
+  private passwordResetCooldownMs() {
+    return Number(this.config.get<string>("PASSWORD_RESET_RESEND_COOLDOWN_SECONDS") ?? "60") * 1000;
   }
 
   private tooManyRequests(message: string) {

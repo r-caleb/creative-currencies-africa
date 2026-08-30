@@ -5,7 +5,7 @@ export default function RegisterPage() {
   return (
     <main className="auth-choice-page">
       <div className="auth-choice-brand">
-        <Link href="/#accueil" aria-label="Retour à Creative Currencies Africa">
+        <Link href="/connexion" aria-label="Retour à la connexion Creative Currencies Africa">
           <img src="/assets/cca-logo-full-transparent-web.png" alt="Creative Currencies Africa" />
         </Link>
       </div>

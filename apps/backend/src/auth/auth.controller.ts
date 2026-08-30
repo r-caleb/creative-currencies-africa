@@ -11,17 +11,23 @@ import {
 import { AuthService } from "./auth.service";
 import {
   AuthResponseDto,
+  ForgotPasswordResponseDto,
   LogoutResponseDto,
   RefreshResponseDto,
   RegistrationPendingResponseDto,
   ResendVerificationResponseDto,
+  ResetPasswordResponseDto,
+  VerifyPasswordResetCodeResponseDto,
 } from "./dto/auth-response.dto";
+import { ForgotPasswordDto } from "./dto/forgot-password.dto";
 import { LoginDto } from "./dto/login.dto";
 import { LogoutDto } from "./dto/logout.dto";
 import { RefreshDto } from "./dto/refresh.dto";
 import { RegisterDto } from "./dto/register.dto";
 import { ResendVerificationDto } from "./dto/resend-verification.dto";
+import { ResetPasswordDto } from "./dto/reset-password.dto";
 import { VerifyEmailDto } from "./dto/verify-email.dto";
+import { VerifyPasswordResetCodeDto } from "./dto/verify-password-reset-code.dto";
 import { JwtAuthGuard } from "./jwt-auth.guard";
 import type { AuthUser } from "./auth.types";
 
@@ -62,19 +68,46 @@ export class AuthController {
     return this.auth.resendVerification(body);
   }
 
+  @Post("forgot-password")
+  @HttpCode(200)
+  @ApiOperation({ summary: "Demander un code OTP de réinitialisation du mot de passe" })
+  @ApiBody({ type: ForgotPasswordDto })
+  @ApiOkResponse({ type: ForgotPasswordResponseDto })
+  forgotPassword(@Body() body: ForgotPasswordDto) {
+    return this.auth.forgotPassword(body);
+  }
+
+  @Post("reset-password")
+  @HttpCode(200)
+  @ApiOperation({ summary: "Réinitialiser le mot de passe avec un code OTP" })
+  @ApiBody({ type: ResetPasswordDto })
+  @ApiOkResponse({ type: ResetPasswordResponseDto })
+  resetPassword(@Body() body: ResetPasswordDto) {
+    return this.auth.resetPassword(body);
+  }
+
+  @Post("verify-password-reset-code")
+  @HttpCode(200)
+  @ApiOperation({ summary: "Vérifier le code OTP avant de choisir un nouveau mot de passe" })
+  @ApiBody({ type: VerifyPasswordResetCodeDto })
+  @ApiOkResponse({ type: VerifyPasswordResetCodeResponseDto })
+  verifyPasswordResetCode(@Body() body: VerifyPasswordResetCodeDto) {
+    return this.auth.verifyPasswordResetCode(body);
+  }
+
   @Post("login")
   @HttpCode(200)
   @ApiOperation({ summary: "Se connecter avec l'adresse e-mail et le mot de passe" })
   @ApiBody({ type: LoginDto })
   @ApiOkResponse({ type: AuthResponseDto })
-  @ApiUnauthorizedResponse({ description: "Identifiants invalides" })
+  @ApiUnauthorizedResponse({ description: "Email ou mot de passe incorrect." })
   login(@Req() req: AuthedRequest, @Body() body: LoginDto) {
     return this.auth.login(body, this.requestMeta(req));
   }
 
   @Post("refresh")
   @HttpCode(200)
-  @ApiOperation({ summary: "Rafraîchir l'access token avec rotation du refresh token" })
+  @ApiOperation({ summary: "Renouveler la session de l'utilisateur connecté" })
   @ApiBody({ type: RefreshDto })
   @ApiOkResponse({ type: RefreshResponseDto })
   refresh(@Req() req: AuthedRequest, @Body() body: RefreshDto) {
@@ -83,7 +116,7 @@ export class AuthController {
 
   @Post("logout")
   @HttpCode(200)
-  @ApiOperation({ summary: "Révoquer la session liée au refresh token" })
+  @ApiOperation({ summary: "Déconnecter l'utilisateur" })
   @ApiBody({ type: LogoutDto })
   @ApiOkResponse({ type: LogoutResponseDto })
   logout(@Body() body: LogoutDto) {

@@ -32,7 +32,14 @@ import {
   Mail,
   PasswordEye,
 } from "@/components/auth-ui";
-import { registerMember } from "@/lib/api";
+import { getApiErrorMessage, registerMember } from "@/lib/api";
+import { useReferenceDisciplines } from "@/hooks/use-reference-disciplines";
+import { getPasswordValidationMessage } from "@/lib/password-validation";
+import {
+  formatCustomLanguage,
+  normalizeProfileOption,
+  profileLanguageOptions,
+} from "@/lib/profile-options";
 import { useAppDispatch } from "@/store/hooks";
 import { setPendingVerification, setRegistrationAccountType } from "@/store/slices/registration-slice";
 
@@ -100,10 +107,10 @@ const initialForm: FormState = {
 };
 
 const accountTypeBySlug: Record<string, string> = {
+  public: "PUBLIC",
   createur: "CREATOR",
   apprenant: "LEARNER",
   organisation: "ORGANIZATION",
-  partenaire: "PARTNER",
 };
 
 const genderByLabel: Record<string, string> = {
@@ -111,58 +118,6 @@ const genderByLabel: Record<string, string> = {
   Masculin: "MALE",
   "Préfère ne pas répondre": "PREFER_NOT_TO_SAY",
 };
-
-const disciplines = [
-  "Mode, couture & stylisme",
-  "Beauté, coiffure & esthétique",
-  "Artisanat",
-  "Arts visuels",
-  "Photographie",
-  "Cinéma & audiovisuel",
-  "Musique",
-  "Arts de la scène",
-  "Danse",
-  "Écriture & littérature",
-  "Design & graphisme",
-  "Architecture & scénographie",
-  "Patrimoine & culture",
-  "Arts numériques",
-  "Communication & médias",
-  "Autre",
-];
-
-const languageOptions = [
-  "Français",
-  "Lingala",
-  "Swahili",
-  "Kikongo",
-  "Tshiluba",
-  "Anglais",
-  "Portugais",
-  "Arabe",
-  "Espagnol",
-  "Italien",
-  "Allemand",
-  "Néerlandais",
-  "Yoruba",
-  "Hausa",
-  "Wolof",
-  "Bambara",
-  "Amharique",
-  "Kinyarwanda",
-  "Kirundi",
-  "Luganda",
-  "Malagasy",
-  "Somali",
-  "Afrikaans",
-  "Zulu",
-  "Xhosa",
-  "Mandarin",
-  "Hindi",
-  "Turc",
-  "Russe",
-  "Autre",
-];
 
 const regionDisplayNames = new Intl.DisplayNames(["fr"], { type: "region" });
 
@@ -208,6 +163,19 @@ function countryFlag(code: CountryCode) {
 }
 
 const profileConfigs = {
+  public: {
+    professionLabel: "Centre d'intérêt",
+    professionPlaceholder: "Mode, musique, cinéma, photographie...",
+    disciplineLabel: "Domaine qui vous intéresse",
+    statusLabel: "Usage principal",
+    statusOptions: ["Découvrir", "Participer", "Suivre les opportunités", "Trouver des talents"],
+    availabilityLabel: "Disponibilité",
+    availabilityOptions: ["Disponible", "Selon opportunité", "À définir"],
+    bioLabel: "Présentation courte",
+    bioPlaceholder: "Présentez brièvement ce qui vous amène sur Creative Currencies Africa.",
+    skillsLabel: "Centres d'intérêt",
+    skillsPlaceholder: "Expositions, formations, événements, collaborations...",
+  },
   createur: {
     professionLabel: "Profession ou métier créatif",
     professionPlaceholder: "Styliste, photographe, réalisateur...",
@@ -263,6 +231,16 @@ const profileConfigs = {
 };
 
 const presenceConfigs = {
+  public: {
+    portfolioLabel: "Lien utile",
+    portfolioPlaceholder: "Lien vers une page, un profil ou une référence...",
+    websiteLabel: "Site ou page personnelle",
+    websitePlaceholder: "https://...",
+    instagramLabel: "Instagram",
+    instagramPlaceholder: "@votrecompte",
+    linkedinLabel: "LinkedIn",
+    linkedinPlaceholder: "Lien de profil",
+  },
   createur: {
     portfolioLabel: "Portfolio",
     portfolioPlaceholder: "Lien Behance, Drive, book PDF...",
@@ -307,14 +285,17 @@ const presenceConfigs = {
 
 const steps = [
   {
+    key: "identity",
     title: "Informations personnelles",
     description: "Les informations nécessaires pour créer votre compte membre.",
   },
   {
+    key: "profile",
     title: "Profil Creative ID",
     description: "Les éléments qui décrivent votre activité et votre univers créatif.",
   },
   {
+    key: "presence",
     title: "Présence & confirmation",
     description: "Ajoutez vos liens publics ou complétez-les plus tard.",
   },
@@ -546,22 +527,22 @@ function LanguageMultiSelect({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const selectedKeys = new Set(value.map(normalizeOption));
-  const optionKeys = new Set(languageOptions.map(normalizeOption));
-  const normalizedQuery = normalizeOption(query);
-  const filteredLanguages = languageOptions.filter((language) => {
-    return !selectedKeys.has(normalizeOption(language)) && normalizeOption(language).includes(normalizedQuery);
+  const selectedKeys = new Set(value.map(normalizeProfileOption));
+  const optionKeys = new Set(profileLanguageOptions.map(normalizeProfileOption));
+  const normalizedQuery = normalizeProfileOption(query);
+  const filteredLanguages = profileLanguageOptions.filter((language) => {
+    return !selectedKeys.has(normalizeProfileOption(language)) && normalizeProfileOption(language).includes(normalizedQuery);
   });
   const trimmedQuery = query.trim();
   const canAddCustom =
     trimmedQuery.length > 0 &&
-    !selectedKeys.has(normalizeOption(trimmedQuery)) &&
-    !optionKeys.has(normalizeOption(trimmedQuery));
+    !selectedKeys.has(normalizeProfileOption(trimmedQuery)) &&
+    !optionKeys.has(normalizeProfileOption(trimmedQuery));
 
   const addLanguage = (language: string) => {
     const nextLanguage = formatCustomLanguage(language);
 
-    if (!nextLanguage || selectedKeys.has(normalizeOption(nextLanguage))) {
+    if (!nextLanguage || selectedKeys.has(normalizeProfileOption(nextLanguage))) {
       return;
     }
 
@@ -570,7 +551,7 @@ function LanguageMultiSelect({
   };
 
   const removeLanguage = (language: string) => {
-    onChange(value.filter((item) => normalizeOption(item) !== normalizeOption(language)));
+    onChange(value.filter((item) => normalizeProfileOption(item) !== normalizeProfileOption(language)));
   };
 
   return (
@@ -696,11 +677,15 @@ export function RegistrationWizard({ account }: RegistrationWizardProps) {
   const avatarPreviewUrlRef = useRef("");
   const profileConfig = profileConfigs[account.slug as keyof typeof profileConfigs] ?? profileConfigs.createur;
   const presenceConfig = presenceConfigs[account.slug as keyof typeof presenceConfigs] ?? presenceConfigs.createur;
-  const isOrganizationProfile = account.slug === "organisation" || account.slug === "partenaire";
+  const isPublicProfile = account.slug === "public";
+  const activeSteps = isPublicProfile ? steps.filter((item) => item.key !== "profile") : steps;
+  const currentStep = activeSteps[step] ?? activeSteps[0];
+  const isOrganizationProfile = account.slug === "organisation";
   const avatarUploadLabel = isOrganizationProfile ? "Ajouter un logo" : "Ajouter une photo";
   const AvatarUploadIcon = isOrganizationProfile ? BriefcaseBusiness : ImagePlus;
+  const disciplineOptions = useReferenceDisciplines();
 
-  const goNext = () => setStep((current) => Math.min(current + 1, steps.length - 1));
+  const goNext = () => setStep((current) => Math.min(current + 1, activeSteps.length - 1));
   const goBack = () => setStep((current) => Math.max(current - 1, 0));
   const phoneCountry = countries.find((country) => country.code === form.phoneCountryCode);
 
@@ -767,8 +752,19 @@ export function RegistrationWizard({ account }: RegistrationWizardProps) {
   const submitRegistration = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (step < steps.length - 1) {
+    const passwordError = getPasswordValidationMessage(form.password);
+    if (step === 0 && passwordError) {
+      setError(passwordError);
+      return;
+    }
+
+    if (step < activeSteps.length - 1) {
       goNext();
+      return;
+    }
+
+    if (passwordError) {
+      setError(passwordError);
       return;
     }
 
@@ -808,12 +804,6 @@ export function RegistrationWizard({ account }: RegistrationWizardProps) {
       payload.organizationDescription = form.bio || undefined;
     }
 
-    if (account.slug === "partenaire") {
-      payload.partnerName = form.lastName;
-      payload.partnerType = form.profession;
-      payload.partnerDescription = form.bio || undefined;
-    }
-
     try {
       const response = await registerMember(payload);
       dispatch(setRegistrationAccountType(account.slug));
@@ -822,7 +812,7 @@ export function RegistrationWizard({ account }: RegistrationWizardProps) {
       window.localStorage.setItem("cca.pendingVerificationExpiresAt", response.verificationExpiresAt);
       router.push(`/verification-otp?email=${encodeURIComponent(response.user.email)}&flow=registration`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Impossible de créer le compte pour le moment.");
+      setError(getApiErrorMessage(err, "Impossible de créer le compte pour le moment."));
     } finally {
       setIsSubmitting(false);
     }
@@ -833,7 +823,7 @@ export function RegistrationWizard({ account }: RegistrationWizardProps) {
       <AuthBackLink href="/inscription" />
 
       <div className="auth-progress" aria-label="Progression de l'inscription">
-        {steps.map((item, index) => (
+        {activeSteps.map((item, index) => (
           <span
             key={item.title}
             className={index === step ? "is-current" : index < step ? "is-complete" : undefined}
@@ -845,12 +835,12 @@ export function RegistrationWizard({ account }: RegistrationWizardProps) {
       </div>
 
       <div className="auth-step-heading">
-        <strong>{steps[step].title}</strong>
-        <p>{steps[step].description}</p>
+        <strong>{currentStep.title}</strong>
+        <p>{currentStep.description}</p>
       </div>
 
       <form className="auth-form registration-form" onSubmit={submitRegistration}>
-        {step === 0 ? (
+        {currentStep.key === "identity" ? (
           <>
             <label className={`auth-avatar-upload${avatarPreviewUrl ? " has-preview" : ""}${isOrganizationProfile ? " is-logo" : ""}`}>
               <input type="file" accept="image/*" onChange={updateAvatarFile} />
@@ -887,11 +877,12 @@ export function RegistrationWizard({ account }: RegistrationWizardProps) {
               />
             </div>
 
-            <AuthInput
-              label="Adresse e-mail"
-              name="email"
-              type="email"
-              placeholder="nom@creativecurrencies.africa"
+              <AuthInput
+                label="Adresse e-mail"
+                name="email"
+                type="text"
+                inputMode="email"
+                placeholder="nom@creativecurrencies.africa"
               icon={Mail}
               value={form.email}
               onChange={updateField("email")}
@@ -908,7 +899,6 @@ export function RegistrationWizard({ account }: RegistrationWizardProps) {
               value={form.password}
               onChange={updateField("password")}
               required
-              minLength={8}
             />
 
             <PhoneInput
@@ -951,7 +941,7 @@ export function RegistrationWizard({ account }: RegistrationWizardProps) {
           </>
         ) : null}
 
-        {step === 1 ? (
+        {currentStep.key === "profile" ? (
           <>
             <div className="auth-field-grid">
               <AuthInput
@@ -961,7 +951,7 @@ export function RegistrationWizard({ account }: RegistrationWizardProps) {
                 icon={BriefcaseBusiness}
                 value={form.profession}
                 onChange={updateField("profession")}
-                required={account.slug === "organisation" || account.slug === "partenaire"}
+                required={account.slug === "organisation"}
               />
               <WizardSelect
                 label={profileConfig.disciplineLabel}
@@ -971,7 +961,7 @@ export function RegistrationWizard({ account }: RegistrationWizardProps) {
                 required
               >
                 <option value="">Choisir une discipline</option>
-                {disciplines.map((discipline) => (
+                {disciplineOptions.map((discipline) => (
                   <option key={discipline} value={discipline}>{discipline}</option>
                 ))}
               </WizardSelect>
@@ -1038,7 +1028,7 @@ export function RegistrationWizard({ account }: RegistrationWizardProps) {
           </>
         ) : null}
 
-        {step === 2 ? (
+        {currentStep.key === "presence" ? (
           <>
             <div className="auth-field-grid">
               <AuthInput
@@ -1103,7 +1093,7 @@ export function RegistrationWizard({ account }: RegistrationWizardProps) {
           ) : (
             <span />
           )}
-          {step < steps.length - 1 ? (
+          {step < activeSteps.length - 1 ? (
             <button className="auth-primary-button" type="submit">
               Continuer
               <span aria-hidden="true">→</span>
@@ -1117,7 +1107,7 @@ export function RegistrationWizard({ account }: RegistrationWizardProps) {
         </div>
       </form>
 
-      {step === 0 ? (
+      {currentStep.key === "identity" ? (
         <>
           <div className="auth-divider"><span>ou s&apos;inscrire avec</span></div>
           <AuthSocialButtons />
@@ -1136,22 +1126,4 @@ function splitList(value: string) {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
-}
-
-function normalizeOption(value: string) {
-  return value
-    .trim()
-    .toLocaleLowerCase("fr")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
-
-function formatCustomLanguage(value: string) {
-  const normalizedValue = value.trim().replace(/\s+/g, " ");
-
-  if (!normalizedValue) {
-    return "";
-  }
-
-  return `${normalizedValue[0].toLocaleUpperCase("fr")}${normalizedValue.slice(1)}`;
 }

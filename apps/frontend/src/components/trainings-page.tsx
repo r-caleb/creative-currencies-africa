@@ -1,187 +1,420 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import {
   ArrowRight,
   BadgeCheck,
   BookOpen,
   CalendarDays,
-  CheckCircle2,
   Clock3,
-  FileBadge,
   FileText,
+  Loader2,
   MapPin,
-  PlayCircle,
+  Search,
   UsersRound,
 } from "lucide-react";
 import { MemberShell } from "@/components/member-shell";
+import { useVisibleItems } from "@/hooks/use-visible-items";
+import { enrollInTraining, getApiErrorMessage, getMemberTrainings } from "@/lib/api";
+import type { MemberTraining, MemberTrainingsResponse } from "@/lib/api";
+import { useAppSelector } from "@/store/hooks";
 
-const modules = [
-  { title: "Stylisme", status: "À venir", progress: "0%" },
-  { title: "Photographie", status: "Inscrit", progress: "25%" },
-  { title: "Relations publiques", status: "À venir", progress: "0%" },
-  { title: "Business of Fashion", status: "Panel", progress: "Ouvert" },
-];
-
-const sessions = [
-  { date: "02 sept.", title: "Ouverture & introduction aux industries créatives", time: "09:00 - 12:30" },
-  { date: "03 sept.", title: "Ateliers pratiques : image, style et narration", time: "10:00 - 16:00" },
-  { date: "04 sept.", title: "Panel Talk : The Business of Fashion", time: "14:00 - 17:00" },
-  { date: "05 sept.", title: "Restitution, portfolio et orientation", time: "09:30 - 13:00" },
-];
-
-const resources = [
-  { title: "Syllabus général", type: "PDF", icon: FileText },
-  { title: "Template portfolio", type: "Guide", icon: FileBadge },
-  { title: "Replay introduction", type: "Vidéo", icon: PlayCircle },
-];
-
-const recommended = [
-  { title: "Portfolio professionnel", level: "Débutant", seats: "32 places" },
-  { title: "Marketing digital pour artistes", level: "Intermédiaire", seats: "18 places" },
-  { title: "Prix, devis et négociation", level: "Intermédiaire", seats: "24 places" },
-];
+const filters = ["Toutes", "Disponibles", "Officielles CCA", "Mes inscriptions", "Mes publications", "Certifiantes", "En ligne", "Présentiel"];
 
 export function TrainingsPage() {
+  const { accessToken, profile, user } = useAppSelector((state) => state.auth);
+  const [data, setData] = useState<MemberTrainingsResponse | null>(null);
+  const [query, setQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState("Toutes");
+  const [selectedId, setSelectedId] = useState("");
+  const [status, setStatus] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isEnrolling, setIsEnrolling] = useState(false);
+
+  useEffect(() => {
+    if (!accessToken) {
+      setIsLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+
+    setIsLoading(true);
+    getMemberTrainings(accessToken)
+      .then((response) => {
+        if (!isMounted) {
+          return;
+        }
+
+        const safeResponse: MemberTrainingsResponse = {
+          accountType: response.accountType ?? "MEMBER",
+          canPublishTraining: !!response.canPublishTraining,
+          catalog: response.catalog ?? [],
+          myEnrollments: response.myEnrollments ?? [],
+          myPublished: response.myPublished ?? [],
+        };
+
+        setData(safeResponse);
+        setSelectedId((current) => current || safeResponse.catalog[0]?.id || "");
+        setStatus("");
+      })
+      .catch((error) => {
+        if (isMounted) {
+          setStatus(getApiErrorMessage(error, "Impossible de charger les formations pour le moment."));
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [accessToken]);
+
+  const catalog = data?.catalog ?? [];
+  const filteredTrainings = useMemo(() => {
+    const normalizedQuery = normalizeSearch(query);
+
+    return catalog.filter((training) => {
+      const matchesFilter =
+        activeFilter === "Toutes" ||
+        (activeFilter === "Disponibles" && !training.enrollment) ||
+        (activeFilter === "Officielles CCA" && training.official) ||
+        (activeFilter === "Mes inscriptions" && !!training.enrollment) ||
+        (activeFilter === "Mes publications" && training.canManage) ||
+        (activeFilter === "Certifiantes" && training.certificate) ||
+        training.mode === activeFilter;
+      const haystack = normalizeSearch([
+        training.title,
+        training.category,
+        training.level,
+        training.mode,
+        training.location,
+        training.organizerName,
+        training.description,
+        training.modules.join(" "),
+      ].join(" "));
+
+      return matchesFilter && (!normalizedQuery || haystack.includes(normalizedQuery));
+    });
+  }, [activeFilter, catalog, query]);
+  const visibleTrainings = useVisibleItems(filteredTrainings, 10);
+
+  const selectedTraining = filteredTrainings.find((training) => training.id === selectedId) ?? filteredTrainings[0] ?? catalog[0] ?? null;
+  const enrolledCount = data?.myEnrollments.length ?? 0;
+  const myPublishedCount = data?.myPublished.length ?? 0;
+  const recommended = catalog.filter((training) => training.recommended && training.id !== selectedTraining?.id).slice(0, 3);
+  const heroStats = [
+    { label: "Disponibles", value: String(catalog.length) },
+    { label: "Inscrites", value: String(enrolledCount) },
+    { label: "CCA", value: String(catalog.filter((training) => training.official).length) },
+  ];
+  const visibleFilters = filters.filter((filter) => filter !== "Mes publications" || data?.canPublishTraining || myPublishedCount > 0);
+
+  const handleTrainingAction = async (training: MemberTraining) => {
+    setSelectedId(training.id);
+
+    if (training.enrollment) {
+      setStatus("Votre inscription est déjà active pour cette formation.");
+      return;
+    }
+
+    if (training.canEnroll && training.source === "training") {
+      if (!accessToken) {
+        setStatus("Connectez-vous pour vous inscrire à cette formation.");
+        return;
+      }
+
+      setIsEnrolling(true);
+      setStatus("");
+
+      try {
+        const response = await enrollInTraining(accessToken, training.id);
+        setData(response.trainings);
+        setSelectedId(training.id);
+        setStatus("Inscription confirmée. La formation apparaît maintenant dans Mes inscriptions.");
+      } catch (error) {
+        setStatus(getApiErrorMessage(error, "Impossible de confirmer l'inscription pour le moment."));
+      } finally {
+        setIsEnrolling(false);
+      }
+
+      return;
+    }
+
+    if (training.linkUrl) {
+      window.open(training.linkUrl, "_blank", "noopener,noreferrer");
+      setStatus("Le lien de la formation a été ouvert dans un nouvel onglet.");
+      return;
+    }
+
+    setStatus("Cette formation vient d'une publication. Consultez les détails pour suivre les modalités d'inscription.");
+  };
+
   return (
     <MemberShell activeItem="Formations">
       <div className="training-layout">
         <section className="training-hero">
           <div className="training-hero-copy">
             <span className="member-kicker">Formations</span>
-            <h1>Développez vos compétences et construisez un parcours certifiant.</h1>
+            <h1>Découvrez les formations CCA et préparez vos prochaines compétences.</h1>
             <p>
-              Retrouvez vos workshops, ressources, sessions à venir et certificats associés.
-              Chaque formation renforce votre Creative ID et votre visibilité professionnelle.
+              L’espace Formations rassemble les programmes officiels CCA, les formations publiées par les structures
+              créatives et vos inscriptions en cours.
             </p>
             <div className="member-hero-actions">
-              <a className="member-create-button" href="#programme-formation">
-                Voir le programme
+              <a className="member-create-button" href="#catalogue-formations">
+                Explorer les formations
                 <ArrowRight aria-hidden="true" strokeWidth={1.8} />
               </a>
-              <a className="member-secondary-button" href="#catalogue-formations">Explorer les formations</a>
+              {data?.canPublishTraining ? (
+                <a className="member-secondary-button" href="/espace-membre/publier">Publier une formation</a>
+              ) : (
+                <a className="member-secondary-button" href="#formation-detail">Voir les détails</a>
+              )}
             </div>
           </div>
-          <img src="/assets/cc-event-flyer.png" alt="" />
+          <div className="training-hero-panel">
+            <img src="/assets/cc-event-flyer.png" alt="" />
+            <div>
+              {heroStats.map((stat) => (
+                <article key={stat.label}>
+                  <strong>{stat.value}</strong>
+                  <span>{stat.label}</span>
+                </article>
+              ))}
+            </div>
+          </div>
         </section>
+
+        <section className="member-card opportunities-toolbar">
+          <label className="opportunities-search">
+            <Search aria-hidden="true" strokeWidth={1.8} />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Rechercher une formation, une compétence, un lieu..."
+            />
+          </label>
+          <div className="opportunities-filters" aria-label="Filtres formations">
+            {visibleFilters.map((filter) => (
+              <button
+                key={filter}
+                className={filter === activeFilter ? "is-active" : undefined}
+                type="button"
+                onClick={() => setActiveFilter(filter)}
+              >
+                {filter}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {status ? <p className={status.startsWith("Impossible") ? "auth-form-error" : "auth-form-success"}>{status}</p> : null}
 
         <div className="training-grid">
           <section className="training-main">
-            <section id="programme-formation" className="member-card training-current-card">
-              <div className="member-card-title">
-                <div>
-                  <h2>Formation officielle en cours</h2>
-                  <p>Journée de formation Creative Currencies 2026.</p>
-                </div>
-                <span className="training-status">Inscription active</span>
-              </div>
-              <div className="training-current-body">
-                <img src="/assets/cc-event-banner.png" alt="" />
-                <div>
-                  <h3>Stylisme, photographie, relations publiques + panel talk</h3>
-                  <p>
-                    Un programme intensif de quatre jours pour outiller les talents créatifs,
-                    documenter leur parcours et les connecter aux opportunités du secteur.
-                  </p>
-                  <div className="training-meta-grid">
-                    <span><CalendarDays aria-hidden="true" /> 2 - 5 septembre 2026</span>
-                    <span><MapPin aria-hidden="true" /> Silikin Village, Kinshasa</span>
-                    <span><UsersRound aria-hidden="true" /> Cohorte Creative Currencies</span>
-                    <span><BadgeCheck aria-hidden="true" /> Certificat après validation</span>
-                  </div>
-                </div>
-              </div>
-            </section>
-
             <section id="catalogue-formations" className="member-card">
               <div className="member-card-title">
                 <div>
-                  <h2>Modules du parcours</h2>
-                  <p>Une vue claire des blocs de formation suivis par le membre.</p>
+                  <h2>Catalogue formations</h2>
+                  <p>
+                    Formations accessibles pour votre profil
+                    {profile?.discipline ? ` en ${profile.discipline}` : user?.type ? ` ${accountTypeLabel(user.type).toLowerCase()}` : ""}.
+                  </p>
                 </div>
+                <span className="opportunity-count">{filteredTrainings.length} formation{filteredTrainings.length > 1 ? "s" : ""}</span>
               </div>
-              <div className="training-module-grid">
-                {modules.map((module) => (
-                  <article key={module.title}>
-                    <div>
-                      <strong>{module.title}</strong>
-                      <span>{module.status}</span>
-                    </div>
-                    <small>{module.progress}</small>
-                  </article>
-                ))}
+              <div className="training-catalog-list">
+                {isLoading ? (
+                  <TrainingEmptyState title="Chargement des formations" text="Nous préparons le catalogue disponible pour votre profil." />
+                ) : filteredTrainings.length ? (
+                  visibleTrainings.visibleItems.map((training) => (
+                    <article key={training.id} className={training.id === selectedTraining?.id ? "is-selected" : undefined}>
+                      <div>
+                        <span>
+                          {training.official ? "Formation officielle CCA" : training.category} · {training.level}
+                        </span>
+                        <strong>{training.title}</strong>
+                        <p>{training.description}</p>
+                        <div className="opportunity-meta">
+                          <span><CalendarDays aria-hidden="true" /> {training.dates}</span>
+                          <span><MapPin aria-hidden="true" /> {training.location}</span>
+                          <span><UsersRound aria-hidden="true" /> {training.seats ? `${training.seats} places` : `${training.enrolledCount} intéressé${training.enrolledCount > 1 ? "s" : ""}`}</span>
+                          {training.certificate ? <span><BadgeCheck aria-hidden="true" /> Certificat après validation</span> : null}
+                        </div>
+                      </div>
+                      <div className="training-catalog-action">
+                        <small>{training.enrollment ? "Inscrit" : training.recommended ? "Recommandée" : training.mode}</small>
+                        <button
+                          className={training.enrollment || training.canEnroll ? "member-create-button" : "member-secondary-button"}
+                          type="button"
+                          disabled={isEnrolling}
+                          onClick={() => void handleTrainingAction(training)}
+                        >
+                          {training.enrollment ? "Voir détails" : training.canEnroll ? "S’inscrire" : training.linkUrl ? "Ouvrir le lien" : "Voir détails"}
+                        </button>
+                      </div>
+                    </article>
+                  ))
+                ) : (
+                  <TrainingEmptyState title="Aucune formation trouvée" text="Essayez un autre mot-clé ou revenez à toutes les formations.">
+                    <button className="member-secondary-button" type="button" onClick={() => {
+                      setQuery("");
+                      setActiveFilter("Toutes");
+                    }}>
+                      Réinitialiser
+                    </button>
+                  </TrainingEmptyState>
+                )}
+                {visibleTrainings.hasMore ? (
+                  <div className="member-feed-load-more" ref={visibleTrainings.loadMoreRef}>
+                    <Loader2 aria-hidden="true" strokeWidth={1.8} />
+                    <span>Défilez pour afficher plus de formations</span>
+                  </div>
+                ) : null}
               </div>
             </section>
 
-            <section className="member-card">
-              <div className="member-card-title">
-                <div>
-                  <h2>Planning des sessions</h2>
-                  <p>Les dates importantes liées à la formation et aux activités terrain.</p>
-                </div>
-              </div>
-              <div className="training-session-list">
-                {sessions.map((session) => (
-                  <article key={session.title}>
-                    <time>{session.date}</time>
+            {selectedTraining ? (
+              <>
+                <section id="formation-detail" className="member-card training-current-card">
+                  <div className="member-card-title">
                     <div>
-                      <strong>{session.title}</strong>
-                      <span><Clock3 aria-hidden="true" /> {session.time}</span>
+                      <h2>{selectedTraining.official ? "Formation officielle CCA" : "Détail de la formation"}</h2>
+                      <p>{selectedTraining.organizerName}.</p>
                     </div>
-                  </article>
-                ))}
-              </div>
-            </section>
+                    <span className="training-status">{selectedTraining.enrollment ? "Inscription active" : selectedTraining.canEnroll ? "Places ouvertes" : "Modalités à consulter"}</span>
+                  </div>
+                  <div className="training-current-body">
+                    <img src={selectedTraining.coverImageUrl ?? "/assets/cc-event-banner.png"} alt="" />
+                    <div>
+                      <h3>{selectedTraining.title}</h3>
+                      <p>{selectedTraining.description}</p>
+                      <div className="training-meta-grid">
+                        <span><CalendarDays aria-hidden="true" /> {selectedTraining.dates}</span>
+                        <span><MapPin aria-hidden="true" /> {selectedTraining.location}</span>
+                        <span><UsersRound aria-hidden="true" /> {selectedTraining.mode}</span>
+                        <span><BadgeCheck aria-hidden="true" /> {selectedTraining.certificate ? "Certificat après validation" : "Attestation de participation"}</span>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="member-card">
+                  <div className="member-card-title">
+                    <div>
+                      <h2>Programme proposé</h2>
+                      <p>Les principaux blocs associés à la formation sélectionnée.</p>
+                    </div>
+                  </div>
+                  <div className="training-module-grid">
+                    {selectedTraining.modules.map((module, index) => (
+                      <article key={`${selectedTraining.id}-${module}`}>
+                        <div>
+                          <strong>{module}</strong>
+                          <span>{selectedTraining.enrollment ? "Inclus dans votre inscription" : "Présenté par l’organisateur"}</span>
+                        </div>
+                        <small>{String(index + 1).padStart(2, "0")}</small>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="member-card">
+                  <div className="member-card-title">
+                    <div>
+                      <h2>Planning des sessions</h2>
+                      <p>Les dates importantes liées à la formation.</p>
+                    </div>
+                  </div>
+                  <div className="training-session-list">
+                    {selectedTraining.sessions.length ? selectedTraining.sessions.map((session) => (
+                      <article key={`${selectedTraining.id}-${session.title}`}>
+                        <time>{session.date}</time>
+                        <div>
+                          <strong>{session.title}</strong>
+                          <span><Clock3 aria-hidden="true" /> {session.time}</span>
+                        </div>
+                      </article>
+                    )) : (
+                      <TrainingEmptyState title="Planning à confirmer" text="L’organisateur n’a pas encore publié les horaires détaillés." />
+                    )}
+                  </div>
+                </section>
+              </>
+            ) : null}
           </section>
 
           <aside className="training-side">
-            <section className="member-card training-progress-card">
-              <span className="member-kicker">Progression</span>
-              <strong>25%</strong>
-              <p>Vous avez commencé le parcours. Les ressources et attestations seront débloquées progressivement.</p>
-              <div className="creative-progress-track"><span /></div>
-              <div className="training-check-list">
-                <article className="is-done"><CheckCircle2 aria-hidden="true" /> Inscription confirmée</article>
-                <article><CheckCircle2 aria-hidden="true" /> Présence aux ateliers</article>
-                <article><CheckCircle2 aria-hidden="true" /> Projet ou portfolio final</article>
-                <article><CheckCircle2 aria-hidden="true" /> Certificat validé</article>
-              </div>
-            </section>
-
             <section className="member-card">
               <div className="member-card-title">
-                <h2>Ressources associées</h2>
-                <a href="#">Bibliothèque</a>
+                <h2>Ressources de la formation</h2>
+                <a href="/espace-membre/ressources">Bibliothèque</a>
               </div>
               <div className="compact-list">
-                {resources.map((item) => {
-                  const Icon = item.icon;
-
-                  return (
+                {selectedTraining?.resources.length ? (
+                  selectedTraining.resources.map((item) => (
                     <article key={item.title}>
-                      <span className="list-icon is-gold"><Icon aria-hidden="true" strokeWidth={1.8} /></span>
+                      <span className="list-icon is-gold"><FileText aria-hidden="true" strokeWidth={1.8} /></span>
                       <div>
                         <strong>{item.title}</strong>
                         <small>{item.type}</small>
                       </div>
                     </article>
-                  );
-                })}
+                  ))
+                ) : (
+                  <TrainingEmptyState
+                    title="Aucune ressource disponible"
+                    text="Les supports peuvent être ajoutés plus tard ou réservés aux personnes inscrites."
+                  />
+                )}
               </div>
             </section>
+
+            {data?.canPublishTraining ? (
+              <section className="member-card">
+                <div className="member-card-title">
+                  <h2>Mes formations publiées</h2>
+                  <a href="/espace-membre/publier">Créer</a>
+                </div>
+                <div className="training-recommended-list">
+                  {data.myPublished.length ? data.myPublished.slice(0, 4).map((item) => (
+                    <button key={item.id} type="button" onClick={() => setSelectedId(item.id)}>
+                      <BookOpen aria-hidden="true" strokeWidth={1.8} />
+                      <span>
+                        <strong>{item.title}</strong>
+                        <small>{item.status === "PUBLISHED" ? "Publiée" : "Brouillon"} · {item.category}</small>
+                      </span>
+                    </button>
+                  )) : (
+                    <TrainingEmptyState title="Aucune publication" text="Publiez une formation depuis le bouton Publier." />
+                  )}
+                </div>
+              </section>
+            ) : null}
 
             <section className="member-card">
               <div className="member-card-title">
                 <h2>Recommandées</h2>
-                <a href="#">Tout voir</a>
+                <a href="#catalogue-formations">Tout voir</a>
               </div>
               <div className="training-recommended-list">
-                {recommended.map((item) => (
-                  <article key={item.title}>
+                {recommended.length ? recommended.map((item) => (
+                  <button key={item.id} type="button" onClick={() => setSelectedId(item.id)}>
                     <BookOpen aria-hidden="true" strokeWidth={1.8} />
-                    <div>
+                    <span>
                       <strong>{item.title}</strong>
-                      <span>{item.level} · {item.seats}</span>
-                    </div>
-                  </article>
-                ))}
+                      <small>{item.level} · {item.seats ? `${item.seats} places` : item.mode}</small>
+                    </span>
+                  </button>
+                )) : (
+                  <TrainingEmptyState title="Aucune recommandation" text="Les formations officielles CCA apparaîtront ici." />
+                )}
               </div>
             </section>
           </aside>
@@ -189,4 +422,36 @@ export function TrainingsPage() {
       </div>
     </MemberShell>
   );
+}
+
+function TrainingEmptyState({ title, text, children }: { title: string; text: string; children?: ReactNode }) {
+  return (
+    <div className="member-empty-state">
+      <BookOpen aria-hidden="true" strokeWidth={1.8} />
+      <strong>{title}</strong>
+      <p>{text}</p>
+      {children}
+    </div>
+  );
+}
+
+function accountTypeLabel(type?: string) {
+  const labels: Record<string, string> = {
+    PUBLIC: "Public",
+    LEARNER: "Apprenant",
+    CREATOR: "Créateur",
+    ORGANIZATION: "Organisation",
+    PARTNER: "Partenaire",
+    ADMIN: "Admin",
+  };
+
+  return type ? labels[type] ?? "Membre" : "Membre";
+}
+
+function normalizeSearch(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
 }

@@ -22,6 +22,7 @@ export default async function RegisterTypePage({ params }: { params: Promise<{ t
       title="Commençons par vos informations essentielles."
       description="Ces éléments permettront de créer votre profil membre et de préparer votre Creative ID."
       aside="minimal"
+      brandHref="/connexion"
     >
       <RegistrationWizard account={{ slug: account.slug, title: account.title }} />
     </AuthShell>

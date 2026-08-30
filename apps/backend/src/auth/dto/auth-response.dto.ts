@@ -63,6 +63,33 @@ export class ResendVerificationResponseDto {
   verificationExpiresAt!: Date;
 }
 
+export class ForgotPasswordResponseDto {
+  @ApiProperty({ example: true })
+  success!: boolean;
+
+  @ApiProperty({ example: "Si un compte existe, un code de réinitialisation a été envoyé par e-mail." })
+  message!: string;
+
+  @ApiProperty()
+  resetExpiresAt!: Date;
+}
+
+export class ResetPasswordResponseDto {
+  @ApiProperty({ example: true })
+  success!: boolean;
+
+  @ApiProperty({ example: "Votre mot de passe a été mis à jour. Vous pouvez vous connecter." })
+  message!: string;
+}
+
+export class VerifyPasswordResetCodeResponseDto {
+  @ApiProperty({ example: true })
+  success!: boolean;
+
+  @ApiProperty({ example: "Code vérifié. Vous pouvez choisir un nouveau mot de passe." })
+  message!: string;
+}
+
 export class RefreshResponseDto {
   @ApiProperty()
   accessToken!: string;

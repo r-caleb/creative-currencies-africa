@@ -7,6 +7,10 @@ type Theme = "dark" | "light";
 
 const themeStorageKey = "cca-theme-v3";
 
+function isTheme(value: string | undefined | null): value is Theme {
+  return value === "dark" || value === "light";
+}
+
 const navItems = [
   { label: "Accueil", href: "#accueil" },
   { label: "À propos", href: "#a-propos" },
@@ -17,25 +21,29 @@ const navItems = [
 ];
 
 export function CcaHeader() {
-  const [theme, setTheme] = useState<Theme>("dark");
+  const [theme, setTheme] = useState<Theme>("light");
   const [isThemeReady, setIsThemeReady] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [activeSection, setActiveSection] = useState(navItems[0].href);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
+    const applyTheme = (nextTheme: Theme) => {
+      setTheme(nextTheme);
+      document.documentElement.dataset.theme = nextTheme;
+    };
     const params = new URLSearchParams(window.location.search);
     const requestedTheme = params.get("theme");
 
-    if (requestedTheme === "dark" || requestedTheme === "light") {
-      setTheme(requestedTheme);
+    if (isTheme(requestedTheme)) {
+      applyTheme(requestedTheme);
       setIsThemeReady(true);
       return;
     }
 
     const stored = window.localStorage.getItem(themeStorageKey);
-    if (stored === "dark" || stored === "light") {
-      setTheme(stored);
+    if (isTheme(stored)) {
+      applyTheme(stored);
       setIsThemeReady(true);
       return;
     }
@@ -44,14 +52,21 @@ export function CcaHeader() {
     const updateThemeFromSystem = (event?: MediaQueryListEvent) => {
       const currentStored = window.localStorage.getItem(themeStorageKey);
 
-      if (currentStored === "dark" || currentStored === "light") {
+      if (isTheme(currentStored)) {
         return;
       }
 
-      setTheme((event?.matches ?? systemThemeQuery.matches) ? "light" : "dark");
+      applyTheme((event?.matches ?? systemThemeQuery.matches) ? "light" : "dark");
     };
 
-    updateThemeFromSystem();
+    const initializedTheme = document.documentElement.dataset.theme;
+
+    if (isTheme(initializedTheme)) {
+      setTheme(initializedTheme);
+    } else {
+      updateThemeFromSystem();
+    }
+
     setIsThemeReady(true);
     systemThemeQuery.addEventListener("change", updateThemeFromSystem);
 
@@ -70,6 +85,7 @@ export function CcaHeader() {
     const nextTheme = theme === "dark" ? "light" : "dark";
 
     setTheme(nextTheme);
+    document.documentElement.dataset.theme = nextTheme;
     window.localStorage.setItem(themeStorageKey, nextTheme);
   };
 

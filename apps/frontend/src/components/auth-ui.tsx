@@ -8,11 +8,11 @@ import {
   Check,
   EyeOff,
   GraduationCap,
-  Handshake,
   LockKeyhole,
   Mail,
   Palette,
   ShieldCheck,
+  UserRound,
 } from "lucide-react";
 import { FaApple, FaFacebookF, FaGoogle } from "react-icons/fa6";
 
@@ -22,6 +22,7 @@ type AuthShellProps = {
   description: string;
   children: ReactNode;
   aside?: "portrait" | "secure" | "minimal";
+  brandHref?: string;
 };
 
 type AuthInputProps = InputHTMLAttributes<HTMLInputElement> & {
@@ -31,6 +32,13 @@ type AuthInputProps = InputHTMLAttributes<HTMLInputElement> & {
 };
 
 export const accountTypes = [
+  {
+    slug: "public",
+    title: "Public",
+    text: "Membres qui souhaitent découvrir la plateforme, suivre l'actualité et interagir librement.",
+    icon: UserRound,
+    points: ["Inscription simple", "Accès au réseau", "Opportunités à suivre"],
+  },
   {
     slug: "createur",
     title: "Créateur",
@@ -48,25 +56,18 @@ export const accountTypes = [
   {
     slug: "organisation",
     title: "Organisation",
-    text: "Écoles, studios, médias, collectifs, institutions et structures créatives.",
+    text: "Écoles, studios, médias, collectifs, institutions, structures créatives et partenaires.",
     icon: Building2,
-    points: ["Gestion des équipes", "Tableau de bord", "Rapports d'activité"],
-  },
-  {
-    slug: "partenaire",
-    title: "Partenaire",
-    text: "Sponsors, entreprises et partenaires qui veulent soutenir l'écosystème.",
-    icon: Handshake,
-    points: ["Projets exclusifs", "Visibilité", "Impact mesurable"],
+    points: ["Gestion des équipes", "Partenariats", "Rapports d'activité"],
   },
 ];
 
-export function AuthShell({ eyebrow, title, description, children, aside = "portrait" }: AuthShellProps) {
+export function AuthShell({ eyebrow, title, description, children, aside = "portrait", brandHref = "/#accueil" }: AuthShellProps) {
   return (
     <main className={`auth-page auth-page--${aside}`}>
       <section className="auth-panel" aria-labelledby="auth-title">
         <div className="auth-brand-row">
-          <Link href="/#accueil" aria-label="Retour à Creative Currencies Africa">
+          <Link href={brandHref} aria-label="Retour à Creative Currencies Africa">
             <img src="/assets/cca-logo-full-transparent-web.png" alt="Creative Currencies Africa" />
           </Link>
         </div>

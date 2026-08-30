@@ -1,0 +1,1203 @@
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from "@nestjs/common";
+import {
+  AccountStatus,
+  AccountType,
+  Prisma,
+  PublicationAttachmentType,
+  PublicationAudience,
+  NotificationType,
+  PublicationReactionType,
+  PublicationStatus,
+  PublicationType,
+} from "@prisma/client";
+import { ConfigService } from "@nestjs/config";
+import { Buffer } from "node:buffer";
+import { randomUUID } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import { extname, join, resolve } from "node:path";
+import type { AuthUser } from "../auth/auth.types";
+import { NotificationService } from "../notification/notification.service";
+import { PrismaService } from "../prisma/prisma.service";
+import type { CreatePublicationCommentDto } from "./dto/create-publication-comment.dto";
+import type { CreatePublicationDto, PublicationAttachmentDto } from "./dto/create-publication.dto";
+import type { PublicationQueryDto } from "./dto/publication-query.dto";
+import type { TogglePublicationReactionDto } from "./dto/toggle-publication-reaction.dto";
+import type { UpdatePublicationDto } from "./dto/update-publication.dto";
+
+type PublicationPolicy = {
+  label: string;
+  description: string;
+  destinations: string[];
+  allowedAccountTypes: AccountType[];
+  defaultAudience: PublicationAudience;
+  requiredFields: string[];
+};
+
+const activeUserInclude = {
+  profile: true,
+  organizationProfile: true,
+  partnerProfile: true,
+} satisfies Prisma.UserInclude;
+
+type ActiveUser = Prisma.UserGetPayload<{ include: typeof activeUserInclude }>;
+type PublicationPayloadForValidation = Pick<CreatePublicationDto, "title" | "content" | "linkUrl"> & {
+  attachments?: Array<{ url: string }>;
+};
+
+const publicationInclude = {
+  author: {
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      type: true,
+      emailVerifiedAt: true,
+      profile: {
+        select: {
+          publicName: true,
+          avatarUrl: true,
+          memberNumber: true,
+          discipline: true,
+          otherDiscipline: true,
+          country: true,
+          city: true,
+          verifiedAt: true,
+        },
+      },
+      organizationProfile: {
+        select: {
+          name: true,
+          logoUrl: true,
+          sector: true,
+          country: true,
+          city: true,
+          verifiedAt: true,
+        },
+      },
+      partnerProfile: {
+        select: {
+          name: true,
+          logoUrl: true,
+          partnerType: true,
+          country: true,
+          city: true,
+          verifiedAt: true,
+        },
+      },
+    },
+  },
+  attachments: {
+    orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+  },
+  _count: {
+    select: {
+      comments: true,
+      reactions: true,
+    },
+  },
+} satisfies Prisma.PublicationInclude;
+
+type PublicationWithRelations = Prisma.PublicationGetPayload<{ include: typeof publicationInclude }>;
+
+const publicationCommentInclude = {
+  author: {
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      type: true,
+      emailVerifiedAt: true,
+      profile: {
+        select: {
+          publicName: true,
+          avatarUrl: true,
+          memberNumber: true,
+          discipline: true,
+          otherDiscipline: true,
+          country: true,
+          city: true,
+          verifiedAt: true,
+        },
+      },
+      organizationProfile: {
+        select: {
+          name: true,
+          logoUrl: true,
+          sector: true,
+          country: true,
+          city: true,
+          verifiedAt: true,
+        },
+      },
+      partnerProfile: {
+        select: {
+          name: true,
+          logoUrl: true,
+          partnerType: true,
+          country: true,
+          city: true,
+          verifiedAt: true,
+        },
+      },
+    },
+  },
+} satisfies Prisma.PublicationCommentInclude;
+
+type PublicationCommentWithAuthor = Prisma.PublicationCommentGetPayload<{ include: typeof publicationCommentInclude }>;
+
+const publicationPolicies: Record<PublicationType, PublicationPolicy> = {
+  [PublicationType.PROJECT]: {
+    label: "Projet",
+    description: "Je veux présenter une initiative, une exposition, une campagne ou une production.",
+    destinations: ["network", "creative-id"],
+    allowedAccountTypes: [
+      AccountType.CREATOR,
+      AccountType.LEARNER,
+      AccountType.ORGANIZATION,
+      AccountType.PARTNER,
+      AccountType.ADMIN,
+    ],
+    defaultAudience: PublicationAudience.MEMBERS,
+    requiredFields: ["title", "content"],
+  },
+  [PublicationType.CREATION]: {
+    label: "Création / œuvre",
+    description: "Je veux montrer une œuvre, une image, une vidéo, un design ou une réalisation.",
+    destinations: ["network", "creative-id"],
+    allowedAccountTypes: [AccountType.CREATOR, AccountType.LEARNER, AccountType.ORGANIZATION, AccountType.ADMIN],
+    defaultAudience: PublicationAudience.MEMBERS,
+    requiredFields: ["title", "content"],
+  },
+  [PublicationType.QUESTION]: {
+    label: "Question",
+    description: "Je veux demander un avis, un conseil ou une réponse à la communauté.",
+    destinations: ["network"],
+    allowedAccountTypes: [
+      AccountType.PUBLIC,
+      AccountType.CREATOR,
+      AccountType.LEARNER,
+      AccountType.ORGANIZATION,
+      AccountType.PARTNER,
+      AccountType.ADMIN,
+    ],
+    defaultAudience: PublicationAudience.MEMBERS,
+    requiredFields: ["title", "content"],
+  },
+  [PublicationType.COLLABORATION]: {
+    label: "Collaboration",
+    description: "Je cherche une personne, une équipe, un lieu, un mentor ou un partenaire.",
+    destinations: ["network"],
+    allowedAccountTypes: [
+      AccountType.CREATOR,
+      AccountType.LEARNER,
+      AccountType.ORGANIZATION,
+      AccountType.PARTNER,
+      AccountType.ADMIN,
+    ],
+    defaultAudience: PublicationAudience.MEMBERS,
+    requiredFields: ["title", "content"],
+  },
+  [PublicationType.OPPORTUNITY]: {
+    label: "Opportunité",
+    description: "Je partage un appel à projets, une résidence, un casting, un concours ou un financement.",
+    destinations: ["opportunities", "network"],
+    allowedAccountTypes: [AccountType.CREATOR, AccountType.ORGANIZATION, AccountType.PARTNER, AccountType.ADMIN],
+    defaultAudience: PublicationAudience.MEMBERS,
+    requiredFields: ["title", "content"],
+  },
+  [PublicationType.JOB]: {
+    label: "Mission / emploi",
+    description: "Je veux recruter ou proposer une mission, un poste, une prestation ou un besoin freelance.",
+    destinations: ["opportunities", "network"],
+    allowedAccountTypes: [AccountType.CREATOR, AccountType.ORGANIZATION, AccountType.PARTNER, AccountType.ADMIN],
+    defaultAudience: PublicationAudience.MEMBERS,
+    requiredFields: ["title", "content"],
+  },
+  [PublicationType.RESOURCE]: {
+    label: "Ressource utile",
+    description: "Je partage un guide, un modèle, un document, un lien utile ou un retour d'expérience.",
+    destinations: ["resources", "network"],
+    allowedAccountTypes: [
+      AccountType.CREATOR,
+      AccountType.LEARNER,
+      AccountType.ORGANIZATION,
+      AccountType.PARTNER,
+      AccountType.ADMIN,
+    ],
+    defaultAudience: PublicationAudience.MEMBERS,
+    requiredFields: ["title", "content", "linkUrlOrAttachment"],
+  },
+  [PublicationType.GROUP_DISCUSSION]: {
+    label: "Discussion de groupe",
+    description: "Créer un sujet de conversation dans un groupe ou une catégorie communautaire.",
+    destinations: ["groups"],
+    allowedAccountTypes: [],
+    defaultAudience: PublicationAudience.GROUP,
+    requiredFields: ["title", "content"],
+  },
+  [PublicationType.TRAINING]: {
+    label: "Formation",
+    description: "Je propose un atelier, un cours, une masterclass ou un parcours d'apprentissage.",
+    destinations: ["trainings", "agenda"],
+    allowedAccountTypes: [AccountType.ORGANIZATION, AccountType.PARTNER, AccountType.ADMIN],
+    defaultAudience: PublicationAudience.MEMBERS,
+    requiredFields: ["title", "content"],
+  },
+  [PublicationType.EVENT]: {
+    label: "Événement",
+    description: "J'annonce une exposition, une rencontre, un workshop, un panel ou une activation.",
+    destinations: ["agenda", "network"],
+    allowedAccountTypes: [AccountType.CREATOR, AccountType.ORGANIZATION, AccountType.PARTNER, AccountType.ADMIN],
+    defaultAudience: PublicationAudience.MEMBERS,
+    requiredFields: ["title", "content"],
+  },
+  [PublicationType.ANNOUNCEMENT]: {
+    label: "Annonce officielle",
+    description: "Diffuser une communication officielle de la plateforme CCA.",
+    destinations: ["network", "notifications"],
+    allowedAccountTypes: [AccountType.ADMIN],
+    defaultAudience: PublicationAudience.MEMBERS,
+    requiredFields: ["title", "content"],
+  },
+};
+
+@Injectable()
+export class PublicationService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+    private readonly notifications: NotificationService,
+  ) {}
+
+  async getCapabilities(authUser: AuthUser) {
+    const user = await this.getActiveUser(authUser);
+
+    return {
+      accountType: user.type,
+      types: Object.values(PublicationType)
+        .filter((type) => type !== PublicationType.GROUP_DISCUSSION)
+        .map((type) => {
+          const policy = publicationPolicies[type];
+          return {
+            value: type,
+            label: policy.label,
+            description: policy.description,
+            destinations: policy.destinations,
+            defaultAudience: policy.defaultAudience,
+            allowed: policy.allowedAccountTypes.includes(user.type),
+            allowedAccountTypes: policy.allowedAccountTypes,
+            requiredFields: policy.requiredFields,
+          };
+        }),
+      audiences: Object.values(PublicationAudience).filter((audience) => audience !== PublicationAudience.GROUP),
+    };
+  }
+
+  async createPublication(authUser: AuthUser, input: CreatePublicationDto) {
+    const user = await this.getActiveUser(authUser);
+    const policy = this.ensureTypeAllowed(user, input.type);
+    this.validatePublicationPayload(input.type, input);
+
+    const status = input.publishNow === false ? PublicationStatus.DRAFT : PublicationStatus.PUBLISHED;
+    const publication = await this.prisma.publication.create({
+      data: {
+        author: { connect: { id: user.id } },
+        type: input.type,
+        status,
+        audience: input.audience ?? policy.defaultAudience,
+        title: this.requiredText(input.title, "Le titre est requis."),
+        content: this.requiredText(input.content, "Le contenu est requis."),
+        excerpt: this.buildExcerpt(input.content),
+        category: this.optionalText(input.category),
+        discipline: this.optionalText(input.discipline) ?? this.defaultDiscipline(user),
+        country: this.optionalText(input.country) ?? this.defaultCountry(user),
+        city: this.optionalText(input.city) ?? this.defaultCity(user),
+        tags: this.normalizeTags(input.tags),
+        routingDestinations: policy.destinations,
+        linkUrl: this.optionalText(input.linkUrl),
+        coverImageUrl: this.optionalText(input.coverImageUrl),
+        groupId: this.optionalText(input.groupId),
+        opportunityDeadline: input.opportunityDeadline ? new Date(input.opportunityDeadline) : null,
+        opportunityLocation: this.optionalText(input.opportunityLocation),
+        budgetRange: this.optionalText(input.budgetRange),
+        contactEmail: this.optionalText(input.contactEmail),
+        publishedAt: status === PublicationStatus.PUBLISHED ? new Date() : null,
+        expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
+        attachments: this.buildAttachmentsCreate(input.attachments),
+      },
+      include: publicationInclude,
+    });
+
+    if (status === PublicationStatus.PUBLISHED) {
+      await this.notifyPublicationPublished(publication, user).catch(() => undefined);
+    }
+
+    return this.serializePublication(publication, user.id);
+  }
+
+  async uploadPublicationAttachment(authUser: AuthUser, file?: Express.Multer.File) {
+    const user = await this.getActiveUser(authUser);
+    this.validatePublicationFile(file);
+    const attachmentType = this.publicationAttachmentType(file);
+    const storedFile = await this.storePublicationFile(user.id, file, attachmentType);
+
+    return {
+      type: attachmentType,
+      url: storedFile.url,
+      name: file.originalname,
+      mimeType: file.mimetype,
+      sizeBytes: file.size,
+    };
+  }
+
+  async listPublications(authUser: AuthUser, query: PublicationQueryDto = {}) {
+    const user = await this.getActiveUser(authUser);
+    const limit = this.resolveLimit(query.limit);
+    const where = this.buildListWhere(user, query);
+    const publications = await this.prisma.publication.findMany({
+      where: this.addCursorToWhere(where, query.cursor),
+      include: publicationInclude,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: query.paginated ? limit + 1 : limit,
+    });
+    const pageItems = query.paginated ? publications.slice(0, limit) : publications;
+    const rankedItems = this.rankPublicationsForUser(pageItems, user);
+    const serializedItems = rankedItems.map((publication) => this.serializePublication(publication, user.id));
+
+    if (query.paginated) {
+      return {
+        items: serializedItems,
+        nextCursor: publications.length > limit && pageItems.length ? this.encodePublicationCursor(pageItems[pageItems.length - 1]) : null,
+        hasMore: publications.length > limit,
+      };
+    }
+
+    return serializedItems;
+  }
+
+  async listMyPublications(authUser: AuthUser, query: PublicationQueryDto = {}) {
+    return this.listPublications(authUser, { ...query, mine: true });
+  }
+
+  async getPublication(authUser: AuthUser, id: string) {
+    const user = await this.getActiveUser(authUser);
+    const publication = await this.findPublicationOrThrow(id);
+
+    this.ensureCanRead(user, publication);
+
+    return this.serializePublication(publication, user.id);
+  }
+
+  async listComments(authUser: AuthUser, publicationId: string) {
+    const user = await this.getActiveUser(authUser);
+    const publication = await this.findPublicationOrThrow(publicationId);
+    this.ensureCanRead(user, publication);
+
+    const comments = await this.prisma.publicationComment.findMany({
+      where: { publicationId },
+      include: publicationCommentInclude,
+      orderBy: [{ createdAt: "asc" }],
+    });
+
+    return comments.map((comment) => this.serializePublicationComment(comment, user.id));
+  }
+
+  async updatePublication(authUser: AuthUser, id: string, input: UpdatePublicationDto) {
+    const user = await this.getActiveUser(authUser);
+    const publication = await this.findPublicationOrThrow(id);
+    this.ensureCanManage(user, publication);
+
+    const nextType = input.type ?? publication.type;
+    const policy = this.ensureTypeAllowed(user, nextType);
+    this.validatePublicationPayload(nextType, {
+      ...input,
+      title: input.title ?? publication.title,
+      content: input.content ?? publication.content,
+      linkUrl: input.linkUrl ?? publication.linkUrl ?? undefined,
+      attachments: input.attachments,
+    });
+
+    const nextStatus =
+      input.publishNow === undefined
+        ? publication.status
+        : input.publishNow
+          ? PublicationStatus.PUBLISHED
+          : PublicationStatus.DRAFT;
+
+    const updated = await this.prisma.publication.update({
+      where: { id },
+      data: {
+        type: nextType,
+        status: nextStatus,
+        audience: input.audience ?? publication.audience,
+        title: input.title === undefined ? publication.title : this.requiredText(input.title, "Le titre est requis."),
+        content:
+          input.content === undefined ? publication.content : this.requiredText(input.content, "Le contenu est requis."),
+        excerpt: input.content === undefined ? publication.excerpt : this.buildExcerpt(input.content),
+        category: input.category === undefined ? publication.category : this.optionalText(input.category),
+        discipline: input.discipline === undefined ? publication.discipline : this.optionalText(input.discipline),
+        country: input.country === undefined ? publication.country : this.optionalText(input.country),
+        city: input.city === undefined ? publication.city : this.optionalText(input.city),
+        tags: input.tags === undefined ? publication.tags : this.normalizeTags(input.tags),
+        routingDestinations: nextType === publication.type ? publication.routingDestinations : policy.destinations,
+        linkUrl: input.linkUrl === undefined ? publication.linkUrl : this.optionalText(input.linkUrl),
+        coverImageUrl:
+          input.coverImageUrl === undefined ? publication.coverImageUrl : this.optionalText(input.coverImageUrl),
+        groupId: input.groupId === undefined ? publication.groupId : this.optionalText(input.groupId),
+        opportunityDeadline:
+          input.opportunityDeadline === undefined
+            ? publication.opportunityDeadline
+            : input.opportunityDeadline
+              ? new Date(input.opportunityDeadline)
+              : null,
+        opportunityLocation:
+          input.opportunityLocation === undefined
+            ? publication.opportunityLocation
+            : this.optionalText(input.opportunityLocation),
+        budgetRange: input.budgetRange === undefined ? publication.budgetRange : this.optionalText(input.budgetRange),
+        contactEmail:
+          input.contactEmail === undefined ? publication.contactEmail : this.optionalText(input.contactEmail),
+        publishedAt:
+          nextStatus === PublicationStatus.PUBLISHED && !publication.publishedAt ? new Date() : publication.publishedAt,
+        expiresAt: input.expiresAt === undefined ? publication.expiresAt : input.expiresAt ? new Date(input.expiresAt) : null,
+        ...(input.attachments === undefined
+          ? {}
+          : {
+              attachments: {
+                deleteMany: {},
+                create: this.normalizeAttachments(input.attachments),
+              },
+            }),
+      },
+      include: publicationInclude,
+    });
+
+    if (publication.status !== PublicationStatus.PUBLISHED && updated.status === PublicationStatus.PUBLISHED) {
+      await this.notifyPublicationPublished(updated, user).catch(() => undefined);
+    }
+
+    return this.serializePublication(updated, user.id);
+  }
+
+  async publishPublication(authUser: AuthUser, id: string) {
+    const user = await this.getActiveUser(authUser);
+    const publication = await this.findPublicationOrThrow(id);
+    this.ensureCanManage(user, publication);
+    this.ensureTypeAllowed(user, publication.type);
+    this.validatePublicationPayload(publication.type, {
+      title: publication.title,
+      content: publication.content,
+      linkUrl: publication.linkUrl ?? undefined,
+      attachments: publication.attachments,
+    });
+
+    const updated = await this.prisma.publication.update({
+      where: { id },
+      data: {
+        status: PublicationStatus.PUBLISHED,
+        publishedAt: publication.publishedAt ?? new Date(),
+      },
+      include: publicationInclude,
+    });
+
+    await this.notifyPublicationPublished(updated, user).catch(() => undefined);
+
+    return this.serializePublication(updated, user.id);
+  }
+
+  async archivePublication(authUser: AuthUser, id: string) {
+    const user = await this.getActiveUser(authUser);
+    const publication = await this.findPublicationOrThrow(id);
+    this.ensureCanManage(user, publication);
+
+    const updated = await this.prisma.publication.update({
+      where: { id },
+      data: { status: PublicationStatus.ARCHIVED },
+      include: publicationInclude,
+    });
+
+    return this.serializePublication(updated, user.id);
+  }
+
+  async addComment(authUser: AuthUser, publicationId: string, input: CreatePublicationCommentDto) {
+    const user = await this.getActiveUser(authUser);
+    const publication = await this.findPublicationOrThrow(publicationId);
+    this.ensureCanRead(user, publication);
+
+    const parentId = this.optionalText(input.parentId);
+    if (parentId) {
+      const parent = await this.prisma.publicationComment.findUnique({
+        where: { id: parentId },
+        select: { publicationId: true },
+      });
+
+      if (!parent || parent.publicationId !== publicationId) {
+        throw new BadRequestException("Le commentaire auquel vous répondez est introuvable.");
+      }
+    }
+
+    const comment = await this.prisma.publicationComment.create({
+      data: {
+        publicationId,
+        authorId: user.id,
+        parentId,
+        content: this.requiredText(input.content, "Le commentaire est requis."),
+      },
+      include: publicationCommentInclude,
+    });
+
+    if (publication.authorId !== user.id) {
+      await this.notifications.createForUser({
+        userId: publication.authorId,
+        type: NotificationType.MESSAGE,
+        title: "Nouveau commentaire",
+        message: `${this.displayName(user)} a commenté votre publication “${publication.title}”.`,
+        href: "/espace-membre",
+      }).catch(() => undefined);
+    }
+
+    return this.serializePublicationComment(comment, user.id);
+  }
+
+  async toggleReaction(authUser: AuthUser, publicationId: string, input: TogglePublicationReactionDto = {}) {
+    const user = await this.getActiveUser(authUser);
+    const publication = await this.findPublicationOrThrow(publicationId);
+    this.ensureCanRead(user, publication);
+
+    const type = input.type ?? PublicationReactionType.LIKE;
+    const existing = await this.prisma.publicationReaction.findUnique({
+      where: {
+        publicationId_userId_type: {
+          publicationId,
+          userId: user.id,
+          type,
+        },
+      },
+      select: { id: true },
+    });
+
+    if (existing) {
+      await this.prisma.publicationReaction.delete({ where: { id: existing.id } });
+    } else {
+      await this.prisma.publicationReaction.create({
+        data: {
+          publicationId,
+          userId: user.id,
+          type,
+        },
+      });
+
+      if (publication.authorId !== user.id) {
+        await this.notifications.createForUser({
+          userId: publication.authorId,
+          type: NotificationType.SYSTEM,
+          title: "Nouvelle réaction",
+          message: `${this.displayName(user)} a réagi à votre publication “${publication.title}”.`,
+          href: "/espace-membre",
+        }).catch(() => undefined);
+      }
+    }
+
+    const count = await this.prisma.publicationReaction.count({
+      where: { publicationId, type },
+    });
+
+    return {
+      active: !existing,
+      type,
+      count,
+    };
+  }
+
+  private async getActiveUser(authUser: AuthUser): Promise<ActiveUser> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: authUser.userId },
+      include: activeUserInclude,
+    });
+
+    if (!user || user.status !== AccountStatus.ACTIVE) {
+      throw new UnauthorizedException("Votre connexion n'est plus valide. Connectez-vous à nouveau.");
+    }
+
+    return user;
+  }
+
+  private ensureTypeAllowed(user: ActiveUser, type: PublicationType) {
+    const policy = publicationPolicies[type];
+
+    if (!policy) {
+      throw new BadRequestException("Choisissez un type de publication valide.");
+    }
+
+    if (!policy.allowedAccountTypes.includes(user.type)) {
+      throw new ForbiddenException(this.permissionMessage(user.type, policy.label));
+    }
+
+    return policy;
+  }
+
+  private permissionMessage(accountType: AccountType, label: string) {
+    const labels: Record<AccountType, string> = {
+      [AccountType.PUBLIC]: "public",
+      [AccountType.CREATOR]: "créateur",
+      [AccountType.LEARNER]: "apprenant",
+      [AccountType.ORGANIZATION]: "organisation",
+      [AccountType.PARTNER]: "partenaire",
+      [AccountType.ADMIN]: "administrateur",
+    };
+
+    return `Un compte ${labels[accountType]} ne peut pas publier ce type de contenu : ${label}.`;
+  }
+
+  private validatePublicationPayload(type: PublicationType, input: PublicationPayloadForValidation) {
+    this.requiredText(input.title, "Le titre est requis.");
+    this.requiredText(input.content, "Le contenu est requis.");
+
+    if (type === PublicationType.RESOURCE && !this.optionalText(input.linkUrl) && !input.attachments?.length) {
+      throw new BadRequestException("Ajoutez un lien ou un fichier pour publier une ressource.");
+    }
+  }
+
+  private buildListWhere(user: ActiveUser, query: PublicationQueryDto): Prisma.PublicationWhereInput {
+    const and: Prisma.PublicationWhereInput[] = [];
+    const q = this.optionalText(query.q);
+    const category = this.optionalText(query.category);
+    const destination = this.optionalText(query.destination);
+
+    if (user.type !== AccountType.ADMIN) {
+      and.push(
+        query.mine
+          ? { authorId: user.id }
+          : {
+              OR: [
+                { authorId: user.id },
+                {
+                  status: PublicationStatus.PUBLISHED,
+                  audience: { in: [PublicationAudience.PUBLIC, PublicationAudience.MEMBERS, PublicationAudience.GROUP] },
+                },
+              ],
+            },
+      );
+    } else if (query.mine) {
+      and.push({ authorId: user.id });
+    }
+
+    if (query.type) {
+      and.push({ type: query.type });
+    }
+
+    if (query.status) {
+      and.push({ status: query.status });
+    } else if (!query.mine && user.type === AccountType.ADMIN) {
+      and.push({ status: PublicationStatus.PUBLISHED });
+    }
+
+    if (query.audience) {
+      and.push({ audience: query.audience });
+    }
+
+    if (category) {
+      and.push({ category: { contains: category, mode: "insensitive" } });
+    }
+
+    if (destination) {
+      and.push({ routingDestinations: { has: destination } });
+    }
+
+    if (q) {
+      and.push({
+        OR: [
+          { title: { contains: q, mode: "insensitive" } },
+          { content: { contains: q, mode: "insensitive" } },
+          { category: { contains: q, mode: "insensitive" } },
+          { discipline: { contains: q, mode: "insensitive" } },
+          { country: { contains: q, mode: "insensitive" } },
+          { city: { contains: q, mode: "insensitive" } },
+          { tags: { has: q } },
+        ],
+      });
+    }
+
+    return and.length ? { AND: and } : {};
+  }
+
+  private async findPublicationOrThrow(id: string) {
+    const publication = await this.prisma.publication.findUnique({
+      where: { id },
+      include: publicationInclude,
+    });
+
+    if (!publication) {
+      throw new NotFoundException("Cette publication est introuvable.");
+    }
+
+    return publication;
+  }
+
+  private ensureCanRead(user: ActiveUser, publication: PublicationWithRelations) {
+    if (user.type === AccountType.ADMIN || publication.authorId === user.id) {
+      return;
+    }
+
+    if (publication.status === PublicationStatus.PUBLISHED && publication.audience !== PublicationAudience.PRIVATE) {
+      return;
+    }
+
+    throw new NotFoundException("Cette publication est introuvable.");
+  }
+
+  private ensureCanManage(user: ActiveUser, publication: PublicationWithRelations) {
+    if (user.type === AccountType.ADMIN || publication.authorId === user.id) {
+      return;
+    }
+
+    throw new ForbiddenException("Vous ne pouvez modifier que vos propres publications.");
+  }
+
+  private buildAttachmentsCreate(attachments?: PublicationAttachmentDto[]) {
+    const normalized = this.normalizeAttachments(attachments);
+    return normalized.length ? { create: normalized } : undefined;
+  }
+
+  private normalizeAttachments(attachments?: PublicationAttachmentDto[]) {
+    return (attachments ?? []).map((attachment, index) => ({
+      type: attachment.type ?? PublicationAttachmentType.OTHER,
+      url: this.requiredText(attachment.url, "Le lien du fichier est requis."),
+      name: this.optionalText(attachment.name),
+      mimeType: this.optionalText(attachment.mimeType),
+      sizeBytes: attachment.sizeBytes ?? null,
+      order: attachment.order ?? index,
+    }));
+  }
+
+  private normalizeTags(tags?: string[]) {
+    return Array.from(new Set((tags ?? []).map((tag) => this.optionalText(tag)).filter((tag): tag is string => !!tag))).slice(0, 12);
+  }
+
+  private resolveLimit(value?: number) {
+    return Math.min(Math.max(value ?? 30, 1), 80);
+  }
+
+  private addCursorToWhere(where: Prisma.PublicationWhereInput, cursor?: string): Prisma.PublicationWhereInput {
+    const decodedCursor = this.decodePublicationCursor(cursor);
+
+    if (!decodedCursor) {
+      return where;
+    }
+
+    return {
+      AND: [
+        where,
+        {
+          OR: [
+            { createdAt: { lt: decodedCursor.createdAt } },
+            { createdAt: { equals: decodedCursor.createdAt }, id: { lt: decodedCursor.id } },
+          ],
+        },
+      ],
+    };
+  }
+
+  private encodePublicationCursor(publication: PublicationWithRelations) {
+    return Buffer.from(`${publication.createdAt.toISOString()}|${publication.id}`, "utf8").toString("base64url");
+  }
+
+  private decodePublicationCursor(cursor?: string) {
+    const rawCursor = this.optionalText(cursor);
+
+    if (!rawCursor) {
+      return null;
+    }
+
+    try {
+      const [rawDate, id] = Buffer.from(rawCursor, "base64url").toString("utf8").split("|");
+      const createdAt = new Date(rawDate);
+
+      if (!id || Number.isNaN(createdAt.getTime())) {
+        throw new Error("Invalid cursor");
+      }
+
+      return { createdAt, id };
+    } catch {
+      throw new BadRequestException("Le curseur de pagination est invalide.");
+    }
+  }
+
+  private rankPublicationsForUser(publications: PublicationWithRelations[], user: ActiveUser) {
+    return publications
+      .map((publication) => ({
+        publication,
+        score: this.scorePublicationForUser(publication, user),
+      }))
+      .sort((left, right) => {
+        if (right.score !== left.score) {
+          return right.score - left.score;
+        }
+
+        const rightDate = right.publication.publishedAt ?? right.publication.createdAt;
+        const leftDate = left.publication.publishedAt ?? left.publication.createdAt;
+
+        return rightDate.getTime() - leftDate.getTime();
+      })
+      .map(({ publication }) => publication);
+  }
+
+  private scorePublicationForUser(publication: PublicationWithRelations, user: ActiveUser) {
+    const now = Date.now();
+    const publishedAt = publication.publishedAt ?? publication.createdAt;
+    const ageInDays = Math.max(0, (now - publishedAt.getTime()) / 86_400_000);
+    const freshness = Math.max(0, 24 - ageInDays) * 1.4;
+    const engagement = Math.min(34, publication._count.reactions * 2 + publication._count.comments * 3);
+    const completeness =
+      6 +
+      (publication.coverImageUrl ? 5 : 0) +
+      (publication.linkUrl ? 4 : 0) +
+      (publication.attachments.length ? 5 : 0) +
+      (publication.category ? 3 : 0);
+    const relevance =
+      this.sameValue(publication.discipline, this.defaultDiscipline(user)) * 16 +
+      this.sameValue(publication.country, this.defaultCountry(user)) * 8 +
+      this.sameValue(publication.city, this.defaultCity(user)) * 12;
+    const businessPriority =
+      (publication.routingDestinations.includes("opportunities") ? 13 : 0) +
+      (publication.routingDestinations.includes("trainings") ? 10 : 0) +
+      (publication.routingDestinations.includes("agenda") ? 8 : 0) +
+      (publication.author.type === AccountType.ADMIN ? 12 : 0) +
+      (publication.author.type === AccountType.ORGANIZATION || publication.author.type === AccountType.PARTNER ? 6 : 0);
+    const deadlineBoost = this.deadlineScore(publication.opportunityDeadline ?? publication.expiresAt);
+    const expiredPenalty = this.isExpired(publication.expiresAt) || this.isExpired(publication.opportunityDeadline) ? -80 : 0;
+
+    return freshness + engagement + completeness + relevance + businessPriority + deadlineBoost + expiredPenalty;
+  }
+
+  private sameValue(left?: string | null, right?: string | null) {
+    return this.normalizeComparable(left) && this.normalizeComparable(left) === this.normalizeComparable(right) ? 1 : 0;
+  }
+
+  private normalizeComparable(value?: string | null) {
+    return value?.trim().toLowerCase() ?? "";
+  }
+
+  private deadlineScore(deadline?: Date | null) {
+    if (!deadline) {
+      return 0;
+    }
+
+    const daysUntilDeadline = (deadline.getTime() - Date.now()) / 86_400_000;
+
+    if (daysUntilDeadline < 0) {
+      return -40;
+    }
+
+    if (daysUntilDeadline <= 7) {
+      return 18;
+    }
+
+    if (daysUntilDeadline <= 30) {
+      return 9;
+    }
+
+    return 3;
+  }
+
+  private isExpired(value?: Date | null) {
+    return !!value && value.getTime() < Date.now();
+  }
+
+  private defaultDiscipline(user: ActiveUser) {
+    return user.profile?.otherDiscipline ?? user.profile?.discipline ?? user.organizationProfile?.sector ?? user.partnerProfile?.partnerType ?? null;
+  }
+
+  private defaultCountry(user: ActiveUser) {
+    return user.profile?.country ?? user.organizationProfile?.country ?? user.partnerProfile?.country ?? null;
+  }
+
+  private defaultCity(user: ActiveUser) {
+    return user.profile?.city ?? user.organizationProfile?.city ?? user.partnerProfile?.city ?? null;
+  }
+
+  private async notifyPublicationPublished(publication: PublicationWithRelations, author: ActiveUser) {
+    const recipients = await this.prisma.networkConnection.findMany({
+      where: {
+        memberId: author.id,
+        status: "ACCEPTED",
+        ownerId: { not: author.id },
+      },
+      select: { ownerId: true },
+      take: 80,
+    });
+    const notificationType = this.notificationTypeForPublication(publication.type);
+    const href = this.hrefForPublication(publication);
+    const authorName = this.displayName(author);
+
+    await Promise.all(
+      recipients.map((recipient) =>
+        this.notifications.createForUser({
+          userId: recipient.ownerId,
+          type: notificationType,
+          title: publicationPolicies[publication.type].label,
+          message: `${authorName} a publié “${publication.title}”.`,
+          href,
+        }).catch(() => undefined),
+      ),
+    );
+  }
+
+  private notificationTypeForPublication(type: PublicationType) {
+    if (type === PublicationType.TRAINING) {
+      return NotificationType.TRAINING;
+    }
+
+    if (type === PublicationType.OPPORTUNITY || type === PublicationType.JOB) {
+      return NotificationType.OPPORTUNITY;
+    }
+
+    return NotificationType.SYSTEM;
+  }
+
+  private hrefForPublication(publication: PublicationWithRelations) {
+    if (publication.routingDestinations.includes("opportunities")) {
+      return "/espace-membre/opportunites";
+    }
+
+    if (publication.routingDestinations.includes("resources")) {
+      return "/espace-membre/ressources";
+    }
+
+    if (publication.routingDestinations.includes("groups")) {
+      return publication.groupId ? `/espace-membre/messages?groupId=${publication.groupId}` : "/espace-membre/groupes";
+    }
+
+    if (publication.routingDestinations.includes("trainings")) {
+      return "/espace-membre/formations";
+    }
+
+    return "/espace-membre";
+  }
+
+  private displayName(user: ActiveUser) {
+    return (
+      user.profile?.publicName ??
+      user.organizationProfile?.name ??
+      user.partnerProfile?.name ??
+      `${user.firstName} ${user.lastName}`.trim()
+    );
+  }
+
+  private buildExcerpt(content: string) {
+    const normalized = this.requiredText(content, "Le contenu est requis.").replace(/\s+/g, " ");
+    return normalized.length > 220 ? `${normalized.slice(0, 217).trim()}...` : normalized;
+  }
+
+  private requiredText(value: unknown, message: string) {
+    if (typeof value !== "string" || !value.trim()) {
+      throw new BadRequestException(message);
+    }
+
+    return value.trim();
+  }
+
+  private optionalText(value: unknown) {
+    return typeof value === "string" && value.trim() ? value.trim() : null;
+  }
+
+  private validatePublicationFile(file?: Express.Multer.File): asserts file is Express.Multer.File {
+    if (!file) {
+      throw new BadRequestException("Choisissez un fichier à envoyer.");
+    }
+
+    const acceptedMimeTypes = [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "image/gif",
+      "video/mp4",
+      "video/quicktime",
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.ms-powerpoint",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "text/plain",
+    ];
+
+    if (!acceptedMimeTypes.includes(file.mimetype)) {
+      throw new BadRequestException("Envoyez une image, une vidéo, un PDF ou un document valide.");
+    }
+
+    if (file.size > 20 * 1024 * 1024) {
+      throw new BadRequestException("Le fichier ne doit pas dépasser 20 Mo.");
+    }
+  }
+
+  private publicationAttachmentType(file: Express.Multer.File) {
+    if (file.mimetype.startsWith("image/")) {
+      return PublicationAttachmentType.IMAGE;
+    }
+
+    if (file.mimetype.startsWith("video/")) {
+      return PublicationAttachmentType.VIDEO;
+    }
+
+    if (file.mimetype === "application/pdf") {
+      return PublicationAttachmentType.PDF;
+    }
+
+    return PublicationAttachmentType.DOCUMENT;
+  }
+
+  private async storePublicationFile(userId: string, file: Express.Multer.File, type: PublicationAttachmentType) {
+    const extension = this.fileExtension(file);
+    const safeType = type.toLowerCase();
+    const originalName = this.safeOriginalFileName(file.originalname, extension);
+    const fileName = `${safeType}-${Date.now()}-${originalName}-${randomUUID()}${extension}`;
+    const relativeDirectory = join("publications", userId);
+    const uploadsRoot = resolve(process.cwd(), this.config.get<string>("UPLOADS_DIR") ?? "uploads");
+    const directory = join(uploadsRoot, relativeDirectory);
+
+    await mkdir(directory, { recursive: true });
+    await writeFile(join(directory, fileName), file.buffer);
+
+    return {
+      fileName,
+      url: `${this.publicBackendUrl()}/uploads/${relativeDirectory}/${fileName}`,
+    };
+  }
+
+  private fileExtension(file: Express.Multer.File) {
+    const extension = extname(file.originalname).toLowerCase();
+
+    if ([".jpg", ".jpeg", ".png", ".webp", ".gif", ".mp4", ".mov", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt"].includes(extension)) {
+      return extension;
+    }
+
+    const extensions: Record<string, string> = {
+      "image/jpeg": ".jpg",
+      "image/png": ".png",
+      "image/webp": ".webp",
+      "image/gif": ".gif",
+      "video/mp4": ".mp4",
+      "video/quicktime": ".mov",
+      "application/pdf": ".pdf",
+      "application/msword": ".doc",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+      "application/vnd.ms-excel": ".xls",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+      "application/vnd.ms-powerpoint": ".ppt",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
+      "text/plain": ".txt",
+    };
+
+    return extensions[file.mimetype] ?? "";
+  }
+
+  private safeOriginalFileName(originalName: string, extension: string) {
+    const withoutExtension = originalName.slice(0, extension ? -extension.length : undefined);
+    const normalized = withoutExtension
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 48);
+
+    return normalized || "fichier";
+  }
+
+  private publicBackendUrl() {
+    const configuredUrl = this.config.get<string>("PUBLIC_BACKEND_URL");
+
+    if (configuredUrl?.trim()) {
+      return configuredUrl.replace(/\/+$/, "");
+    }
+
+    const port = this.config.get<number>("PORT") ?? 4000;
+    return `http://localhost:${port}`;
+  }
+
+  private serializePublication(publication: PublicationWithRelations, currentUserId: string) {
+    return {
+      id: publication.id,
+      type: publication.type,
+      typeLabel: publicationPolicies[publication.type].label,
+      status: publication.status,
+      audience: publication.audience,
+      title: publication.title,
+      content: publication.content,
+      excerpt: publication.excerpt,
+      category: publication.category,
+      discipline: publication.discipline,
+      country: publication.country,
+      city: publication.city,
+      tags: publication.tags,
+      routingDestinations: publication.routingDestinations,
+      linkUrl: publication.linkUrl,
+      coverImageUrl: publication.coverImageUrl,
+      groupId: publication.groupId,
+      opportunityDeadline: publication.opportunityDeadline,
+      opportunityLocation: publication.opportunityLocation,
+      budgetRange: publication.budgetRange,
+      contactEmail: publication.contactEmail,
+      publishedAt: publication.publishedAt,
+      expiresAt: publication.expiresAt,
+      createdAt: publication.createdAt,
+      updatedAt: publication.updatedAt,
+      author: this.serializeAuthor(publication.author),
+      attachments: publication.attachments,
+      counts: {
+        comments: publication._count.comments,
+        reactions: publication._count.reactions,
+      },
+      permissions: {
+        canEdit: publication.authorId === currentUserId,
+        canArchive: publication.authorId === currentUserId,
+      },
+    };
+  }
+
+  private serializePublicationComment(comment: PublicationCommentWithAuthor, currentUserId: string) {
+    return {
+      id: comment.id,
+      publicationId: comment.publicationId,
+      parentId: comment.parentId,
+      content: comment.content,
+      createdAt: comment.createdAt,
+      updatedAt: comment.updatedAt,
+      author: this.serializeAuthor(comment.author),
+      permissions: {
+        canEdit: comment.authorId === currentUserId,
+        canDelete: comment.authorId === currentUserId,
+      },
+    };
+  }
+
+  private serializeAuthor(author: PublicationWithRelations["author"] | PublicationCommentWithAuthor["author"]) {
+    const profile = author.profile;
+    const organization = author.organizationProfile;
+    const partner = author.partnerProfile;
+
+    return {
+      id: author.id,
+      accountType: author.type,
+      displayName:
+        profile?.publicName ??
+        organization?.name ??
+        partner?.name ??
+        `${author.firstName} ${author.lastName}`.trim(),
+      avatarUrl: profile?.avatarUrl ?? organization?.logoUrl ?? partner?.logoUrl,
+      memberNumber: profile?.memberNumber,
+      discipline: profile?.otherDiscipline ?? profile?.discipline ?? organization?.sector ?? partner?.partnerType,
+      country: profile?.country ?? organization?.country ?? partner?.country,
+      city: profile?.city ?? organization?.city ?? partner?.city,
+      verified: !!author.emailVerifiedAt || !!profile?.verifiedAt || !!organization?.verifiedAt || !!partner?.verifiedAt,
+    };
+  }
+}

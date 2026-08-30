@@ -7,15 +7,18 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
-import { AccountStatus, AccountType, Gender } from "@prisma/client";
+import { AccountStatus, AccountType, Gender, Prisma } from "@prisma/client";
 import * as argon2 from "argon2";
 import type { StringValue } from "ms";
 import { PrismaService } from "../prisma/prisma.service";
 import type { AuthUser, TokenMeta } from "./auth.types";
+import { ForgotPasswordDto } from "./dto/forgot-password.dto";
 import { LoginDto } from "./dto/login.dto";
 import { ResendVerificationDto } from "./dto/resend-verification.dto";
 import { RegisterDto } from "./dto/register.dto";
+import { ResetPasswordDto } from "./dto/reset-password.dto";
 import { VerifyEmailDto } from "./dto/verify-email.dto";
+import { VerifyPasswordResetCodeDto } from "./dto/verify-password-reset-code.dto";
 import { VerificationService } from "./verification.service";
 
 @Injectable()
@@ -45,73 +48,13 @@ export class AuthService {
 
     const passwordHash = await argon2.hash(password, { type: argon2.argon2id });
 
-    const user = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.user.create({
-        data: {
-          email,
-          passwordHash,
-          firstName,
-          lastName,
-          phone: this.optionalText(input.phone),
-          type,
-          status: AccountStatus.PENDING,
-        },
-      });
-
-      if (type === AccountType.CREATOR || type === AccountType.LEARNER) {
-        await tx.creativeProfile.create({
-          data: {
-            userId: created.id,
-            country: this.requiredText(input.country, "Le pays est requis"),
-            city: this.requiredText(input.city, "La ville est requise"),
-            profession: this.optionalText(input.profession),
-            birthDate: input.birthDate ? new Date(input.birthDate) : null,
-            gender: input.gender ?? null,
-            discipline: this.requiredText(input.discipline, "La discipline principale est requise"),
-            otherDiscipline: this.optionalText(input.otherDiscipline),
-            bio: this.optionalText(input.bio),
-            portfolioUrl: this.optionalText(input.portfolioUrl),
-            websiteUrl: this.optionalText(input.websiteUrl),
-            avatarUrl: this.optionalText(input.avatarUrl),
-            cvUrl: this.optionalText(input.cvUrl),
-            memberNumber: await this.generateMemberNumber(),
-            skills: Array.isArray(input.skills) ? input.skills.filter(Boolean) : [],
-            languages: Array.isArray(input.languages) ? input.languages.filter(Boolean) : [],
-            availability: this.optionalText(input.availability),
-          },
-        });
-      }
-
-      if (type === AccountType.ORGANIZATION) {
-        await tx.organizationProfile.create({
-          data: {
-            userId: created.id,
-            name: this.requiredText(input.organizationName, "Le nom de l'organisation est requis"),
-            legalName: this.optionalText(input.organizationLegalName),
-            sector: this.optionalText(input.organizationSector),
-            country: this.requiredText(input.country, "Le pays est requis"),
-            city: this.requiredText(input.city, "La ville est requise"),
-            websiteUrl: this.optionalText(input.websiteUrl),
-            description: this.optionalText(input.organizationDescription ?? input.bio),
-          },
-        });
-      }
-
-      if (type === AccountType.PARTNER) {
-        await tx.partnerProfile.create({
-          data: {
-            userId: created.id,
-            name: this.requiredText(input.partnerName, "Le nom du partenaire est requis"),
-            partnerType: this.requiredText(input.partnerType, "Le type de partenaire est requis"),
-            country: this.requiredText(input.country, "Le pays est requis"),
-            city: this.optionalText(input.city),
-            websiteUrl: this.optionalText(input.websiteUrl),
-            description: this.optionalText(input.partnerDescription ?? input.bio),
-          },
-        });
-      }
-
-      return created;
+    const user = await this.createRegistrationWithMemberNumberRetry({
+      input,
+      email,
+      passwordHash,
+      firstName,
+      lastName,
+      type,
     });
 
     const verification = await this.verification.sendEmailVerificationCode(user);
@@ -146,13 +89,75 @@ export class AuthService {
     };
   }
 
+  async forgotPassword(input: ForgotPasswordDto) {
+    const email = this.normalizeEmail(input.email);
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        status: true,
+      },
+    });
+    const reset =
+      user?.status === AccountStatus.ACTIVE
+        ? await this.verification.sendPasswordResetCode(user)
+        : { expiresAt: this.verification.passwordResetFallbackExpiresAt() };
+
+    return {
+      success: true,
+      message: "Si un compte existe, un code de réinitialisation a été envoyé par e-mail.",
+      resetExpiresAt: reset.expiresAt,
+    };
+  }
+
+  async resetPassword(input: ResetPasswordDto) {
+    const email = this.normalizeEmail(input.email);
+    const code = this.requiredText(input.code, "Le code de réinitialisation est requis");
+    const password = this.assertPassword(input.password);
+    const user = await this.verification.verifyPasswordResetCode(email, code);
+    const passwordHash = await argon2.hash(password, { type: argon2.argon2id });
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: user.id },
+        data: { passwordHash },
+      });
+
+      await tx.authSession.updateMany({
+        where: {
+          userId: user.id,
+          revokedAt: null,
+        },
+        data: { revokedAt: new Date() },
+      });
+    });
+
+    return {
+      success: true,
+      message: "Votre mot de passe a été mis à jour. Vous pouvez vous connecter.",
+    };
+  }
+
+  async verifyPasswordResetCode(input: VerifyPasswordResetCodeDto) {
+    const email = this.normalizeEmail(input.email);
+    const code = this.requiredText(input.code, "Le code de réinitialisation est requis");
+    await this.verification.checkPasswordResetCode(email, code);
+
+    return {
+      success: true,
+      message: "Code vérifié. Vous pouvez choisir un nouveau mot de passe.",
+    };
+  }
+
   async login(input: LoginDto, meta?: TokenMeta) {
     const email = this.normalizeEmail(input.email);
     const password = this.requiredText(input.password, "Le mot de passe est requis");
 
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user || !user.passwordHash) {
-      throw new UnauthorizedException("Identifiants invalides");
+      throw new UnauthorizedException("Email ou mot de passe incorrect.");
     }
 
     if (!user.emailVerifiedAt || user.status === AccountStatus.PENDING) {
@@ -160,12 +165,12 @@ export class AuthService {
     }
 
     if (user.status !== AccountStatus.ACTIVE) {
-      throw new UnauthorizedException("Identifiants invalides");
+      throw new UnauthorizedException("Ce compte n'est pas accessible pour le moment.");
     }
 
     const passwordOk = await argon2.verify(user.passwordHash, password);
     if (!passwordOk) {
-      throw new UnauthorizedException("Identifiants invalides");
+      throw new UnauthorizedException("Email ou mot de passe incorrect.");
     }
 
     const tokens = await this.issueTokens(user.id, {
@@ -190,7 +195,7 @@ export class AuthService {
     });
 
     if (!user || user.status !== AccountStatus.ACTIVE) {
-      throw new UnauthorizedException("Session invalide");
+      throw new UnauthorizedException("Votre connexion n'est plus valide. Connectez-vous à nouveau.");
     }
 
     return {
@@ -202,7 +207,7 @@ export class AuthService {
   }
 
   async refresh(refreshToken: string, meta?: TokenMeta) {
-    const token = this.requiredText(refreshToken, "Le refresh token est requis");
+    const token = this.requiredText(refreshToken, "Votre connexion n'est plus valide. Connectez-vous à nouveau.");
     const payload = await this.verifyRefreshToken(token);
 
     const session = await this.prisma.authSession.findUnique({
@@ -217,7 +222,7 @@ export class AuthService {
       session.expiresAt <= new Date() ||
       session.user.status !== AccountStatus.ACTIVE
     ) {
-      throw new UnauthorizedException("Session expirée");
+      throw new UnauthorizedException("Votre connexion a expiré. Connectez-vous à nouveau.");
     }
 
     const currentOk = await argon2.verify(session.refreshTokenHash, token);
@@ -232,7 +237,7 @@ export class AuthService {
         where: { id: session.id },
         data: { revokedAt: new Date() },
       });
-      throw new UnauthorizedException("Refresh token invalide");
+      throw new UnauthorizedException("Votre connexion n'est plus valide. Connectez-vous à nouveau.");
     }
 
     const accessToken = await this.signAccessToken(session.userId);
@@ -258,7 +263,7 @@ export class AuthService {
   }
 
   async logout(refreshToken: string) {
-    const token = this.requiredText(refreshToken, "Le refresh token est requis");
+    const token = this.requiredText(refreshToken, "Votre connexion n'est plus valide. Connectez-vous à nouveau.");
 
     try {
       const payload = await this.verifyRefreshToken(token);
@@ -345,10 +350,107 @@ export class AuthService {
     return amount * multipliers[unit];
   }
 
-  private async generateMemberNumber() {
+  private async createRegistrationWithMemberNumberRetry({
+    input,
+    email,
+    passwordHash,
+    firstName,
+    lastName,
+    type,
+  }: {
+    input: RegisterDto;
+    email: string;
+    passwordHash: string;
+    firstName: string;
+    lastName: string;
+    type: AccountType;
+  }) {
     for (let attempt = 0; attempt < 5; attempt += 1) {
+      try {
+        return await this.prisma.$transaction(async (tx) => {
+          const created = await tx.user.create({
+            data: {
+              email,
+              passwordHash,
+              firstName,
+              lastName,
+              phone: this.optionalText(input.phone),
+              type,
+              status: AccountStatus.PENDING,
+            },
+          });
+
+          if (type === AccountType.CREATOR || type === AccountType.LEARNER) {
+            await tx.creativeProfile.create({
+              data: {
+                userId: created.id,
+                country: this.requiredText(input.country, "Le pays est requis"),
+                city: this.requiredText(input.city, "La ville est requise"),
+                profession: this.optionalText(input.profession),
+                birthDate: input.birthDate ? new Date(input.birthDate) : null,
+                gender: input.gender ?? null,
+                discipline: this.requiredText(input.discipline, "La discipline principale est requise"),
+                otherDiscipline: this.optionalText(input.otherDiscipline),
+                bio: this.optionalText(input.bio),
+                portfolioUrl: this.optionalText(input.portfolioUrl),
+                websiteUrl: this.optionalText(input.websiteUrl),
+                avatarUrl: this.optionalText(input.avatarUrl),
+                cvUrl: this.optionalText(input.cvUrl),
+                memberNumber: await this.generateMemberNumber(),
+                skills: Array.isArray(input.skills) ? input.skills.filter(Boolean) : [],
+                languages: Array.isArray(input.languages) ? input.languages.filter(Boolean) : [],
+                availability: this.optionalText(input.availability),
+              },
+            });
+          }
+
+          if (type === AccountType.ORGANIZATION) {
+            await tx.organizationProfile.create({
+              data: {
+                userId: created.id,
+                name: this.requiredText(input.organizationName, "Le nom de l'organisation est requis"),
+                legalName: this.optionalText(input.organizationLegalName),
+                sector: this.optionalText(input.organizationSector),
+                country: this.requiredText(input.country, "Le pays est requis"),
+                city: this.requiredText(input.city, "La ville est requise"),
+                websiteUrl: this.optionalText(input.websiteUrl),
+                description: this.optionalText(input.organizationDescription ?? input.bio),
+              },
+            });
+          }
+
+          if (type === AccountType.PARTNER) {
+            await tx.partnerProfile.create({
+              data: {
+                userId: created.id,
+                name: this.requiredText(input.partnerName, "Le nom du partenaire est requis"),
+                partnerType: this.requiredText(input.partnerType, "Le type de partenaire est requis"),
+                country: this.requiredText(input.country, "Le pays est requis"),
+                city: this.optionalText(input.city),
+                websiteUrl: this.optionalText(input.websiteUrl),
+                description: this.optionalText(input.partnerDescription ?? input.bio),
+              },
+            });
+          }
+
+          return created;
+        });
+      } catch (error) {
+        if (this.isMemberNumberUniqueConflict(error)) {
+          continue;
+        }
+
+        throw error;
+      }
+    }
+
+    throw new BadRequestException("Impossible de générer un numéro membre unique. Réessayez dans un instant.");
+  }
+
+  private async generateMemberNumber() {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
       const year = new Date().getFullYear();
-      const suffix = Math.floor(1000 + Math.random() * 9000);
+      const suffix = Math.floor(100000 + Math.random() * 900000);
       const memberNumber = `CCA-${year}-${suffix}`;
       const exists = await this.prisma.creativeProfile.findUnique({
         where: { memberNumber },
@@ -360,13 +462,22 @@ export class AuthService {
       }
     }
 
-    throw new BadRequestException("Impossible de générer un numéro membre");
+    throw new BadRequestException("Impossible de générer un numéro membre unique. Réessayez dans un instant.");
+  }
+
+  private isMemberNumberUniqueConflict(error: unknown) {
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
+      return false;
+    }
+
+    const target = error.meta?.target;
+    return Array.isArray(target) ? target.includes("memberNumber") : target === "memberNumber";
   }
 
   private normalizeEmail(value?: string) {
     const email = this.requiredText(value, "L'adresse e-mail est requise").toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      throw new BadRequestException("Adresse e-mail invalide");
+      throw new BadRequestException("Entrez une adresse e-mail valide.");
     }
 
     return email;
@@ -374,8 +485,15 @@ export class AuthService {
 
   private assertPassword(value?: string) {
     const password = this.requiredText(value, "Le mot de passe est requis");
-    if (password.length < 8) {
-      throw new BadRequestException("Le mot de passe doit contenir au moins 8 caractères");
+    const missingRules = [
+      password.length >= 8 ? "" : "- Au moins 8 caractères",
+      /[A-Z]/.test(password) && /[a-z]/.test(password) ? "" : "- Une majuscule et une minuscule",
+      /\d/.test(password) ? "" : "- Un chiffre",
+      /[^A-Za-z0-9]/.test(password) ? "" : "- Un caractère spécial",
+    ].filter(Boolean);
+
+    if (missingRules.length > 0) {
+      throw new BadRequestException(`Le mot de passe doit contenir :\n${missingRules.join("\n")}`);
     }
 
     return password;
@@ -384,7 +502,7 @@ export class AuthService {
   private resolveAccountType(value?: AccountType) {
     const type = value ?? AccountType.LEARNER;
     if (!Object.values(AccountType).includes(type) || type === AccountType.ADMIN) {
-      throw new BadRequestException("Type de compte invalide");
+      throw new BadRequestException("Choisissez un type de compte valide.");
     }
 
     return type;

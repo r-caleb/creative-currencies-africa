@@ -19,7 +19,7 @@ export class AuthUserService {
     });
 
     if (!user || user.status !== AccountStatus.ACTIVE) {
-      throw new UnauthorizedException("Session invalide");
+      throw new UnauthorizedException("Votre connexion n'est plus valide. Connectez-vous à nouveau.");
     }
 
     return {
