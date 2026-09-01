@@ -12,20 +12,23 @@ import {
   FileBadge,
   FileText,
   Globe2,
+  Image as ImageIcon,
   Languages,
   Link2,
   LockKeyhole,
+  Loader2,
   MapPin,
   Pencil,
   Phone,
+  Plus,
   ShieldCheck,
   UsersRound,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { MemberShell } from "@/components/member-shell";
-import { getApiErrorMessage, updateMemberProfile } from "@/lib/api";
-import type { AuthMeResponse, MemberProfile } from "@/lib/api";
+import { getApiErrorMessage, getMyPublications, updateMemberProfile } from "@/lib/api";
+import type { AuthMeResponse, MemberProfile, Publication } from "@/lib/api";
 import { accountTypeLabel, buildInitials, getMemberDisplayName, getMemberProfileTitle } from "@/lib/member-display";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { setCurrentMember } from "@/store/slices/auth-slice";
@@ -70,6 +73,9 @@ export function CreativeIdPage() {
   const [visibilityMessage, setVisibilityMessage] = useState("");
   const [visibilityError, setVisibilityError] = useState("");
   const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
+  const [creationPublications, setCreationPublications] = useState<Publication[]>([]);
+  const [isLoadingCreations, setIsLoadingCreations] = useState(false);
+  const [creationsError, setCreationsError] = useState("");
 
   const displayName = getMemberDisplayName({ user, profile, organizationProfile, partnerProfile });
   const profileTitle = getMemberProfileTitle({ user, profile, organizationProfile, partnerProfile });
@@ -149,6 +155,39 @@ export function CreativeIdPage() {
       window.clearTimeout(timeoutId);
     };
   }, [publicUrl]);
+
+  useEffect(() => {
+    if (!accessToken) {
+      return;
+    }
+
+    let isMounted = true;
+
+    setIsLoadingCreations(true);
+    getMyPublications(accessToken, { type: "CREATION", status: "PUBLISHED", limit: 12 })
+      .then((publications) => {
+        if (!isMounted) {
+          return;
+        }
+
+        setCreationPublications(publications);
+        setCreationsError("");
+      })
+      .catch((error) => {
+        if (isMounted) {
+          setCreationsError(getApiErrorMessage(error, "Impossible de charger vos créations pour le moment."));
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoadingCreations(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [accessToken]);
 
   async function copyPublicLink() {
     if (!publicUrl) {
@@ -241,6 +280,24 @@ export function CreativeIdPage() {
 
         <div className="creative-id-grid">
           <section className="creative-id-main">
+            <section className="member-card creative-id-section creative-id-showcase">
+              <div className="member-card-title">
+                <div>
+                  <h2>Mes créations visibles</h2>
+                  <p>Ce bloc montre ce qui ressortira en priorité sur votre profil public.</p>
+                </div>
+                <Link className="member-secondary-button" href="/espace-membre/publier?type=CREATION">
+                  <Plus aria-hidden="true" strokeWidth={1.8} />
+                  Publier une création
+                </Link>
+              </div>
+              <CreativeCreationGrid
+                publications={creationPublications}
+                isLoading={isLoadingCreations}
+                error={creationsError}
+              />
+            </section>
+
             <section className="member-card creative-id-section">
               <div className="member-card-title">
                 <div>
@@ -385,6 +442,90 @@ export function CreativeIdPage() {
       </div>
     </MemberShell>
   );
+}
+
+function CreativeCreationGrid({
+  publications,
+  isLoading,
+  error,
+}: {
+  publications: Publication[];
+  isLoading: boolean;
+  error: string;
+}) {
+  if (isLoading) {
+    return (
+      <div className="creative-creation-loading">
+        <Loader2 aria-hidden="true" strokeWidth={1.8} />
+        <span>Chargement de vos créations...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return <p className="auth-form-error" role="alert">{error}</p>;
+  }
+
+  if (!publications.length) {
+    return (
+      <div className="creative-creation-empty">
+        <ImageIcon aria-hidden="true" strokeWidth={1.8} />
+        <div>
+          <strong>Aucune création publiée pour le moment</strong>
+          <p>Publiez une œuvre avec un visuel pour donner plus de force à votre profil public.</p>
+        </div>
+        <Link className="member-create-button" href="/espace-membre/publier?type=CREATION">
+          <Plus aria-hidden="true" strokeWidth={1.8} />
+          Ajouter une création
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="creative-creation-grid">
+      {publications.map((publication) => (
+        <article key={publication.id}>
+          <CreativeCreationMedia publication={publication} />
+          <div>
+            <small>{publication.category || "Création"}</small>
+            <strong>{publication.title}</strong>
+            <p>{publication.excerpt || publication.content}</p>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function CreativeCreationMedia({ publication }: { publication: Publication }) {
+  const media = getCreativePublicationMedia(publication);
+
+  if (media?.type === "image") {
+    return <img src={media.url} alt="" />;
+  }
+
+  if (media?.type === "video") {
+    return <video src={media.url} muted playsInline preload="metadata" />;
+  }
+
+  return <span><ImageIcon aria-hidden="true" strokeWidth={1.8} /></span>;
+}
+
+function getCreativePublicationMedia(publication: Publication) {
+  const coverImageUrl = publication.coverImageUrl || publication.attachments.find((attachment) => attachment.type === "IMAGE")?.url;
+
+  if (coverImageUrl) {
+    return { type: "image" as const, url: coverImageUrl };
+  }
+
+  const videoUrl = publication.attachments.find((attachment) => attachment.type === "VIDEO")?.url;
+
+  if (videoUrl) {
+    return { type: "video" as const, url: videoUrl };
+  }
+
+  return null;
 }
 
 function CreativeLinkCard({

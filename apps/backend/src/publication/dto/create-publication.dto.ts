@@ -158,6 +158,13 @@ export class CreatePublicationDto {
   @Type(() => PublicationAttachmentDto)
   attachments?: PublicationAttachmentDto[];
 
+  @ApiPropertyOptional({ example: ["user_123"], description: "Membres identifiés dans la publication." })
+  @IsOptional()
+  @IsArray({ message: "Les membres identifiés doivent être une liste." })
+  @ArrayMaxSize(10, { message: "Identifiez au maximum 10 membres." })
+  @IsString({ each: true, message: "Chaque membre identifié doit être valide." })
+  mentionedUserIds?: string[];
+
   @ApiPropertyOptional({ example: true, description: "false permet d'enregistrer un brouillon." })
   @IsOptional()
   @IsBoolean({ message: "Le statut de publication doit être vrai ou faux." })

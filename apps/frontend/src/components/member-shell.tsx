@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
   Bell,
@@ -60,6 +60,7 @@ const sidebarItems: SidebarItem[] = [
   { label: "Ressources", href: "/espace-membre/ressources", icon: BookOpen },
   { label: "Agenda", href: "/espace-membre/agenda", icon: CalendarDays },
   { label: "Certificats", href: "/espace-membre/certificats", icon: ShieldCheck },
+  { label: "Admin", href: "/espace-membre/admin", icon: ShieldCheck },
   { label: "Paramètres", href: "/espace-membre/parametres", icon: Settings },
 ];
 
@@ -78,6 +79,8 @@ export function MemberShell({
   const [messageUnreadCount, setMessageUnreadCount] = useState(0);
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentPath = searchParams.toString() ? `${pathname}?${searchParams.toString()}` : pathname;
   const dispatch = useAppDispatch();
   const { accessToken, refreshToken, user, profile, organizationProfile, partnerProfile, status } = useAppSelector((state) => state.auth);
   const profileTitle = getMemberProfileTitle({ user, profile, organizationProfile, partnerProfile });
@@ -86,7 +89,17 @@ export function MemberShell({
   const initials = buildInitials(displayName);
   const headerAvatarUrl = profile?.avatarUrl ?? organizationProfile?.logoUrl ?? partnerProfile?.logoUrl ?? null;
   const shouldShowCreativeIdPrompt = !!profile && profile.profileCompletion < 100;
-  const visibleSidebarItems = sidebarItems.filter((item) => item.label !== "Certificats" || canViewCertificates(user?.type));
+  const visibleSidebarItems = sidebarItems.filter((item) => {
+    if (item.label === "Certificats") {
+      return canViewCertificates(user?.type);
+    }
+
+    if (item.label === "Admin") {
+      return user?.type === "ADMIN";
+    }
+
+    return true;
+  });
 
   useEffect(() => {
     const storage = getBrowserStorage();
@@ -140,7 +153,7 @@ export function MemberShell({
     }
 
     if (!accessToken && !refreshToken) {
-      router.replace(`/connexion?redirect=${encodeURIComponent(pathname)}`);
+      router.replace(`/connexion?redirect=${encodeURIComponent(currentPath)}`);
       return;
     }
 
@@ -164,13 +177,13 @@ export function MemberShell({
 
       clearStoredAuth();
       dispatch(clearAuth());
-      router.replace(`/connexion?redirect=${encodeURIComponent(pathname)}`);
+      router.replace(`/connexion?redirect=${encodeURIComponent(currentPath)}`);
     });
 
     return () => {
       isMounted = false;
     };
-  }, [accessToken, dispatch, pathname, refreshToken, router, status]);
+  }, [accessToken, currentPath, dispatch, refreshToken, router, status]);
 
   useEffect(() => {
     if (!accessToken || !user) {

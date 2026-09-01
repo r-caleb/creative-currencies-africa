@@ -223,6 +223,7 @@ export type NetworkMemberProfile = {
     counts: {
       comments: number;
       reactions: number;
+      shares: number;
     };
   }[];
 };
@@ -253,6 +254,8 @@ export type PublicationStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED" | "REJECTED";
 export type PublicationAudience = "PRIVATE" | "MEMBERS" | "PUBLIC" | "GROUP";
 export type PublicationAttachmentType = "IMAGE" | "VIDEO" | "PDF" | "DOCUMENT" | "LINK" | "OTHER";
 export type PublicationReactionType = "LIKE" | "SUPPORT" | "SAVE";
+export type PublicationReportReason = "SPAM" | "INAPPROPRIATE" | "MISLEADING" | "HARASSMENT" | "OTHER";
+export type PublicationReportStatus = "PENDING" | "REVIEWED" | "DISMISSED";
 
 export type PublicationCapability = {
   value: PublicationType;
@@ -291,6 +294,18 @@ export type PublicationUploadResponse = {
   sizeBytes: number;
 };
 
+export type PublicationAuthor = {
+  id: string;
+  accountType: string;
+  displayName: string;
+  avatarUrl: string | null;
+  memberNumber?: string;
+  discipline: string | null;
+  country: string | null;
+  city: string | null;
+  verified: boolean;
+};
+
 export type Publication = {
   id: string;
   type: PublicationType;
@@ -317,21 +332,13 @@ export type Publication = {
   expiresAt: string | null;
   createdAt: string;
   updatedAt: string;
-  author: {
-    id: string;
-    accountType: string;
-    displayName: string;
-    avatarUrl: string | null;
-    memberNumber?: string;
-    discipline: string | null;
-    country: string | null;
-    city: string | null;
-    verified: boolean;
-  };
+  author: PublicationAuthor;
+  mentions?: PublicationAuthor[];
   attachments: PublicationAttachment[];
   counts: {
     comments: number;
     reactions: number;
+    shares: number;
   };
   permissions: {
     canEdit: boolean;
@@ -361,6 +368,100 @@ export type PublicationComment = {
     canEdit: boolean;
     canDelete: boolean;
   };
+};
+
+export type PublicationReport = {
+  id: string;
+  reason: PublicationReportReason;
+  message: string | null;
+  status: PublicationReportStatus;
+  reviewedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  reporter: Publication["author"];
+  publication: Publication;
+};
+
+export type PublicationReportsResponse = {
+  reports: PublicationReport[];
+  total: number;
+  pending: number;
+};
+
+export type AdminMember = {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  displayName: string;
+  avatarUrl: string | null;
+  type: string;
+  status: "PENDING" | "ACTIVE" | "SUSPENDED" | "ARCHIVED";
+  phone: string | null;
+  emailVerified: boolean;
+  memberNumber: string | null;
+  profileCompletion: number | null;
+  discipline: string | null;
+  country: string | null;
+  city: string | null;
+  verifiedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminPublication = Omit<Publication, "author" | "counts" | "permissions" | "typeLabel"> & {
+  author: AdminMember;
+  counts: {
+    comments: number;
+    reactions: number;
+    shares: number;
+    reports: number;
+  };
+};
+
+export type AdminReport = Omit<PublicationReport, "reporter" | "publication"> & {
+  reporter: AdminMember;
+  publication: AdminPublication;
+};
+
+export type AdminOverviewResponse = {
+  summary: {
+    membersTotal: number;
+    activeMembers: number;
+    pendingMembers: number;
+    suspendedMembers: number;
+    pendingReports: number;
+    publishedPublications: number;
+    draftPublications: number;
+    rejectedPublications: number;
+    applicationsPending: number;
+  };
+  content: {
+    trainings: number;
+    opportunities: number;
+    resources: number;
+    groups: number;
+    certificatesIssued: number;
+  };
+  recentReports: AdminReport[];
+  recentMembers: AdminMember[];
+  recentPublications: AdminPublication[];
+};
+
+export type AdminMembersResponse = {
+  members: AdminMember[];
+  total: number;
+};
+
+export type AdminPublicationsResponse = {
+  publications: AdminPublication[];
+  total: number;
+};
+
+export type AdminReportsResponse = {
+  reports: AdminReport[];
+  total: number;
+  pending: number;
 };
 
 export type MemberTrainingResource = {
@@ -604,6 +705,20 @@ export type MemberCertificatesResponse = {
   };
 };
 
+export type IssueCertificatePayload = {
+  userId: string;
+  title: string;
+  status?: "PENDING" | "ISSUED";
+  trainingId?: string;
+  fileUrl?: string;
+  badgeUrl?: string;
+};
+
+export type IssueCertificateResponse = {
+  success: boolean;
+  certificate: MemberCertificate;
+};
+
 export type CreatePublicationPayload = {
   type: PublicationType;
   title: string;
@@ -630,6 +745,7 @@ export type CreatePublicationPayload = {
     sizeBytes?: number;
     order?: number;
   }[];
+  mentionedUserIds?: string[];
   publishNow?: boolean;
 };
 
@@ -702,7 +818,7 @@ export type DirectConversation = {
   target: DirectMessageUser | null;
   lastMessage: DirectMessage | null;
   unread: number;
-  lastMessageAt: string;
+  lastMessageAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -1307,6 +1423,13 @@ export function getMemberCertificates(accessToken?: string | null) {
   }, accessToken);
 }
 
+export function issueMemberCertificate(accessToken: string | null | undefined, body: IssueCertificatePayload) {
+  return authenticatedApiRequest<IssueCertificateResponse>("/member/certificates/issue", {
+    method: "POST",
+    body: JSON.stringify(body),
+  }, accessToken);
+}
+
 export function applyToOpportunity(
   accessToken: string | null | undefined,
   opportunityId: string,
@@ -1358,7 +1481,7 @@ export function getPublicationsPage(accessToken?: string | null, query: Publicat
   const paginatedQuery = { ...query, paginated: true };
 
   Object.entries(paginatedQuery).forEach(([key, value]) => {
-    if (value === undefined || value === null || (typeof value === "string" && value === "")) {
+    if (value === undefined || value === null) {
       return;
     }
 
@@ -1376,7 +1499,7 @@ export function getMyPublications(accessToken?: string | null, query: Publicatio
   const params = new URLSearchParams();
 
   Object.entries(query).forEach(([key, value]) => {
-    if (value === undefined || value === null || value === "") {
+    if (value === undefined || value === null || (typeof value === "string" && value === "")) {
       return;
     }
 
@@ -1410,11 +1533,119 @@ export function reactToPublication(accessToken: string | null | undefined, publi
   }, accessToken);
 }
 
+export function sharePublication(accessToken: string | null | undefined, publicationId: string, content?: string) {
+  return authenticatedApiRequest<{ success: boolean; shared: boolean; shareId: string; count: number }>(`/publications/${publicationId}/shares`, {
+    method: "POST",
+    body: JSON.stringify({ content }),
+  }, accessToken);
+}
+
+export function reportPublication(accessToken: string | null | undefined, publicationId: string, reason: PublicationReportReason, message?: string) {
+  return authenticatedApiRequest<{ success: boolean; reportId: string; status: PublicationReportStatus }>(`/publications/${publicationId}/reports`, {
+    method: "POST",
+    body: JSON.stringify({ reason, message }),
+  }, accessToken);
+}
+
+export function getPublicationReports(accessToken?: string | null, query: { status?: PublicationReportStatus; reason?: PublicationReportReason; limit?: number } = {}) {
+  const params = new URLSearchParams();
+
+  Object.entries(query).forEach(([key, value]) => {
+    if (value === undefined || value === null) {
+      return;
+    }
+
+    params.set(key, String(value));
+  });
+
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+
+  return authenticatedApiRequest<PublicationReportsResponse>(`/publications/reports${suffix}`, {
+    method: "GET",
+  }, accessToken);
+}
+
+export function moderatePublicationReport(
+  accessToken: string | null | undefined,
+  reportId: string,
+  input: { status?: PublicationReportStatus; publicationStatus?: Exclude<PublicationStatus, "DRAFT"> },
+) {
+  return authenticatedApiRequest<{ success: boolean; report: PublicationReport | null }>(`/publications/reports/${reportId}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  }, accessToken);
+}
+
+export function getAdminOverview(accessToken?: string | null) {
+  return authenticatedApiRequest<AdminOverviewResponse>("/admin/overview", {
+    method: "GET",
+  }, accessToken);
+}
+
+export function getAdminMembers(accessToken?: string | null, query: { q?: string; type?: string; status?: string; limit?: number } = {}) {
+  return authenticatedApiRequest<AdminMembersResponse>(`/admin/members${buildQueryString(query)}`, {
+    method: "GET",
+  }, accessToken);
+}
+
+export function updateAdminMemberStatus(accessToken: string | null | undefined, memberId: string, status: AdminMember["status"]) {
+  return authenticatedApiRequest<AdminMember>(`/admin/members/${memberId}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  }, accessToken);
+}
+
+export function grantAdminAccess(accessToken: string | null | undefined, memberId: string) {
+  return authenticatedApiRequest<AdminMember>(`/admin/members/${memberId}/admin-access`, {
+    method: "PATCH",
+  }, accessToken);
+}
+
+export function getAdminPublications(
+  accessToken?: string | null,
+  query: { q?: string; type?: PublicationType; status?: PublicationStatus; limit?: number } = {},
+) {
+  return authenticatedApiRequest<AdminPublicationsResponse>(`/admin/publications${buildQueryString(query)}`, {
+    method: "GET",
+  }, accessToken);
+}
+
+export function updateAdminPublicationStatus(
+  accessToken: string | null | undefined,
+  publicationId: string,
+  status: Exclude<PublicationStatus, "DRAFT">,
+) {
+  return authenticatedApiRequest<AdminPublication>(`/admin/publications/${publicationId}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  }, accessToken);
+}
+
+export function getAdminReports(
+  accessToken?: string | null,
+  query: { status?: PublicationReportStatus; reason?: PublicationReportReason; limit?: number } = {},
+) {
+  return authenticatedApiRequest<AdminReportsResponse>(`/admin/reports${buildQueryString(query)}`, {
+    method: "GET",
+  }, accessToken);
+}
+
+export function updateAdminReport(
+  accessToken: string | null | undefined,
+  reportId: string,
+  input: { status?: Exclude<PublicationReportStatus, "PENDING">; publicationStatus?: Exclude<PublicationStatus, "DRAFT"> },
+) {
+  return authenticatedApiRequest<{ success: boolean; report: AdminReport | null }>(`/admin/reports/${reportId}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  }, accessToken);
+}
+
 export function getCommunityGroups(accessToken?: string | null, query: CommunityGroupQuery = {}) {
   const params = new URLSearchParams();
 
   Object.entries(query).forEach(([key, value]) => {
-    if (value === undefined || value === null || value === "") {
+    if (value === undefined || value === null || (typeof value === "string" && value === "")) {
       return;
     }
 
@@ -1468,7 +1699,7 @@ export function getCommunityGroupMemberCandidates(
   const params = new URLSearchParams();
 
   Object.entries(query).forEach(([key, value]) => {
-    if (value === undefined || value === null || value === "") {
+    if (value === undefined || value === null || (typeof value === "string" && value === "")) {
       return;
     }
 
@@ -1685,4 +1916,40 @@ export function getReferenceDisciplines() {
   return apiRequest<string[]>("/reference/disciplines", {
     method: "GET",
   });
+}
+
+export function createReferenceDiscipline(
+  accessToken: string | null | undefined,
+  body: { name: string; sortOrder?: number; isActive?: boolean },
+) {
+  return authenticatedApiRequest<{ id: string; name: string; slug: string; isActive: boolean; sortOrder: number }>("/reference/disciplines", {
+    method: "POST",
+    body: JSON.stringify(body),
+  }, accessToken);
+}
+
+export function updateReferenceDiscipline(
+  accessToken: string | null | undefined,
+  id: string,
+  body: { name?: string; sortOrder?: number; isActive?: boolean },
+) {
+  return authenticatedApiRequest<{ id: string; name: string; slug: string; isActive: boolean; sortOrder: number }>(`/reference/disciplines/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  }, accessToken);
+}
+
+function buildQueryString(query: Record<string, string | number | boolean | undefined | null>) {
+  const params = new URLSearchParams();
+
+  Object.entries(query).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === "") {
+      return;
+    }
+
+    params.set(key, String(value));
+  });
+
+  const queryString = params.toString();
+  return queryString ? `?${queryString}` : "";
 }

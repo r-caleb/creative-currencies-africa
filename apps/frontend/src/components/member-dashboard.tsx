@@ -9,32 +9,53 @@ import {
   CalendarDays,
   CheckCircle2,
   FileText,
+  Flag,
   Heart,
   Image as ImageIcon,
   Lightbulb,
   Loader2,
   MessageCircle,
   Newspaper,
+  Repeat2,
   Send,
   Sparkles,
   UserPlus,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { MemberShell } from "@/components/member-shell";
-import { commentPublication, getApiErrorMessage, getPublicationComments, getPublicationsPage, reactToPublication, saveNetworkMember } from "@/lib/api";
-import type { Publication, PublicationComment } from "@/lib/api";
+import { commentPublication, getApiErrorMessage, getPublicationCapabilities, getPublicationComments, getPublicationsPage, reactToPublication, reportPublication, saveNetworkMember, sharePublication } from "@/lib/api";
+import type { Publication, PublicationCapability, PublicationComment, PublicationType } from "@/lib/api";
 import { accountTypeLabel, buildInitials, getMemberDisplayName, getMemberProfileTitle } from "@/lib/member-display";
 import { useAppSelector } from "@/store/hooks";
 
 type RelationStatus = "PENDING" | "ACCEPTED" | "DECLINED";
 type FeedAuthor = Publication["author"];
+type ReportReason = "SPAM" | "INAPPROPRIATE" | "MISLEADING" | "HARASSMENT" | "OTHER";
+type QuickPublishAction = {
+  type: PublicationType;
+  label: string;
+  href: string;
+  icon: LucideIcon;
+};
 
-const quickPublishActions = [
-  { label: "Projet", href: "/espace-membre/publier", icon: Sparkles },
-  { label: "Création", href: "/espace-membre/publier", icon: ImageIcon },
-  { label: "Opportunité", href: "/espace-membre/publier", icon: Lightbulb },
-  { label: "Ressource", href: "/espace-membre/publier", icon: FileText },
+const quickPublishActions: QuickPublishAction[] = [
+  { type: "CREATION", label: "Création", href: "/espace-membre/publier?type=CREATION", icon: ImageIcon },
+  { type: "PROJECT", label: "Projet", href: "/espace-membre/publier?type=PROJECT", icon: Sparkles },
+  { type: "OPPORTUNITY", label: "Opportunité", href: "/espace-membre/publier?type=OPPORTUNITY", icon: Lightbulb },
+  { type: "QUESTION", label: "Question", href: "/espace-membre/publier?type=QUESTION", icon: MessageCircle },
+  { type: "COLLABORATION", label: "Collaboration", href: "/espace-membre/publier?type=COLLABORATION", icon: UserPlus },
+  { type: "RESOURCE", label: "Ressource", href: "/espace-membre/publier?type=RESOURCE", icon: FileText },
+  { type: "EVENT", label: "Événement", href: "/espace-membre/publier?type=EVENT", icon: CalendarDays },
+  { type: "TRAINING", label: "Formation", href: "/espace-membre/publier?type=TRAINING", icon: Newspaper },
 ];
 const feedPageSize = 12;
+const reportReasons: Array<{ value: ReportReason; label: string }> = [
+  { value: "SPAM", label: "Spam ou contenu répétitif" },
+  { value: "MISLEADING", label: "Information trompeuse" },
+  { value: "INAPPROPRIATE", label: "Contenu inapproprié" },
+  { value: "HARASSMENT", label: "Harcèlement" },
+  { value: "OTHER", label: "Autre raison" },
+];
 
 export function MemberDashboard() {
   const { accessToken, user, profile, organizationProfile, partnerProfile } = useAppSelector((state) => state.auth);
@@ -45,6 +66,11 @@ export function MemberDashboard() {
   const [nextFeedCursor, setNextFeedCursor] = useState<string | null>(null);
   const [hasMoreFeed, setHasMoreFeed] = useState(false);
   const [reactingPostId, setReactingPostId] = useState("");
+  const [sharingPostId, setSharingPostId] = useState("");
+  const [reportingPostId, setReportingPostId] = useState("");
+  const [reportMenuPostId, setReportMenuPostId] = useState("");
+  const [reportedPostIds, setReportedPostIds] = useState<Set<string>>(() => new Set());
+  const [feedNotice, setFeedNotice] = useState("");
   const [authorRelationStatuses, setAuthorRelationStatuses] = useState<Map<string, RelationStatus>>(() => new Map());
   const [connectingAuthorId, setConnectingAuthorId] = useState("");
   const [openCommentsPostId, setOpenCommentsPostId] = useState("");
@@ -53,6 +79,7 @@ export function MemberDashboard() {
   const [replyTargets, setReplyTargets] = useState<Map<string, PublicationComment>>(() => new Map());
   const [loadingCommentsPostId, setLoadingCommentsPostId] = useState("");
   const [submittingCommentPostId, setSubmittingCommentPostId] = useState("");
+  const [publicationCapabilities, setPublicationCapabilities] = useState<PublicationCapability[]>([]);
   const feedLoadMoreRef = useRef<HTMLDivElement | null>(null);
 
   const displayName = getMemberDisplayName({ user, profile, organizationProfile, partnerProfile });
@@ -82,6 +109,13 @@ export function MemberDashboard() {
 
     return Array.from(authors.values()).slice(0, 4);
   }, [feedPosts, user?.id]);
+  const visibleQuickPublishActions = useMemo(() => {
+    const allowedTypes = publicationCapabilities.length
+      ? new Set(publicationCapabilities.filter((capability) => capability.allowed).map((capability) => capability.value))
+      : getFallbackAllowedQuickTypes(user?.type);
+
+    return quickPublishActions.filter((action) => allowedTypes.has(action.type)).slice(0, 4);
+  }, [publicationCapabilities, user?.type]);
   const feedInsights = useMemo(
     () => [
       { label: "Publications", value: feedPosts.length, icon: Newspaper },
@@ -90,6 +124,31 @@ export function MemberDashboard() {
     ],
     [feedPosts],
   );
+
+  useEffect(() => {
+    if (!accessToken) {
+      setPublicationCapabilities([]);
+      return;
+    }
+
+    let isActive = true;
+
+    getPublicationCapabilities(accessToken)
+      .then((response) => {
+        if (isActive) {
+          setPublicationCapabilities(response.types);
+        }
+      })
+      .catch(() => {
+        if (isActive) {
+          setPublicationCapabilities([]);
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [accessToken]);
 
   const loadFeedPage = useCallback(async (cursor: string | null = null, append = false) => {
     if (!accessToken) {
@@ -179,6 +238,51 @@ export function MemberDashboard() {
       setFeedError(getApiErrorMessage(requestError, "Impossible de mettre à jour la réaction pour le moment."));
     } finally {
       setReactingPostId("");
+    }
+  }
+
+  async function sharePost(post: Publication) {
+    if (!accessToken || sharingPostId) {
+      return;
+    }
+
+    setSharingPostId(post.id);
+
+    try {
+      const response = await sharePublication(accessToken, post.id);
+      setFeedPosts((current) => current.map((item) => item.id === post.id ? {
+        ...item,
+        counts: { ...item.counts, shares: response.count },
+      } : item));
+
+      const shareUrl = `${window.location.origin}${postDestinationHref(post)}`;
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(shareUrl).catch(() => undefined);
+      }
+      setFeedNotice("Publication partagée. Le lien a été copié si votre navigateur l’autorise.");
+    } catch (requestError) {
+      setFeedError(getApiErrorMessage(requestError, "Impossible de partager cette publication pour le moment."));
+    } finally {
+      setSharingPostId("");
+    }
+  }
+
+  async function reportPost(post: Publication, reason: ReportReason) {
+    if (!accessToken || reportingPostId || reportedPostIds.has(post.id)) {
+      return;
+    }
+
+    setReportingPostId(post.id);
+
+    try {
+      await reportPublication(accessToken, post.id, reason);
+      setReportedPostIds((current) => new Set(current).add(post.id));
+      setReportMenuPostId("");
+      setFeedNotice("Merci, le signalement a été transmis à l’équipe CCA.");
+    } catch (requestError) {
+      setFeedError(getApiErrorMessage(requestError, "Impossible d’envoyer ce signalement pour le moment."));
+    } finally {
+      setReportingPostId("");
     }
   }
 
@@ -331,7 +435,7 @@ export function MemberDashboard() {
               <Link href="/espace-membre/publier">Commencer une publication</Link>
             </div>
             <div className="member-feed-composer-actions">
-              {quickPublishActions.map((action) => {
+              {visibleQuickPublishActions.map((action) => {
                 const Icon = action.icon;
 
                 return (
@@ -376,6 +480,7 @@ export function MemberDashboard() {
             </div>
 
             {feedError ? <p className="auth-form-error">{feedError}</p> : null}
+            {feedNotice ? <p className="member-feed-notice">{feedNotice}</p> : null}
 
             {isFeedLoading ? (
               <div className="member-feed-loading">
@@ -392,6 +497,10 @@ export function MemberDashboard() {
                     relationStatus={authorRelationStatuses.get(post.author.id) ?? null}
                     isConnecting={connectingAuthorId === post.author.id}
                     isReacting={reactingPostId === post.id}
+                    isSharing={sharingPostId === post.id}
+                    isReporting={reportingPostId === post.id}
+                    isReportMenuOpen={reportMenuPostId === post.id}
+                    isReported={reportedPostIds.has(post.id)}
                     isCommentsOpen={openCommentsPostId === post.id}
                     isCommentsLoading={loadingCommentsPostId === post.id}
                     isCommentSubmitting={submittingCommentPostId === post.id}
@@ -400,6 +509,9 @@ export function MemberDashboard() {
                     replyTarget={replyTargets.get(post.id) ?? null}
                     onConnect={() => connectToAuthor(post.author)}
                     onReact={() => reactToPost(post)}
+                    onShare={() => sharePost(post)}
+                    onToggleReportMenu={() => setReportMenuPostId((current) => current === post.id ? "" : post.id)}
+                    onReport={(reason) => reportPost(post, reason)}
                     onToggleComments={() => toggleComments(post.id)}
                     onCommentDraftChange={(value) => updateCommentDraft(post.id, value)}
                     onSubmitComment={(event) => submitComment(event, post)}
@@ -419,11 +531,15 @@ export function MemberDashboard() {
                 )}
               </div>
             ) : (
-              <div className="member-feed-empty">
+              <div className="member-feed-empty member-feed-empty--guided">
                 <Sparkles aria-hidden="true" strokeWidth={1.8} />
                 <strong>Aucune publication pour le moment</strong>
-                <p>Les projets, ressources, opportunités et annonces apparaîtront ici dès leur publication.</p>
-                <Link className="member-create-button" href="/espace-membre/publier">Créer la première publication</Link>
+                <p>Le fil se remplira avec les projets, créations, opportunités, ressources et annonces visibles par votre compte.</p>
+                <div>
+                  <Link className="member-create-button" href="/espace-membre/publier">Publier maintenant</Link>
+                  <Link className="member-secondary-button" href="/espace-membre/creative-id">Compléter mon Creative ID</Link>
+                  <Link className="member-secondary-button" href="/espace-membre/reseau">Explorer le réseau</Link>
+                </div>
               </div>
             )}
           </section>
@@ -530,6 +646,10 @@ function FeedPost({
   relationStatus,
   isConnecting,
   isReacting,
+  isSharing,
+  isReporting,
+  isReportMenuOpen,
+  isReported,
   isCommentsOpen,
   isCommentsLoading,
   isCommentSubmitting,
@@ -538,6 +658,9 @@ function FeedPost({
   replyTarget,
   onConnect,
   onReact,
+  onShare,
+  onToggleReportMenu,
+  onReport,
   onToggleComments,
   onCommentDraftChange,
   onSubmitComment,
@@ -549,6 +672,10 @@ function FeedPost({
   relationStatus: RelationStatus | null;
   isConnecting: boolean;
   isReacting: boolean;
+  isSharing: boolean;
+  isReporting: boolean;
+  isReportMenuOpen: boolean;
+  isReported: boolean;
   isCommentsOpen: boolean;
   isCommentsLoading: boolean;
   isCommentSubmitting: boolean;
@@ -557,6 +684,9 @@ function FeedPost({
   replyTarget: PublicationComment | null;
   onConnect: () => void;
   onReact: () => void;
+  onShare: () => void;
+  onToggleReportMenu: () => void;
+  onReport: (reason: ReportReason) => void;
   onToggleComments: () => void;
   onCommentDraftChange: (value: string) => void;
   onSubmitComment: (event: FormEvent<HTMLFormElement>) => void;
@@ -566,6 +696,7 @@ function FeedPost({
   const isOwnPost = post.author.id === currentUserId;
   const action = getRelationAction(post.author, relationStatus);
   const authorLocation = [post.author.city, post.author.country].filter(Boolean).join(", ");
+  const shareCount = post.counts.shares ?? 0;
   const rootComments = comments.filter((comment) => !comment.parentId);
   const repliesByParentId = comments.reduce<Map<string, PublicationComment[]>>((groups, comment) => {
     if (!comment.parentId) {
@@ -607,6 +738,7 @@ function FeedPost({
         </div>
         <h3>{post.title}</h3>
         <p>{post.excerpt || post.content}</p>
+        {post.mentions?.length ? <span className="feed-post-mentions">Avec {formatMentionedAuthors(post.mentions)}</span> : null}
       </div>
 
       {post.coverImageUrl ? <img src={post.coverImageUrl} alt="" /> : null}
@@ -620,11 +752,37 @@ function FeedPost({
           <MessageCircle aria-hidden="true" strokeWidth={1.8} />
           {post.counts.comments} commentaire{post.counts.comments > 1 ? "s" : ""}
         </button>
+        <button type="button" disabled={isSharing} onClick={onShare}>
+          <Repeat2 aria-hidden="true" strokeWidth={1.8} />
+          {isSharing ? "Partage..." : `${shareCount} partage${shareCount > 1 ? "s" : ""}`}
+        </button>
         <Link href={postDestinationHref(post)}>
           <Send aria-hidden="true" strokeWidth={1.8} />
           Ouvrir
         </Link>
+        {!isOwnPost ? (
+          <button type="button" className="feed-report-toggle" disabled={isReported} aria-expanded={isReportMenuOpen} onClick={onToggleReportMenu}>
+            <Flag aria-hidden="true" strokeWidth={1.8} />
+            {isReported ? "Signalé" : "Signaler"}
+          </button>
+        ) : null}
       </footer>
+
+      {isReportMenuOpen && !isOwnPost && !isReported ? (
+        <section className="feed-report-panel" aria-label={`Signaler ${post.title}`}>
+          <div>
+            <strong>Pourquoi signaler cette publication ?</strong>
+            <span>L’équipe CCA la vérifiera sans prévenir publiquement l’auteur.</span>
+          </div>
+          <div>
+            {reportReasons.map((reason) => (
+              <button key={reason.value} type="button" disabled={isReporting} onClick={() => onReport(reason.value)}>
+                {isReporting ? "Envoi..." : reason.label}
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {isCommentsOpen ? (
         <section className="feed-comments-panel" aria-label={`Commentaires sur ${post.title}`}>
@@ -728,6 +886,38 @@ function getRelationAction(author: FeedAuthor, relationStatus: RelationStatus | 
 
 function isStructureAccount(accountType: string) {
   return accountType === "ORGANIZATION" || accountType === "PARTNER" || accountType === "ADMIN";
+}
+
+function getFallbackAllowedQuickTypes(accountType?: string) {
+  if (accountType === "PUBLIC") {
+    return new Set<PublicationType>(["QUESTION"]);
+  }
+
+  if (accountType === "LEARNER") {
+    return new Set<PublicationType>(["CREATION", "PROJECT", "QUESTION", "COLLABORATION", "RESOURCE"]);
+  }
+
+  if (accountType === "ORGANIZATION" || accountType === "PARTNER") {
+    return new Set<PublicationType>(["PROJECT", "OPPORTUNITY", "JOB", "RESOURCE", "TRAINING", "EVENT", "QUESTION", "COLLABORATION"]);
+  }
+
+  if (accountType === "ADMIN") {
+    return new Set<PublicationType>(["CREATION", "PROJECT", "OPPORTUNITY", "RESOURCE", "TRAINING", "EVENT", "ANNOUNCEMENT", "QUESTION", "COLLABORATION"]);
+  }
+
+  return new Set<PublicationType>(["CREATION", "PROJECT", "QUESTION", "COLLABORATION"]);
+}
+
+function formatMentionedAuthors(authors: FeedAuthor[]) {
+  const names = authors.map((author) => author.displayName).filter(Boolean);
+
+  if (names.length <= 2) {
+    return names.join(", ");
+  }
+
+  const remainingCount = names.length - 2;
+
+  return `${names.slice(0, 2).join(", ")} et ${remainingCount} autre${remainingCount > 1 ? "s" : ""}`;
 }
 
 function postDestinationHref(post: Publication) {

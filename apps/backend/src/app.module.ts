@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { AppController } from "./app.controller";
+import { AdminModule } from "./admin/admin.module";
 import { AuthModule } from "./auth/auth.module";
 import { GroupModule } from "./group/group.module";
 import { MemberModule } from "./member/member.module";
@@ -17,6 +18,7 @@ import { RealtimeModule } from "./realtime/realtime.module";
       isGlobal: true,
     }),
     PrismaModule,
+    AdminModule,
     AuthModule,
     ReferenceModule,
     RealtimeModule,

@@ -1,24 +1,28 @@
 "use client";
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
+  AtSign,
   BriefcaseBusiness,
   CheckCircle2,
   FileText,
   Image as ImageIcon,
   Lightbulb,
-  Link as LinkIcon,
+  Megaphone,
   MessageCircleQuestion,
   Paperclip,
+  Search,
   Send,
   Sparkles,
   UsersRound,
+  X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { MemberShell } from "@/components/member-shell";
-import { createPublication, getApiErrorMessage, getPublicationCapabilities, uploadPublicationAttachment } from "@/lib/api";
-import type { PublicationAudience, PublicationCapability, PublicationType, PublicationUploadResponse } from "@/lib/api";
+import { createPublication, getApiErrorMessage, getNetworkMembers, getPublicationCapabilities, uploadPublicationAttachment } from "@/lib/api";
+import type { NetworkMember, PublicationAudience, PublicationCapability, PublicationType, PublicationUploadResponse } from "@/lib/api";
+import { buildInitials } from "@/lib/member-display";
 import { useAppSelector } from "@/store/hooks";
 import styles from "./publish-page.module.css";
 
@@ -37,6 +41,18 @@ type PublishType = {
 
 const localPublishTypes: PublishType[] = [
   {
+    id: "CREATION",
+    label: "Création / œuvre",
+    description: "Publier une œuvre, une image, une vidéo, un design ou une réalisation qui pourra ressortir sur votre profil public.",
+    intent: "Je veux montrer mon travail.",
+    destination: "Réseau + Creative ID",
+    destinations: ["network", "creative-id"],
+    placeholder: "Présentez l'œuvre, la démarche, la technique, le contexte et ce que vous souhaitez montrer ou recevoir comme retour...",
+    icon: ImageIcon,
+    allowed: true,
+    defaultAudience: "MEMBERS",
+  },
+  {
     id: "PROJECT",
     label: "Projet",
     description: "Présenter une initiative, une exposition, une campagne ou une production.",
@@ -45,18 +61,6 @@ const localPublishTypes: PublishType[] = [
     destinations: ["network", "creative-id"],
     placeholder: "Décrivez le projet, les objectifs, le besoin et les profils recherchés...",
     icon: Sparkles,
-    allowed: true,
-    defaultAudience: "MEMBERS",
-  },
-  {
-    id: "CREATION",
-    label: "Création / œuvre",
-    description: "Montrer une œuvre, une image, une vidéo, un design ou une réalisation.",
-    intent: "Je veux montrer mon travail.",
-    destination: "Réseau + Creative ID",
-    destinations: ["network", "creative-id"],
-    placeholder: "Présentez la création, le contexte et ce que vous souhaitez obtenir comme retour...",
-    icon: ImageIcon,
     allowed: true,
     defaultAudience: "MEMBERS",
   },
@@ -144,6 +148,18 @@ const localPublishTypes: PublishType[] = [
     allowed: true,
     defaultAudience: "MEMBERS",
   },
+  {
+    id: "ANNOUNCEMENT",
+    label: "Annonce officielle",
+    description: "Publier une communication officielle CCA visible dans le réseau et les espaces concernés.",
+    intent: "Je communique au nom de CCA.",
+    destination: "Réseau",
+    destinations: ["network"],
+    placeholder: "Rédigez l'annonce, le contexte, les personnes concernées et l'action attendue...",
+    icon: Megaphone,
+    allowed: true,
+    defaultAudience: "MEMBERS",
+  },
 ];
 
 const audienceLabels: Record<PublicationAudience, string> = {
@@ -153,9 +169,13 @@ const audienceLabels: Record<PublicationAudience, string> = {
   PRIVATE: "Privé",
 };
 const categories = ["Arts visuels", "Mode & stylisme", "Business créatif", "Création de contenu", "Formation", "Opportunités", "Autre"];
+const publishTypeOrder: PublicationType[] = ["CREATION", "PROJECT", "COLLABORATION", "QUESTION", "OPPORTUNITY", "JOB", "RESOURCE", "TRAINING", "EVENT", "ANNOUNCEMENT"];
+const mentionLimit = 10;
 
 export function PublishPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedTypeParam = searchParams.get("type");
   const { accessToken, user, profile, organizationProfile, partnerProfile } = useAppSelector((state) => state.auth);
   const [capabilities, setCapabilities] = useState<PublicationCapability[]>([]);
   const [capabilitiesLoaded, setCapabilitiesLoaded] = useState(false);
@@ -167,14 +187,26 @@ export function PublishPage() {
   const [audience, setAudience] = useState<PublicationAudience>("MEMBERS");
   const [link, setLink] = useState("");
   const [structuredDate, setStructuredDate] = useState("");
+  const [structuredTime, setStructuredTime] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
+  const [expiresTime, setExpiresTime] = useState("");
   const [location, setLocation] = useState("");
   const [budgetRange, setBudgetRange] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [attachments, setAttachments] = useState<PublicationUploadResponse[]>([]);
+  const [mentionedMembers, setMentionedMembers] = useState<NetworkMember[]>([]);
+  const [mentionQuery, setMentionQuery] = useState("");
+  const [mentionResults, setMentionResults] = useState<NetworkMember[]>([]);
+  const [isMentionPickerOpen, setIsMentionPickerOpen] = useState(false);
+  const [isLoadingMentions, setIsLoadingMentions] = useState(false);
+  const [mentionStatus, setMentionStatus] = useState("");
   const [status, setStatus] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const requestedType = useMemo(
+    () => (localPublishTypes.some((type) => type.id === requestedTypeParam) ? (requestedTypeParam as PublicationType) : null),
+    [requestedTypeParam],
+  );
 
   useEffect(() => {
     if (!accessToken) {
@@ -190,10 +222,11 @@ export function PublishPage() {
         }
 
         setCapabilities(response.types);
-        const firstAllowed = response.types.find((type) => type.allowed)?.value;
+        const allowedTypes = buildPublishTypes(response.types).filter((type) => type.allowed);
+        const firstAllowed = allowedTypes.find((type) => type.id === requestedType) ?? allowedTypes[0];
         if (firstAllowed) {
-          setActiveTypeId(firstAllowed);
-          setAudience(response.types.find((type) => type.value === firstAllowed)?.defaultAudience ?? "MEMBERS");
+          setActiveTypeId(firstAllowed.id);
+          setAudience(firstAllowed.defaultAudience);
         }
       })
       .catch((error) => {
@@ -210,9 +243,10 @@ export function PublishPage() {
     return () => {
       isMounted = false;
     };
-  }, [accessToken]);
+  }, [accessToken, requestedType]);
 
   const publishTypes = useMemo(() => (capabilitiesLoaded ? buildPublishTypes(capabilities) : []), [capabilities, capabilitiesLoaded]);
+  const selectedMentionIds = useMemo(() => new Set(mentionedMembers.map((member) => member.userId)), [mentionedMembers]);
   const availablePublishTypes = publishTypes.filter((type) => type.allowed);
   const activeType = availablePublishTypes.find((type) => type.id === activeTypeId) ?? availablePublishTypes[0] ?? publishTypes[0] ?? localPublishTypes[0];
   const activeTypeAllowed = availablePublishTypes.some((type) => type.id === activeType.id);
@@ -221,15 +255,61 @@ export function PublishPage() {
   const showStructuredDate = usesStructuredDate(activeType.id);
   const showOpportunityFields = isOpportunityLike(activeType.id);
   const showEventFields = activeType.id === "EVENT" || activeType.id === "TRAINING";
+  const firstImageAttachment = attachments.find((attachment) => attachment.type === "IMAGE");
+  const structuredDateTime = useMemo(
+    () => combineDateAndTime(structuredDate, structuredTime, fallbackTimeForType(activeType.id)),
+    [activeType.id, structuredDate, structuredTime],
+  );
+  const expiresDateTime = useMemo(() => combineDateAndTime(expiresAt, expiresTime, "23:59"), [expiresAt, expiresTime]);
   const completion = useMemo(() => {
     const checks = [activeTypeId, title.trim(), body.trim(), category, audience];
 
     if (usesStructuredDate(activeTypeId)) {
-      checks.push(structuredDate);
+      checks.push(structuredDateTime);
     }
 
     return Math.round((checks.filter(Boolean).length / checks.length) * 100);
-  }, [activeTypeId, audience, body, category, structuredDate, title]);
+  }, [activeTypeId, audience, body, category, structuredDateTime, title]);
+
+  useEffect(() => {
+    if (!isMentionPickerOpen || !accessToken) {
+      return;
+    }
+
+    let isMounted = true;
+    const timeout = window.setTimeout(() => {
+      setIsLoadingMentions(true);
+      setMentionStatus("");
+
+      getNetworkMembers(accessToken, mentionQuery.trim() ? { q: mentionQuery.trim() } : {})
+        .then((members) => {
+          if (!isMounted) {
+            return;
+          }
+
+          setMentionResults(
+            members
+              .filter((member) => !member.isCurrentMember && !selectedMentionIds.has(member.userId))
+              .slice(0, 8),
+          );
+        })
+        .catch((error) => {
+          if (isMounted) {
+            setMentionStatus(getApiErrorMessage(error, "Impossible de rechercher les membres pour le moment."));
+          }
+        })
+        .finally(() => {
+          if (isMounted) {
+            setIsLoadingMentions(false);
+          }
+        });
+    }, 220);
+
+    return () => {
+      isMounted = false;
+      window.clearTimeout(timeout);
+    };
+  }, [accessToken, isMentionPickerOpen, mentionQuery, selectedMentionIds]);
 
   const updateFiles = async (event: ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(event.target.files ?? []);
@@ -258,6 +338,21 @@ export function PublishPage() {
     } finally {
       setIsUploading(false);
     }
+  };
+
+  const addMentionedMember = (member: NetworkMember) => {
+    setMentionedMembers((current) => {
+      if (current.some((item) => item.userId === member.userId) || current.length >= mentionLimit) {
+        return current;
+      }
+
+      return [...current, member];
+    });
+    setMentionQuery("");
+  };
+
+  const removeMentionedMember = (userId: string) => {
+    setMentionedMembers((current) => current.filter((member) => member.userId !== userId));
   };
 
   const submitPublication = (event: FormEvent<HTMLFormElement>) => {
@@ -307,11 +402,11 @@ export function PublishPage() {
         category,
         audience,
         linkUrl: link.trim() || undefined,
-        opportunityDeadline: showStructuredDate ? toIsoDate(structuredDate) : undefined,
+        opportunityDeadline: showStructuredDate ? toIsoDate(structuredDateTime) : undefined,
         opportunityLocation: location.trim() || undefined,
         budgetRange: budgetRange.trim() || undefined,
         contactEmail: contactEmail.trim() || undefined,
-        expiresAt: expiresAt ? toIsoDate(expiresAt) : undefined,
+        expiresAt: expiresDateTime ? toIsoDate(expiresDateTime) : undefined,
         discipline: profile?.discipline || organizationProfile?.sector || partnerProfile?.partnerType || undefined,
         country: profile?.country || organizationProfile?.country || partnerProfile?.country || undefined,
         city: location.trim() || profile?.city || organizationProfile?.city || partnerProfile?.city || undefined,
@@ -323,6 +418,7 @@ export function PublishPage() {
           sizeBytes: attachment.sizeBytes,
           order: index,
         })),
+        mentionedUserIds: mentionedMembers.map((member) => member.userId),
         publishNow,
       });
 
@@ -439,10 +535,23 @@ export function PublishPage() {
                   </div>
                   <div className={styles.formGrid}>
                     {showStructuredDate ? (
-                      <label className={styles.field}>
+                      <div className={`${styles.field} ${styles.dateTimeField}`}>
                         <span>{dateFieldLabel(activeType.id)}</span>
-                        <input type="datetime-local" value={structuredDate} onChange={(event) => setStructuredDate(event.target.value)} />
-                      </label>
+                        <div className={styles.dateTimeGrid}>
+                          <input
+                            type="date"
+                            value={structuredDate}
+                            onChange={(event) => setStructuredDate(event.target.value)}
+                            aria-label={`${dateFieldLabel(activeType.id)} - date`}
+                          />
+                          <input
+                            type="time"
+                            value={structuredTime}
+                            onChange={(event) => setStructuredTime(event.target.value)}
+                            aria-label={`${dateFieldLabel(activeType.id)} - heure`}
+                          />
+                        </div>
+                      </div>
                     ) : null}
                     <label className={styles.field}>
                       <span>{showEventFields ? "Lieu ou format" : "Lieu concerné"}</span>
@@ -458,10 +567,23 @@ export function PublishPage() {
                       <span>Email de contact</span>
                       <input value={contactEmail} onChange={(event) => setContactEmail(event.target.value)} placeholder="contact@exemple.com" inputMode="email" />
                     </label>
-                    <label className={styles.field}>
+                    <div className={`${styles.field} ${styles.dateTimeField}`}>
                       <span>Date de fin de visibilité</span>
-                      <input type="datetime-local" value={expiresAt} onChange={(event) => setExpiresAt(event.target.value)} />
-                    </label>
+                      <div className={styles.dateTimeGrid}>
+                        <input
+                          type="date"
+                          value={expiresAt}
+                          onChange={(event) => setExpiresAt(event.target.value)}
+                          aria-label="Date de fin de visibilité - date"
+                        />
+                        <input
+                          type="time"
+                          value={expiresTime}
+                          onChange={(event) => setExpiresTime(event.target.value)}
+                          aria-label="Date de fin de visibilité - heure"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               ) : null}
@@ -477,10 +599,69 @@ export function PublishPage() {
                   <span>{isUploading ? "Envoi en cours..." : attachments.length ? `${attachments.length} fichier${attachments.length > 1 ? "s" : ""}` : "Ajouter fichiers ou images"}</span>
                   <input type="file" multiple onChange={(event) => void updateFiles(event)} />
                 </label>
-                <button className={styles.mentionButton} type="button">
-                  <LinkIcon aria-hidden="true" strokeWidth={1.8} />
-                  Identifier un membre
-                </button>
+                <div className={styles.mentionArea}>
+                  <button
+                    className={`${styles.mentionButton}${isMentionPickerOpen ? ` ${styles.mentionButtonActive}` : ""}`}
+                    type="button"
+                    aria-expanded={isMentionPickerOpen}
+                    onClick={() => setIsMentionPickerOpen((current) => !current)}
+                  >
+                    <AtSign aria-hidden="true" strokeWidth={1.8} />
+                    {mentionedMembers.length
+                      ? `${mentionedMembers.length} membre${mentionedMembers.length > 1 ? "s" : ""} identifié${mentionedMembers.length > 1 ? "s" : ""}`
+                      : "Identifier un membre"}
+                  </button>
+
+                  {mentionedMembers.length ? (
+                    <div className={styles.mentionChips}>
+                      {mentionedMembers.map((member) => (
+                        <span className={styles.mentionChip} key={member.userId}>
+                          {member.publicName}
+                          <button type="button" aria-label={`Retirer ${member.publicName}`} onClick={() => removeMentionedMember(member.userId)}>
+                            <X aria-hidden="true" strokeWidth={1.8} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {isMentionPickerOpen ? (
+                    <div className={styles.mentionPicker}>
+                      <label className={styles.mentionSearch}>
+                        <Search aria-hidden="true" strokeWidth={1.8} />
+                        <input
+                          value={mentionQuery}
+                          onChange={(event) => setMentionQuery(event.target.value)}
+                          placeholder="Rechercher un membre..."
+                          autoComplete="off"
+                        />
+                      </label>
+
+                      <div className={styles.mentionResults}>
+                        {mentionStatus ? <p className={styles.mentionEmpty}>{mentionStatus}</p> : null}
+                        {isLoadingMentions ? <p className={styles.mentionEmpty}>Recherche...</p> : null}
+                        {!isLoadingMentions && !mentionStatus && mentionResults.length ? (
+                          mentionResults.map((member) => (
+                            <button key={member.userId} type="button" className={styles.mentionResult} onClick={() => addMentionedMember(member)}>
+                              <span className={styles.mentionAvatar}>
+                                {member.avatarUrl ? <img src={member.avatarUrl} alt="" /> : buildInitials(member.publicName)}
+                              </span>
+                              <span>
+                                <strong>{member.publicName}</strong>
+                                <small>{memberContext(member) || "Membre CCA"}</small>
+                              </span>
+                            </button>
+                          ))
+                        ) : null}
+                        {!isLoadingMentions && !mentionStatus && !mentionResults.length ? (
+                          <p className={styles.mentionEmpty}>
+                            {mentionedMembers.length >= mentionLimit ? "Limite de 10 membres atteinte." : "Aucun membre trouvé."}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
               </div>
 
               {attachments.length ? (
@@ -521,9 +702,17 @@ export function PublishPage() {
                 </header>
                 <h3>{title || "Votre titre apparaîtra ici"}</h3>
                 <p>{body || "Le contenu de votre publication sera prévisualisé ici avant diffusion."}</p>
-                {structuredDate ? <small>{dateFieldLabel(activeType.id)} : {formatLocalPreviewDate(structuredDate)}</small> : null}
+                {mentionedMembers.length ? <small className={styles.mentionPreview}>Avec {formatMentionList(mentionedMembers)}</small> : null}
+                {showStructuredDate && structuredDateTime ? <small>{dateFieldLabel(activeType.id)} : {formatLocalPreviewDate(structuredDateTime)}</small> : null}
                 {location ? <small>{location}</small> : null}
                 {link ? <small>{link}</small> : null}
+                {firstImageAttachment ? <img className={styles.previewMedia} src={firstImageAttachment.url} alt="" /> : null}
+                {activeType.id === "CREATION" && !firstImageAttachment ? (
+                  <div className={styles.creationHint}>
+                    <ImageIcon aria-hidden="true" strokeWidth={1.8} />
+                    <span>Un visuel rendra cette création plus attractive dans votre profil public.</span>
+                  </div>
+                ) : null}
               </article>
             </section>
 
@@ -537,7 +726,8 @@ export function PublishPage() {
                 <span className={body.trim() ? styles.done : undefined}><CheckCircle2 aria-hidden="true" /> Description utile</span>
                 <span className={category ? styles.done : undefined}><CheckCircle2 aria-hidden="true" /> Catégorie choisie</span>
                 <span className={audience ? styles.done : undefined}><CheckCircle2 aria-hidden="true" /> Audience définie</span>
-                {showStructuredDate ? <span className={structuredDate ? styles.done : undefined}><CheckCircle2 aria-hidden="true" /> Date exploitable par l’agenda</span> : null}
+                {activeType.id === "CREATION" ? <span className={firstImageAttachment ? styles.done : undefined}><CheckCircle2 aria-hidden="true" /> Visuel de couverture recommandé</span> : null}
+                {showStructuredDate ? <span className={structuredDateTime ? styles.done : undefined}><CheckCircle2 aria-hidden="true" /> Date exploitable par l’agenda</span> : null}
               </div>
             </section>
           </aside>
@@ -570,7 +760,13 @@ function buildPublishTypes(capabilities: PublicationCapability[]): PublishType[]
         defaultAudience: capability.defaultAudience,
       };
     })
-    .filter((type): type is PublishType => !!type);
+    .filter((type): type is PublishType => !!type)
+    .sort((a, b) => publishTypePriority(a.id) - publishTypePriority(b.id));
+}
+
+function publishTypePriority(type: PublicationType) {
+  const index = publishTypeOrder.indexOf(type);
+  return index === -1 ? publishTypeOrder.length : index;
 }
 
 function destinationLabel(destination: string) {
@@ -644,6 +840,14 @@ function dateFieldLabel(type: PublicationType) {
   return "Date importante";
 }
 
+function fallbackTimeForType(type: PublicationType) {
+  return isOpportunityLike(type) ? "23:59" : "09:00";
+}
+
+function combineDateAndTime(date: string, time: string, fallbackTime = "09:00") {
+  return date ? `${date}T${time || fallbackTime}` : "";
+}
+
 function toIsoDate(value: string) {
   return value ? new Date(value).toISOString() : undefined;
 }
@@ -664,4 +868,19 @@ function formatLocalPreviewDate(value: string) {
 
 function isSuccessStatus(status: string) {
   return status.startsWith("Publication") || status.startsWith("Brouillon") || status.includes("fichier");
+}
+
+function formatMentionList(members: NetworkMember[]) {
+  const names = members.map((member) => member.publicName).filter(Boolean);
+
+  if (names.length <= 2) {
+    return names.join(", ");
+  }
+
+  const remainingCount = names.length - 2;
+  return `${names.slice(0, 2).join(", ")} et ${remainingCount} autre${remainingCount > 1 ? "s" : ""}`;
+}
+
+function memberContext(member: NetworkMember) {
+  return [member.profession, member.discipline, member.city].filter(Boolean).join(" · ");
 }

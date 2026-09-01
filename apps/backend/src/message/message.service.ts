@@ -91,6 +91,9 @@ export class MessageService {
             archivedAt: null,
           },
         },
+        messages: {
+          some: {},
+        },
       },
       include: directConversationInclude,
       orderBy: [

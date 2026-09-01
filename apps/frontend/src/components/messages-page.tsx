@@ -82,6 +82,7 @@ export function MessagesPage() {
   const { accessToken, user } = useAppSelector((state) => state.auth);
   const openedMemberRef = useRef<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const composerInputRef = useRef<HTMLInputElement | null>(null);
   const [query, setQuery] = useState("");
   const [manualSelectedId, setManualSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -156,9 +157,18 @@ export function MessagesPage() {
       }));
   }, [groupMessages, groups, requestedGroupId, user?.id]);
 
+  const activeDirectConversationId = manualSelectedId?.startsWith("direct:")
+    ? manualSelectedId.replace("direct:", "")
+    : requestedConversationId;
+
   const directConversationItems = useMemo<Conversation[]>(() => {
     return directConversations
       .filter((conversation) => conversation.target)
+      .filter((conversation) =>
+        conversation.lastMessage ||
+        conversation.id === activeDirectConversationId ||
+        conversation.target?.id === requestedMemberId
+      )
       .map((conversation) => ({
         id: `direct:${conversation.id}`,
         name: conversation.target?.displayName ?? "Conversation",
@@ -174,10 +184,15 @@ export function MessagesPage() {
         directConversationId: conversation.id,
         messages: toDirectConversationMessages(directMessages[conversation.id] ?? [], user?.id),
       }));
-  }, [directConversations, directMessages, user?.id]);
+  }, [activeDirectConversationId, directConversations, directMessages, requestedMemberId, user?.id]);
 
   const memberSuggestions = useMemo(() => {
-    const directMemberIds = new Set(directConversations.map((conversation) => conversation.target?.id).filter(Boolean));
+    const directMemberIds = new Set(
+      directConversations
+        .filter((conversation) => conversation.lastMessage || conversation.id === activeDirectConversationId)
+        .map((conversation) => conversation.target?.id)
+        .filter(Boolean),
+    );
     const normalizedQuery = normalizeProfileOption(query);
 
     if (!normalizedQuery) {
@@ -198,11 +213,46 @@ export function MessagesPage() {
         return searchable.includes(normalizedQuery);
       })
       .slice(0, 6);
-  }, [directConversations, networkMembers, query]);
+  }, [activeDirectConversationId, directConversations, networkMembers, query]);
+
+  const requestedMemberConversation = useMemo<Conversation | null>(() => {
+    if (!requestedMemberId) {
+      return null;
+    }
+
+    const member = networkMembers.find((item) => item.userId === requestedMemberId);
+
+    if (!member) {
+      return null;
+    }
+
+    return {
+      id: `member:${member.userId}`,
+      name: member.publicName,
+      role: [member.profession, member.discipline, member.city].filter(Boolean).join(" · ") || "Membre CCA",
+      avatarUrl: member.avatarUrl,
+      avatarVersion: member.updatedAt,
+      unread: 0,
+      online: Boolean(member.availability?.toLowerCase().includes("disponible")),
+      context: "Nouvelle conversation",
+      kind: "member",
+      memberId: member.userId,
+      memberNumber: member.memberNumber,
+      messages: [],
+    };
+  }, [networkMembers, requestedMemberId]);
 
   const conversations = useMemo(() => {
-    return [...groupConversations, ...directConversationItems];
-  }, [directConversationItems, groupConversations]);
+    const hasRequestedDirectConversation = requestedMemberConversation
+      ? directConversationItems.some((conversation) => conversation.memberId === requestedMemberConversation.memberId)
+      : false;
+
+    return [
+      ...groupConversations,
+      ...directConversationItems,
+      ...(requestedMemberConversation && !hasRequestedDirectConversation ? [requestedMemberConversation] : []),
+    ];
+  }, [directConversationItems, groupConversations, requestedMemberConversation]);
   const defaultSelectedId = requestedConversationId
     ? `direct:${requestedConversationId}`
     : requestedGroupId
@@ -320,6 +370,14 @@ export function MessagesPage() {
       isMounted = false;
     };
   }, [accessToken, groupMessages, selectedConversation.isJoined, selectedGroupId]);
+
+  useEffect(() => {
+    if (selectedConversation.id === emptyConversation.id) {
+      return;
+    }
+
+    composerInputRef.current?.focus();
+  }, [selectedConversation.id]);
 
   useEffect(() => {
     const shouldLoadMessages = selectedDirectConversationId && !directMessages[selectedDirectConversationId];
@@ -766,6 +824,7 @@ export function MessagesPage() {
               <button type="button" aria-label="Ajouter une image"><ImageIcon aria-hidden="true" /></button>
               <button type="button" aria-label="Ajouter un lien"><LinkIcon aria-hidden="true" /></button>
               <input
+                ref={composerInputRef}
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
                 placeholder={selectedConversation.isJoined === false ? "Rejoignez le groupe pour écrire..." : "Écrire un message..."}
@@ -865,8 +924,15 @@ function mergeDirectConversation(conversations: DirectConversation[], conversati
     : conversations.map((item) => item.id === conversation.id ? conversation : item);
 
   return nextConversations.sort(
-    (left, right) => new Date(right.lastMessageAt).getTime() - new Date(left.lastMessageAt).getTime(),
+    (left, right) => directConversationTime(right) - directConversationTime(left),
   );
+}
+
+function directConversationTime(conversation: DirectConversation) {
+  const value = conversation.lastMessageAt ?? conversation.updatedAt ?? conversation.createdAt;
+  const time = new Date(value).getTime();
+
+  return Number.isNaN(time) ? 0 : time;
 }
 
 function formatMessageTime(value: string) {

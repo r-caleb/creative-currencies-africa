@@ -377,6 +377,7 @@ export class MemberService {
             select: {
               comments: true,
               reactions: true,
+              shares: true,
             },
           },
         },
@@ -489,6 +490,7 @@ export class MemberService {
         counts: {
           comments: publication._count.comments,
           reactions: publication._count.reactions,
+          shares: publication._count.shares,
         },
       })),
     };
@@ -687,7 +689,7 @@ export class MemberService {
               partnerProfile: { select: { name: true, logoUrl: true, partnerType: true, country: true, city: true } },
             },
           },
-          _count: { select: { comments: true, reactions: true } },
+          _count: { select: { comments: true, reactions: true, shares: true } },
         },
         orderBy: [{ publishedAt: "desc" }, { updatedAt: "desc" }],
         take: 60,
@@ -708,7 +710,7 @@ export class MemberService {
                   partnerProfile: { select: { name: true, logoUrl: true, partnerType: true, country: true, city: true } },
                 },
               },
-              _count: { select: { comments: true, reactions: true } },
+              _count: { select: { comments: true, reactions: true, shares: true } },
             },
             orderBy: [{ updatedAt: "desc" }],
             take: 30,
@@ -810,7 +812,7 @@ export class MemberService {
               partnerProfile: { select: { name: true, logoUrl: true, partnerType: true, country: true, city: true } },
             },
           },
-          _count: { select: { comments: true, reactions: true } },
+          _count: { select: { comments: true, reactions: true, shares: true } },
         },
         orderBy: [{ opportunityDeadline: "asc" }, { publishedAt: "desc" }, { updatedAt: "desc" }],
         take: 80,
@@ -831,7 +833,7 @@ export class MemberService {
                   partnerProfile: { select: { name: true, logoUrl: true, partnerType: true, country: true, city: true } },
                 },
               },
-              _count: { select: { comments: true, reactions: true } },
+              _count: { select: { comments: true, reactions: true, shares: true } },
             },
             orderBy: [{ updatedAt: "desc" }],
             take: 30,
@@ -968,7 +970,7 @@ export class MemberService {
             },
           },
           attachments: { orderBy: { order: "asc" } },
-          _count: { select: { comments: true, reactions: true } },
+          _count: { select: { comments: true, reactions: true, shares: true } },
         },
         orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
         take: 80,
@@ -989,7 +991,7 @@ export class MemberService {
                 },
               },
               attachments: { orderBy: { order: "asc" } },
-              _count: { select: { comments: true, reactions: true } },
+              _count: { select: { comments: true, reactions: true, shares: true } },
             },
             orderBy: [{ updatedAt: "desc" }],
             take: 30,
@@ -1096,7 +1098,7 @@ export class MemberService {
             },
           },
           attachments: { orderBy: [{ order: "asc" }, { createdAt: "asc" }] },
-          _count: { select: { comments: true, reactions: true } },
+          _count: { select: { comments: true, reactions: true, shares: true } },
         },
         orderBy: [{ opportunityDeadline: "asc" }, { publishedAt: "desc" }],
         take: 80,
@@ -1322,6 +1324,18 @@ export class MemberService {
             certificateEnabled: true,
           },
         },
+      },
+    });
+
+    await this.prisma.notification.create({
+      data: {
+        userId,
+        type: NotificationType.CERTIFICATE,
+        title: status === CertificateStatus.ISSUED ? "Certificat CCA délivré" : "Certificat CCA en préparation",
+        message: status === CertificateStatus.ISSUED
+          ? `Votre certificat "${title}" est disponible dans votre espace membre.`
+          : `Votre certificat "${title}" est en préparation par l'équipe CCA.`,
+        href: "/espace-membre/certificats",
       },
     });
 
@@ -2088,7 +2102,7 @@ export class MemberService {
       organizationProfile: { name: string; sector: string | null; country: string; city: string } | null;
       partnerProfile: { name: string; partnerType: string; country: string; city: string | null } | null;
     };
-    _count: { comments: number; reactions: number };
+    _count: { comments: number; reactions: number; shares: number };
   }, user: Awaited<ReturnType<MemberService["getActiveUser"]>>) {
     const official = publication.author.type === AccountType.ADMIN || this.isOfficialCcaOpportunity(publication.title);
     const location = publication.opportunityLocation ?? ([publication.city, publication.country].filter(Boolean).join(", ") || "À confirmer");
@@ -2586,7 +2600,7 @@ export class MemberService {
       partnerProfile: { name: string } | null;
     };
     attachments: Array<{ name: string | null; type: string; url: string; mimeType: string | null; sizeBytes: number | null }>;
-    _count: { comments: number; reactions: number };
+    _count: { comments: number; reactions: number; shares: number };
   }, user: Awaited<ReturnType<MemberService["getActiveUser"]>>) {
     const authorName = this.resourceAuthorName(publication.author);
     const official = publication.author.type === AccountType.ADMIN;
@@ -2818,7 +2832,7 @@ export class MemberService {
       partnerProfile: { name: string; partnerType: string; country: string; city: string | null } | null;
     };
     attachments: Array<{ name: string | null; type: string; url: string }>;
-    _count: { comments: number; reactions: number };
+    _count: { comments: number; reactions: number; shares: number };
   }, currentUserId: string) {
     const organizerName = this.trainingOrganizerName(publication.author);
     const official = publication.author.type === AccountType.ADMIN || this.isOfficialCcaTraining(publication.title, publication.category);

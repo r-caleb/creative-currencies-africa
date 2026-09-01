@@ -5,7 +5,11 @@ import type { AuthUser } from "../auth/auth.types";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { CreatePublicationCommentDto } from "./dto/create-publication-comment.dto";
 import { CreatePublicationDto } from "./dto/create-publication.dto";
+import { ModeratePublicationReportDto } from "./dto/moderate-publication-report.dto";
 import { PublicationQueryDto } from "./dto/publication-query.dto";
+import { PublicationReportQueryDto } from "./dto/publication-report-query.dto";
+import { ReportPublicationDto } from "./dto/report-publication.dto";
+import { SharePublicationDto } from "./dto/share-publication.dto";
 import { TogglePublicationReactionDto } from "./dto/toggle-publication-reaction.dto";
 import { UpdatePublicationDto } from "./dto/update-publication.dto";
 import { PublicationService } from "./publication.service";
@@ -65,6 +69,21 @@ export class PublicationController {
     return this.publicationService.listMyPublications(req.user, query);
   }
 
+  @Get("reports")
+  @ApiOperation({ summary: "Lister les signalements de publications à modérer" })
+  @ApiOkResponse({ description: "Signalements réservés aux administrateurs" })
+  reports(@Req() req: AuthedRequest, @Query() query: PublicationReportQueryDto) {
+    return this.publicationService.listPublicationReports(req.user, query);
+  }
+
+  @Patch("reports/:reportId")
+  @ApiOperation({ summary: "Traiter un signalement de publication" })
+  @ApiBody({ type: ModeratePublicationReportDto })
+  @ApiOkResponse({ description: "Signalement traité" })
+  moderateReport(@Req() req: AuthedRequest, @Param("reportId") reportId: string, @Body() body: ModeratePublicationReportDto) {
+    return this.publicationService.moderatePublicationReport(req.user, reportId, body);
+  }
+
   @Get(":id/comments")
   @ApiOperation({ summary: "Lister les commentaires d'une publication" })
   @ApiOkResponse({ description: "Commentaires visibles de la publication" })
@@ -115,5 +134,21 @@ export class PublicationController {
   @ApiOkResponse({ description: "Réaction mise à jour" })
   react(@Req() req: AuthedRequest, @Param("id") id: string, @Body() body: TogglePublicationReactionDto) {
     return this.publicationService.toggleReaction(req.user, id, body);
+  }
+
+  @Post(":id/shares")
+  @ApiOperation({ summary: "Partager une publication" })
+  @ApiBody({ type: SharePublicationDto })
+  @ApiOkResponse({ description: "Publication partagée" })
+  share(@Req() req: AuthedRequest, @Param("id") id: string, @Body() body: SharePublicationDto) {
+    return this.publicationService.sharePublication(req.user, id, body);
+  }
+
+  @Post(":id/reports")
+  @ApiOperation({ summary: "Signaler une publication" })
+  @ApiBody({ type: ReportPublicationDto })
+  @ApiCreatedResponse({ description: "Signalement enregistré" })
+  report(@Req() req: AuthedRequest, @Param("id") id: string, @Body() body: ReportPublicationDto) {
+    return this.publicationService.reportPublication(req.user, id, body);
   }
 }

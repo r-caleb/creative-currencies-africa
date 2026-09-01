@@ -12,7 +12,9 @@ import {
   PublicationAttachmentType,
   PublicationAudience,
   NotificationType,
+  PublicationReportReason,
   PublicationReactionType,
+  PublicationReportStatus,
   PublicationStatus,
   PublicationType,
 } from "@prisma/client";
@@ -26,7 +28,11 @@ import { NotificationService } from "../notification/notification.service";
 import { PrismaService } from "../prisma/prisma.service";
 import type { CreatePublicationCommentDto } from "./dto/create-publication-comment.dto";
 import type { CreatePublicationDto, PublicationAttachmentDto } from "./dto/create-publication.dto";
+import type { ModeratePublicationReportDto } from "./dto/moderate-publication-report.dto";
 import type { PublicationQueryDto } from "./dto/publication-query.dto";
+import type { PublicationReportQueryDto } from "./dto/publication-report-query.dto";
+import type { ReportPublicationDto } from "./dto/report-publication.dto";
+import type { SharePublicationDto } from "./dto/share-publication.dto";
 import type { TogglePublicationReactionDto } from "./dto/toggle-publication-reaction.dto";
 import type { UpdatePublicationDto } from "./dto/update-publication.dto";
 
@@ -50,46 +56,60 @@ type PublicationPayloadForValidation = Pick<CreatePublicationDto, "title" | "con
   attachments?: Array<{ url: string }>;
 };
 
+const publicationAuthorSelect = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  type: true,
+  emailVerifiedAt: true,
+  profile: {
+    select: {
+      publicName: true,
+      avatarUrl: true,
+      memberNumber: true,
+      discipline: true,
+      otherDiscipline: true,
+      country: true,
+      city: true,
+      verifiedAt: true,
+    },
+  },
+  organizationProfile: {
+    select: {
+      name: true,
+      logoUrl: true,
+      sector: true,
+      country: true,
+      city: true,
+      verifiedAt: true,
+    },
+  },
+  partnerProfile: {
+    select: {
+      name: true,
+      logoUrl: true,
+      partnerType: true,
+      country: true,
+      city: true,
+      verifiedAt: true,
+    },
+  },
+} satisfies Prisma.UserSelect;
+
+type PublicationAuthor = Prisma.UserGetPayload<{ select: typeof publicationAuthorSelect }>;
+
 const publicationInclude = {
   author: {
-    select: {
-      id: true,
-      firstName: true,
-      lastName: true,
-      type: true,
-      emailVerifiedAt: true,
-      profile: {
-        select: {
-          publicName: true,
-          avatarUrl: true,
-          memberNumber: true,
-          discipline: true,
-          otherDiscipline: true,
-          country: true,
-          city: true,
-          verifiedAt: true,
-        },
+    select: publicationAuthorSelect,
+  },
+  mentions: {
+    include: {
+      user: {
+        select: publicationAuthorSelect,
       },
-      organizationProfile: {
-        select: {
-          name: true,
-          logoUrl: true,
-          sector: true,
-          country: true,
-          city: true,
-          verifiedAt: true,
-        },
-      },
-      partnerProfile: {
-        select: {
-          name: true,
-          logoUrl: true,
-          partnerType: true,
-          country: true,
-          city: true,
-          verifiedAt: true,
-        },
-      },
+    },
+    orderBy: {
+      createdAt: "asc",
     },
   },
   attachments: {
@@ -99,53 +119,27 @@ const publicationInclude = {
     select: {
       comments: true,
       reactions: true,
+      shares: true,
     },
   },
 } satisfies Prisma.PublicationInclude;
 
 type PublicationWithRelations = Prisma.PublicationGetPayload<{ include: typeof publicationInclude }>;
 
+const publicationReportInclude = {
+  reporter: {
+    include: activeUserInclude,
+  },
+  publication: {
+    include: publicationInclude,
+  },
+} satisfies Prisma.PublicationReportInclude;
+
+type PublicationReportWithRelations = Prisma.PublicationReportGetPayload<{ include: typeof publicationReportInclude }>;
+
 const publicationCommentInclude = {
   author: {
-    select: {
-      id: true,
-      firstName: true,
-      lastName: true,
-      type: true,
-      emailVerifiedAt: true,
-      profile: {
-        select: {
-          publicName: true,
-          avatarUrl: true,
-          memberNumber: true,
-          discipline: true,
-          otherDiscipline: true,
-          country: true,
-          city: true,
-          verifiedAt: true,
-        },
-      },
-      organizationProfile: {
-        select: {
-          name: true,
-          logoUrl: true,
-          sector: true,
-          country: true,
-          city: true,
-          verifiedAt: true,
-        },
-      },
-      partnerProfile: {
-        select: {
-          name: true,
-          logoUrl: true,
-          partnerType: true,
-          country: true,
-          city: true,
-          verifiedAt: true,
-        },
-      },
-    },
+    select: publicationAuthorSelect,
   },
 } satisfies Prisma.PublicationCommentInclude;
 
@@ -305,6 +299,7 @@ export class PublicationService {
     this.validatePublicationPayload(input.type, input);
 
     const status = input.publishNow === false ? PublicationStatus.DRAFT : PublicationStatus.PUBLISHED;
+    const mentionedUserIds = await this.resolveMentionedUserIds(user.id, input.mentionedUserIds);
     const publication = await this.prisma.publication.create({
       data: {
         author: { connect: { id: user.id } },
@@ -321,7 +316,7 @@ export class PublicationService {
         tags: this.normalizeTags(input.tags),
         routingDestinations: policy.destinations,
         linkUrl: this.optionalText(input.linkUrl),
-        coverImageUrl: this.optionalText(input.coverImageUrl),
+        coverImageUrl: this.resolveCoverImageUrl(input),
         groupId: this.optionalText(input.groupId),
         opportunityDeadline: input.opportunityDeadline ? new Date(input.opportunityDeadline) : null,
         opportunityLocation: this.optionalText(input.opportunityLocation),
@@ -330,12 +325,20 @@ export class PublicationService {
         publishedAt: status === PublicationStatus.PUBLISHED ? new Date() : null,
         expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
         attachments: this.buildAttachmentsCreate(input.attachments),
+        mentions: mentionedUserIds.length
+          ? {
+              create: mentionedUserIds.map((userId) => ({ userId })),
+            }
+          : undefined,
       },
       include: publicationInclude,
     });
 
     if (status === PublicationStatus.PUBLISHED) {
-      await this.notifyPublicationPublished(publication, user).catch(() => undefined);
+      await Promise.all([
+        this.notifyPublicationPublished(publication, user).catch(() => undefined),
+        this.notifyPublicationMentions(publication, user).catch(() => undefined),
+      ]);
     }
 
     return this.serializePublication(publication, user.id);
@@ -448,7 +451,11 @@ export class PublicationService {
         routingDestinations: nextType === publication.type ? publication.routingDestinations : policy.destinations,
         linkUrl: input.linkUrl === undefined ? publication.linkUrl : this.optionalText(input.linkUrl),
         coverImageUrl:
-          input.coverImageUrl === undefined ? publication.coverImageUrl : this.optionalText(input.coverImageUrl),
+          input.coverImageUrl === undefined
+            ? input.attachments === undefined
+              ? publication.coverImageUrl
+              : this.resolveCoverImageUrl(input) ?? publication.coverImageUrl
+            : this.optionalText(input.coverImageUrl),
         groupId: input.groupId === undefined ? publication.groupId : this.optionalText(input.groupId),
         opportunityDeadline:
           input.opportunityDeadline === undefined
@@ -479,7 +486,10 @@ export class PublicationService {
     });
 
     if (publication.status !== PublicationStatus.PUBLISHED && updated.status === PublicationStatus.PUBLISHED) {
-      await this.notifyPublicationPublished(updated, user).catch(() => undefined);
+      await Promise.all([
+        this.notifyPublicationPublished(updated, user).catch(() => undefined),
+        this.notifyPublicationMentions(updated, user).catch(() => undefined),
+      ]);
     }
 
     return this.serializePublication(updated, user.id);
@@ -506,7 +516,10 @@ export class PublicationService {
       include: publicationInclude,
     });
 
-    await this.notifyPublicationPublished(updated, user).catch(() => undefined);
+    await Promise.all([
+      this.notifyPublicationPublished(updated, user).catch(() => undefined),
+      this.notifyPublicationMentions(updated, user).catch(() => undefined),
+    ]);
 
     return this.serializePublication(updated, user.id);
   }
@@ -612,6 +625,205 @@ export class PublicationService {
       active: !existing,
       type,
       count,
+    };
+  }
+
+  async sharePublication(authUser: AuthUser, publicationId: string, input: SharePublicationDto = {}) {
+    const user = await this.getActiveUser(authUser);
+    const publication = await this.findPublicationOrThrow(publicationId);
+    this.ensureCanRead(user, publication);
+
+    const content = this.optionalText(input.content);
+    const existing = await this.prisma.publicationShare.findUnique({
+      where: {
+        publicationId_userId: {
+          publicationId,
+          userId: user.id,
+        },
+      },
+      select: { id: true },
+    });
+
+    const share = await this.prisma.publicationShare.upsert({
+      where: {
+        publicationId_userId: {
+          publicationId,
+          userId: user.id,
+        },
+      },
+      create: {
+        publicationId,
+        userId: user.id,
+        content,
+      },
+      update: { content },
+    });
+
+    if (!existing && publication.authorId !== user.id) {
+      await this.notifications.createForUser({
+        userId: publication.authorId,
+        type: NotificationType.SYSTEM,
+        title: "Publication partagée",
+        message: `${this.displayName(user)} a partagé votre publication “${publication.title}”.`,
+        href: "/espace-membre",
+      }).catch(() => undefined);
+    }
+
+    const count = await this.prisma.publicationShare.count({ where: { publicationId } });
+
+    return {
+      success: true,
+      shared: true,
+      shareId: share.id,
+      count,
+    };
+  }
+
+  async reportPublication(authUser: AuthUser, publicationId: string, input: ReportPublicationDto) {
+    const user = await this.getActiveUser(authUser);
+    const publication = await this.findPublicationOrThrow(publicationId);
+    this.ensureCanRead(user, publication);
+
+    if (publication.authorId === user.id) {
+      throw new BadRequestException("Vous ne pouvez pas signaler votre propre publication.");
+    }
+
+    const reason = input.reason ?? PublicationReportReason.OTHER;
+    const message = this.optionalText(input.message);
+    const report = await this.prisma.publicationReport.upsert({
+      where: {
+        publicationId_reporterId: {
+          publicationId,
+          reporterId: user.id,
+        },
+      },
+      create: {
+        publicationId,
+        reporterId: user.id,
+        reason,
+        message,
+      },
+      update: {
+        reason,
+        message,
+        status: PublicationReportStatus.PENDING,
+        reviewedAt: null,
+      },
+    });
+
+    const admins = await this.prisma.user.findMany({
+      where: {
+        type: AccountType.ADMIN,
+        status: AccountStatus.ACTIVE,
+      },
+      select: { id: true },
+      take: 20,
+    });
+
+    await Promise.all(
+      admins.map((admin) =>
+        this.notifications.createForUser({
+          userId: admin.id,
+          type: NotificationType.SYSTEM,
+          title: "Publication signalée",
+          message: `${this.displayName(user)} a signalé “${publication.title}”.`,
+          href: "/espace-membre",
+        }).catch(() => undefined),
+      ),
+    );
+
+    return {
+      success: true,
+      reportId: report.id,
+      status: report.status,
+    };
+  }
+
+  async listPublicationReports(authUser: AuthUser, query: PublicationReportQueryDto = {}) {
+    const user = await this.getActiveUser(authUser);
+    this.ensureAdmin(user);
+
+    const where: Prisma.PublicationReportWhereInput = {
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.reason ? { reason: query.reason } : {}),
+    };
+    const limit = Math.min(Math.max(query.limit ?? 50, 1), 100);
+    const [reports, total] = await Promise.all([
+      this.prisma.publicationReport.findMany({
+        where,
+        include: publicationReportInclude,
+        orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
+        take: limit,
+      }),
+      this.prisma.publicationReport.count({ where }),
+    ]);
+
+    return {
+      reports: reports.map((report) => this.serializePublicationReport(report, user.id)),
+      total,
+      pending: reports.filter((report) => report.status === PublicationReportStatus.PENDING).length,
+    };
+  }
+
+  async moderatePublicationReport(authUser: AuthUser, reportId: string, input: ModeratePublicationReportDto) {
+    const user = await this.getActiveUser(authUser);
+    this.ensureAdmin(user);
+
+    if (!input.status && !input.publicationStatus) {
+      throw new BadRequestException("Choisissez l'action de modération à appliquer.");
+    }
+
+    if (input.publicationStatus === PublicationStatus.DRAFT) {
+      throw new BadRequestException("Une modération ne peut pas remettre une publication en brouillon.");
+    }
+
+    const existing = await this.prisma.publicationReport.findUnique({
+      where: { id: reportId },
+      include: { publication: true },
+    });
+
+    if (!existing) {
+      throw new NotFoundException("Ce signalement est introuvable.");
+    }
+
+    const reportStatus = input.status ?? PublicationReportStatus.REVIEWED;
+    await this.prisma.$transaction(async (tx) => {
+      await tx.publicationReport.update({
+        where: { id: reportId },
+        data: {
+          status: reportStatus,
+          reviewedAt: new Date(),
+        },
+      });
+
+      if (input.publicationStatus) {
+        await tx.publication.update({
+          where: { id: existing.publicationId },
+          data: {
+            status: input.publicationStatus,
+          },
+        });
+      }
+    });
+
+    if (input.publicationStatus === PublicationStatus.ARCHIVED || input.publicationStatus === PublicationStatus.REJECTED) {
+      await this.notifications.createForUser({
+        userId: existing.publication.authorId,
+        type: NotificationType.SYSTEM,
+        title: "Publication modérée",
+        message: `Votre publication “${existing.publication.title}” a été retirée après vérification par l’équipe CCA.`,
+        href: "/espace-membre/publier",
+      }).catch(() => undefined);
+    }
+
+    const report = await this.prisma.publicationReport.findUnique({
+      where: { id: reportId },
+      include: publicationReportInclude,
+    });
+
+    return {
+      success: true,
+      report: report ? this.serializePublicationReport(report, user.id) : null,
     };
   }
 
@@ -760,6 +972,12 @@ export class PublicationService {
     throw new ForbiddenException("Vous ne pouvez modifier que vos propres publications.");
   }
 
+  private ensureAdmin(user: ActiveUser) {
+    if (user.type !== AccountType.ADMIN) {
+      throw new ForbiddenException("Seul un administrateur peut gérer la modération.");
+    }
+  }
+
   private buildAttachmentsCreate(attachments?: PublicationAttachmentDto[]) {
     const normalized = this.normalizeAttachments(attachments);
     return normalized.length ? { create: normalized } : undefined;
@@ -774,6 +992,16 @@ export class PublicationService {
       sizeBytes: attachment.sizeBytes ?? null,
       order: attachment.order ?? index,
     }));
+  }
+
+  private resolveCoverImageUrl(input: Pick<CreatePublicationDto | UpdatePublicationDto, "coverImageUrl" | "attachments">) {
+    const explicitCover = this.optionalText(input.coverImageUrl);
+
+    if (explicitCover) {
+      return explicitCover;
+    }
+
+    return this.normalizeAttachments(input.attachments).find((attachment) => attachment.type === PublicationAttachmentType.IMAGE)?.url ?? null;
   }
 
   private normalizeTags(tags?: string[]) {
@@ -853,7 +1081,7 @@ export class PublicationService {
     const publishedAt = publication.publishedAt ?? publication.createdAt;
     const ageInDays = Math.max(0, (now - publishedAt.getTime()) / 86_400_000);
     const freshness = Math.max(0, 24 - ageInDays) * 1.4;
-    const engagement = Math.min(34, publication._count.reactions * 2 + publication._count.comments * 3);
+    const engagement = Math.min(40, publication._count.reactions * 2 + publication._count.comments * 3 + publication._count.shares * 4);
     const completeness =
       6 +
       (publication.coverImageUrl ? 5 : 0) +
@@ -922,6 +1150,31 @@ export class PublicationService {
     return user.profile?.city ?? user.organizationProfile?.city ?? user.partnerProfile?.city ?? null;
   }
 
+  private async resolveMentionedUserIds(authorId: string, mentionedUserIds?: string[]) {
+    const uniqueIds = Array.from(
+      new Set(
+        (mentionedUserIds ?? [])
+          .filter((userId): userId is string => typeof userId === "string")
+          .map((userId) => userId.trim())
+          .filter((userId) => userId && userId !== authorId),
+      ),
+    ).slice(0, 10);
+
+    if (!uniqueIds.length) {
+      return [];
+    }
+
+    const users = await this.prisma.user.findMany({
+      where: {
+        id: { in: uniqueIds },
+        status: AccountStatus.ACTIVE,
+      },
+      select: { id: true },
+    });
+
+    return users.map((user) => user.id);
+  }
+
   private async notifyPublicationPublished(publication: PublicationWithRelations, author: ActiveUser) {
     const recipients = await this.prisma.networkConnection.findMany({
       where: {
@@ -943,6 +1196,31 @@ export class PublicationService {
           type: notificationType,
           title: publicationPolicies[publication.type].label,
           message: `${authorName} a publié “${publication.title}”.`,
+          href,
+        }).catch(() => undefined),
+      ),
+    );
+  }
+
+  private async notifyPublicationMentions(publication: PublicationWithRelations, author: ActiveUser) {
+    const mentionedUserIds = Array.from(
+      new Set(publication.mentions.map((mention) => mention.userId).filter((userId) => userId !== author.id)),
+    );
+
+    if (!mentionedUserIds.length) {
+      return;
+    }
+
+    const href = this.hrefForPublication(publication);
+    const authorName = this.displayName(author);
+
+    await Promise.all(
+      mentionedUserIds.map((userId) =>
+        this.notifications.createForUser({
+          userId,
+          type: NotificationType.SYSTEM,
+          title: "Vous êtes identifié dans une publication",
+          message: `${authorName} vous a identifié dans “${publication.title}”.`,
           href,
         }).catch(() => undefined),
       ),
@@ -1152,9 +1430,11 @@ export class PublicationService {
       updatedAt: publication.updatedAt,
       author: this.serializeAuthor(publication.author),
       attachments: publication.attachments,
+      mentions: publication.mentions.map((mention) => this.serializeAuthor(mention.user)),
       counts: {
         comments: publication._count.comments,
         reactions: publication._count.reactions,
+        shares: publication._count.shares,
       },
       permissions: {
         canEdit: publication.authorId === currentUserId,
@@ -1179,7 +1459,21 @@ export class PublicationService {
     };
   }
 
-  private serializeAuthor(author: PublicationWithRelations["author"] | PublicationCommentWithAuthor["author"]) {
+  private serializePublicationReport(report: PublicationReportWithRelations, currentUserId: string) {
+    return {
+      id: report.id,
+      reason: report.reason,
+      message: report.message,
+      status: report.status,
+      reviewedAt: report.reviewedAt,
+      createdAt: report.createdAt,
+      updatedAt: report.updatedAt,
+      reporter: this.serializeAuthor(report.reporter),
+      publication: this.serializePublication(report.publication, currentUserId),
+    };
+  }
+
+  private serializeAuthor(author: PublicationAuthor | ActiveUser) {
     const profile = author.profile;
     const organization = author.organizationProfile;
     const partner = author.partnerProfile;

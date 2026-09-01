@@ -175,6 +175,20 @@ enum PublicationReactionType {
   SAVE
 }
 
+enum PublicationReportReason {
+  SPAM
+  INAPPROPRIATE
+  MISLEADING
+  HARASSMENT
+  OTHER
+}
+
+enum PublicationReportStatus {
+  PENDING
+  REVIEWED
+  DISMISSED
+}
+
 enum CommunityGroupStatus {
   ACTIVE
   ARCHIVED
@@ -238,19 +252,22 @@ model User {
   opportunityApplications       OpportunityApplication[]
   eventRegistrations            EventRegistration[]
   certificates                  Certificate[]
-  uploadedResources             Resource[]                 @relation("ResourceUploader")
+  uploadedResources             Resource[]                      @relation("ResourceUploader")
   notifications                 Notification[]
-  publications                  Publication[]              @relation("PublicationAuthor")
+  publications                  Publication[]                   @relation("PublicationAuthor")
   publicationComments           PublicationComment[]
   publicationReactions          PublicationReaction[]
-  networkConnections            NetworkConnection[]        @relation("NetworkConnectionOwner")
-  networkSavedBy                NetworkConnection[]        @relation("NetworkConnectionMember")
-  communityGroupsOwned          CommunityGroup[]           @relation("CommunityGroupOwner")
+  publicationShares             PublicationShare[]
+  publicationReports            PublicationReport[]             @relation("PublicationReporter")
+  publicationMentions           PublicationMention[]
+  networkConnections            NetworkConnection[]             @relation("NetworkConnectionOwner")
+  networkSavedBy                NetworkConnection[]             @relation("NetworkConnectionMember")
+  communityGroupsOwned          CommunityGroup[]                @relation("CommunityGroupOwner")
   communityGroupMemberships     CommunityGroupMembership[]
   communityGroupMessages        CommunityGroupMessage[]
-  communityGroupInvitesSent     CommunityGroupInvitation[] @relation("CommunityGroupInvitationInviter")
-  communityGroupInvitesReceived CommunityGroupInvitation[] @relation("CommunityGroupInvitationInvitee")
-  directConversationsCreated    DirectConversation[]       @relation("DirectConversationCreator")
+  communityGroupInvitesSent     CommunityGroupInvitation[]      @relation("CommunityGroupInvitationInviter")
+  communityGroupInvitesReceived CommunityGroupInvitation[]      @relation("CommunityGroupInvitationInvitee")
+  directConversationsCreated    DirectConversation[]            @relation("DirectConversationCreator")
   directConversationMemberships DirectConversationParticipant[]
   directMessages                DirectMessage[]
 
@@ -700,8 +717,8 @@ model NetworkConnection {
 }
 
 model DirectConversation {
-  id             String @id @default(cuid())
-  participantKey String @unique
+  id             String   @id @default(cuid())
+  participantKey String   @unique
   createdById    String?
   lastMessageAt  DateTime @default(now())
 
@@ -718,7 +735,7 @@ model DirectConversation {
 }
 
 model DirectConversationParticipant {
-  id             String @id @default(cuid())
+  id             String    @id @default(cuid())
   conversationId String
   userId         String
   lastReadAt     DateTime?
@@ -736,7 +753,7 @@ model DirectConversationParticipant {
 }
 
 model DirectMessage {
-  id                 String @id @default(cuid())
+  id                 String    @id @default(cuid())
   conversationId     String
   authorId           String
   content            String
@@ -791,6 +808,9 @@ model Publication {
   attachments PublicationAttachment[]
   comments    PublicationComment[]
   reactions   PublicationReaction[]
+  shares      PublicationShare[]
+  reports     PublicationReport[]
+  mentions    PublicationMention[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -801,6 +821,22 @@ model Publication {
   @@index([audience])
   @@index([category])
   @@index([publishedAt])
+  @@index([createdAt])
+}
+
+model PublicationMention {
+  id            String @id @default(cuid())
+  publicationId String
+  userId        String
+
+  publication Publication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([publicationId, userId])
+  @@index([publicationId])
+  @@index([userId])
   @@index([createdAt])
 }
 
@@ -858,6 +894,46 @@ model PublicationReaction {
   @@index([publicationId])
   @@index([userId])
   @@index([type])
+}
+
+model PublicationShare {
+  id            String  @id @default(cuid())
+  publicationId String
+  userId        String
+  content       String?
+
+  publication Publication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([publicationId, userId])
+  @@index([publicationId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model PublicationReport {
+  id            String                  @id @default(cuid())
+  publicationId String
+  reporterId    String
+  reason        PublicationReportReason
+  message       String?
+  status        PublicationReportStatus @default(PENDING)
+  reviewedAt    DateTime?
+
+  publication Publication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+  reporter    User        @relation("PublicationReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([publicationId, reporterId])
+  @@index([publicationId])
+  @@index([reporterId])
+  @@index([reason])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model CommunityGroup {

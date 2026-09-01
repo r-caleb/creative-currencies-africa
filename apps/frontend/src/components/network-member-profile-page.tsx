@@ -10,11 +10,13 @@ import {
   ExternalLink,
   FileText,
   Globe2,
+  Image as ImageIcon,
   Languages,
   Link2,
   Loader2,
   MapPin,
   MessageCircle,
+  Plus,
   ShieldCheck,
   Sparkles,
   UserRound,
@@ -75,11 +77,18 @@ export function NetworkMemberProfilePage({ memberNumber }: { memberNumber: strin
   const location = profile ? [profile.city, profile.country].filter(Boolean).join(", ") : "";
   const professionalTitle = profile ? [accountTypeLabel(profile.accountType), profile.profession, profile.discipline].filter(Boolean).join(" · ") : "";
   const hasLinks = !!(profile?.portfolioUrl || profile?.websiteUrl || profile?.cvUrl || data?.socialLinks.length);
-  const highlightedPublications = useMemo(
-    () => data?.publications.filter((publication) => publication.routingDestinations.includes("creative-id") || publication.type === "CREATION" || publication.type === "PROJECT").slice(0, 6) ?? [],
+  const creationPublications = useMemo(
+    () => data?.publications.filter((publication) => publication.type === "CREATION").slice(0, 9) ?? [],
+    [data?.publications],
+  );
+  const projectPublications = useMemo(
+    () => data?.publications
+      .filter((publication) => publication.type !== "CREATION" && (publication.type === "PROJECT" || publication.routingDestinations.includes("creative-id")))
+      .slice(0, 6) ?? [],
     [data?.publications],
   );
   const recentPublications = data?.publications.slice(0, 8) ?? [];
+  const showCreationShowcase = !!profile && (profile.accountType === "CREATOR" || creationPublications.length > 0);
 
   async function toggleNetworkConnection() {
     if (!accessToken || !profile || profile.isCurrentMember || isUpdatingConnection) {
@@ -186,6 +195,28 @@ export function NetworkMemberProfilePage({ memberNumber }: { memberNumber: strin
 
             <div className="network-profile-grid">
               <section className="network-profile-main">
+                {showCreationShowcase ? (
+                  <section className="member-card network-profile-section network-profile-showcase">
+                    <div className="member-card-title">
+                      <div>
+                        <h2>Créations à la une</h2>
+                        <p>
+                          {profile.isCurrentMember
+                            ? "Votre vitrine publique mettra d'abord en avant les œuvres que vous publiez."
+                            : "La partie artistique visible en premier sur ce profil."}
+                        </p>
+                      </div>
+                      {profile.isCurrentMember ? (
+                        <Link className="member-secondary-button" href="/espace-membre/publier?type=CREATION">
+                          <Plus aria-hidden="true" strokeWidth={1.8} />
+                          Publier une création
+                        </Link>
+                      ) : null}
+                    </div>
+                    <ProfileCreationGallery publications={creationPublications} isCurrentMember={profile.isCurrentMember} />
+                  </section>
+                ) : null}
+
                 <section className="member-card network-profile-section">
                   <div className="member-card-title">
                     <div>
@@ -239,11 +270,11 @@ export function NetworkMemberProfilePage({ memberNumber }: { memberNumber: strin
                 <section className="member-card network-profile-section">
                   <div className="member-card-title">
                     <div>
-                      <h2>Créations et projets</h2>
-                      <p>Les contenus que ce membre met en avant dans son Creative ID.</p>
+                      <h2>Projets et initiatives</h2>
+                      <p>Les projets, collaborations et initiatives visibles dans son Creative ID.</p>
                     </div>
                   </div>
-                  <ProfilePublicationGrid publications={highlightedPublications} emptyText="Aucune création ou projet publié pour le moment." />
+                  <ProfilePublicationGrid publications={projectPublications} emptyText="Aucun projet publié pour le moment." />
                 </section>
 
                 <section className="member-card network-profile-section">
@@ -345,6 +376,56 @@ function NetworkProfileAvatar({ profile }: { profile: NetworkMember }) {
   );
 }
 
+function ProfileCreationGallery({
+  publications,
+  isCurrentMember,
+}: {
+  publications: NetworkMemberProfile["publications"];
+  isCurrentMember: boolean;
+}) {
+  if (!publications.length) {
+    return (
+      <div className="network-profile-showcase-empty">
+        <div className="network-profile-empty-art" aria-hidden="true">
+          <span><ImageIcon strokeWidth={1.8} /></span>
+          <span />
+          <span />
+        </div>
+        <div className="network-profile-empty-copy">
+          <strong>{isCurrentMember ? "Votre galerie attend sa première création" : "Galerie en préparation"}</strong>
+          <p>
+            {isCurrentMember
+              ? "Publiez une œuvre avec un visuel pour donner immédiatement de la matière à votre profil public."
+              : "Ce créateur n'a pas encore mis d'œuvre en avant. Ses créations apparaîtront ici dès publication."}
+          </p>
+        </div>
+        {isCurrentMember ? (
+          <Link className="member-create-button" href="/espace-membre/publier?type=CREATION">
+            <Plus aria-hidden="true" strokeWidth={1.8} />
+            Publier une création
+          </Link>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="network-profile-creation-gallery">
+      {publications.map((publication) => (
+        <article key={publication.id}>
+          <PublicationMedia publication={publication} />
+          <div>
+            <small>{publication.category || "Création"}</small>
+            <strong>{publication.title}</strong>
+            {publication.excerpt ? <p>{publication.excerpt}</p> : null}
+            <span>{publication.counts.reactions} réaction{publication.counts.reactions > 1 ? "s" : ""} · {publication.counts.comments} commentaire{publication.counts.comments > 1 ? "s" : ""}</span>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
 function ProfilePublicationGrid({
   publications,
   emptyText,
@@ -362,7 +443,7 @@ function ProfilePublicationGrid({
     <div className={compact ? "network-profile-publications is-compact" : "network-profile-publications"}>
       {publications.map((publication) => (
         <article key={publication.id}>
-          {publication.coverImageUrl ? <img src={publication.coverImageUrl} alt="" /> : <span><Sparkles aria-hidden="true" strokeWidth={1.8} /></span>}
+          <PublicationMedia publication={publication} />
           <div>
             <small>{publication.typeLabel}{publication.category ? ` · ${publication.category}` : ""}</small>
             <strong>{publication.title}</strong>
@@ -376,6 +457,36 @@ function ProfilePublicationGrid({
       ))}
     </div>
   );
+}
+
+function PublicationMedia({ publication }: { publication: NetworkMemberProfile["publications"][number] }) {
+  const media = getPublicationMedia(publication);
+
+  if (media?.type === "image") {
+    return <img src={media.url} alt="" />;
+  }
+
+  if (media?.type === "video") {
+    return <video src={media.url} muted playsInline preload="metadata" />;
+  }
+
+  return <span><Sparkles aria-hidden="true" strokeWidth={1.8} /></span>;
+}
+
+function getPublicationMedia(publication: NetworkMemberProfile["publications"][number]) {
+  const coverImageUrl = publication.coverImageUrl || publication.attachments.find((attachment) => attachment.type === "IMAGE")?.url;
+
+  if (coverImageUrl) {
+    return { type: "image" as const, url: coverImageUrl };
+  }
+
+  const videoUrl = publication.attachments.find((attachment) => attachment.type === "VIDEO")?.url;
+
+  if (videoUrl) {
+    return { type: "video" as const, url: videoUrl };
+  }
+
+  return null;
 }
 
 function ProfileExternalLink({ label, url, icon }: { label: string; url: string | null; icon: "file" | "globe" | "link" }) {

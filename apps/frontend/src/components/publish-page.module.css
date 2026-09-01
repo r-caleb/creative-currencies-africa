@@ -155,6 +155,20 @@
   padding: 0 12px;
 }
 
+.dateTimeField {
+  min-width: 0;
+}
+
+.dateTimeGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(118px, 0.48fr);
+  gap: 10px;
+}
+
+.dateTimeGrid input {
+  min-width: 0;
+}
+
 .bodyField textarea {
   min-height: 180px;
   resize: vertical;
@@ -193,7 +207,14 @@
   line-height: 1.5;
 }
 
-.attachments,
+.attachments {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(280px, 420px);
+  gap: 10px;
+  align-items: start;
+  justify-content: space-between;
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;
@@ -217,6 +238,174 @@
   font-size: 0.82rem;
   font-weight: 900;
   cursor: pointer;
+}
+
+.mentionArea {
+  display: grid;
+  justify-self: end;
+  width: min(100%, 420px);
+  min-width: min(100%, 330px);
+  gap: 8px;
+}
+
+.mentionArea .mentionButton {
+  width: 100%;
+  justify-content: center;
+}
+
+.mentionButtonActive {
+  border-color: color-mix(in srgb, var(--member-purple) 48%, var(--member-line));
+  color: var(--member-purple);
+  background: color-mix(in srgb, var(--member-purple) 8%, var(--member-bg-soft));
+}
+
+.mentionChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mentionChip {
+  max-width: 180px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid color-mix(in srgb, var(--member-purple) 24%, var(--member-line));
+  border-radius: 999px;
+  padding: 5px 7px 5px 10px;
+  color: var(--member-text);
+  background: color-mix(in srgb, var(--member-purple) 7%, var(--member-bg-soft));
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.mentionChip button {
+  width: 18px;
+  height: 18px;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+  color: var(--member-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.mentionChip svg {
+  width: 13px;
+  height: 13px;
+}
+
+.mentionPicker {
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--member-purple) 26%, var(--member-line));
+  border-radius: 8px;
+  background: var(--member-card);
+  box-shadow: 0 14px 34px color-mix(in srgb, #111827 12%, transparent);
+}
+
+.mentionSearch {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  border-bottom: 1px solid var(--member-line);
+  color: var(--member-muted);
+  background: var(--member-card);
+}
+
+.mentionSearch svg {
+  width: 18px;
+  height: 18px;
+}
+
+.mentionSearch input {
+  width: 100%;
+  border: 0;
+  color: var(--member-text);
+  background: transparent;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 800;
+  outline: 0;
+}
+
+.mentionResults {
+  max-height: 230px;
+  overflow-y: auto;
+  padding: 6px;
+  background: var(--member-card);
+}
+
+.mentionResult {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px;
+  color: var(--member-text);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mentionResult:hover,
+.mentionResult:focus-visible {
+  background: color-mix(in srgb, var(--member-purple) 8%, var(--member-bg-soft));
+  outline: 0;
+}
+
+.mentionResult strong,
+.mentionResult small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mentionResult strong {
+  color: var(--member-text);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.mentionResult small {
+  color: var(--member-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.mentionAvatar {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 999px;
+  color: #fff;
+  background: linear-gradient(135deg, #7c3aed, #b87816);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.mentionAvatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mentionEmpty {
+  margin: 0;
+  padding: 14px 10px;
+  color: var(--member-muted);
+  font-size: 0.78rem;
+  font-weight: 800;
 }
 
 .attachmentButton input {
@@ -299,6 +488,48 @@
   line-height: 1.55;
 }
 
+.preview .mentionPreview {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  border-radius: 999px;
+  padding: 5px 8px;
+  color: var(--member-purple);
+  background: color-mix(in srgb, var(--member-purple) 8%, var(--member-bg-soft));
+  font-size: 0.72rem;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.previewMedia {
+  width: 100%;
+  max-height: 220px;
+  border: 1px solid var(--member-line);
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.creationHint {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  border: 1px dashed color-mix(in srgb, var(--member-purple) 38%, var(--member-line));
+  border-radius: 8px;
+  padding: 12px;
+  color: var(--member-muted);
+  background: color-mix(in srgb, var(--member-purple) 7%, var(--member-bg-soft));
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.creationHint svg {
+  width: 28px;
+  height: 28px;
+  color: var(--member-purple);
+}
+
 .progress {
   height: 8px;
   overflow: hidden;
@@ -350,7 +581,8 @@
 
 @media (max-width: 760px) {
   .typeGrid,
-  .formGrid {
+  .formGrid,
+  .dateTimeGrid {
     grid-template-columns: 1fr;
   }
 
@@ -361,5 +593,24 @@
   .actions > * {
     flex: 1 1 100%;
     justify-content: center;
+  }
+
+  .attachments {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .attachmentButton,
+  .mentionArea,
+  .mentionButton {
+    width: 100%;
+  }
+
+  .mentionButton {
+    justify-content: center;
+  }
+
+  .mentionPicker {
+    width: 100%;
   }
 }
