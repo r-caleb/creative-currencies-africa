@@ -176,6 +176,7 @@ export function PublishPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedTypeParam = searchParams.get("type");
+  const requestedAudienceParam = searchParams.get("audience");
   const { accessToken, user, profile, organizationProfile, partnerProfile } = useAppSelector((state) => state.auth);
   const [capabilities, setCapabilities] = useState<PublicationCapability[]>([]);
   const [capabilitiesLoaded, setCapabilitiesLoaded] = useState(false);
@@ -207,6 +208,13 @@ export function PublishPage() {
     () => (localPublishTypes.some((type) => type.id === requestedTypeParam) ? (requestedTypeParam as PublicationType) : null),
     [requestedTypeParam],
   );
+  const requestedAudience = useMemo(() => {
+    const allowedAudiences: PublicationAudience[] = ["PRIVATE", "MEMBERS", "PUBLIC"];
+
+    return allowedAudiences.includes(requestedAudienceParam as PublicationAudience)
+      ? (requestedAudienceParam as PublicationAudience)
+      : null;
+  }, [requestedAudienceParam]);
 
   useEffect(() => {
     if (!accessToken) {
@@ -226,7 +234,7 @@ export function PublishPage() {
         const firstAllowed = allowedTypes.find((type) => type.id === requestedType) ?? allowedTypes[0];
         if (firstAllowed) {
           setActiveTypeId(firstAllowed.id);
-          setAudience(firstAllowed.defaultAudience);
+          setAudience(requestedAudience ?? firstAllowed.defaultAudience);
         }
       })
       .catch((error) => {
@@ -243,7 +251,7 @@ export function PublishPage() {
     return () => {
       isMounted = false;
     };
-  }, [accessToken, requestedType]);
+  }, [accessToken, requestedAudience, requestedType]);
 
   const publishTypes = useMemo(() => (capabilitiesLoaded ? buildPublishTypes(capabilities) : []), [capabilities, capabilitiesLoaded]);
   const selectedMentionIds = useMemo(() => new Set(mentionedMembers.map((member) => member.userId)), [mentionedMembers]);

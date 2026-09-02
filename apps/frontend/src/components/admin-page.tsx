@@ -11,6 +11,7 @@ import {
   FileBadge,
   FileText,
   GraduationCap,
+  Globe2,
   LayoutDashboard,
   Lightbulb,
   Loader2,
@@ -55,7 +56,7 @@ import { accountTypeLabel, buildInitials } from "@/lib/member-display";
 import { useAppSelector } from "@/store/hooks";
 import { MemberShell } from "./member-shell";
 
-type AdminTab = "overview" | "moderation" | "publications" | "members" | "certificates" | "references";
+type AdminTab = "overview" | "content" | "moderation" | "publications" | "members" | "certificates" | "references";
 type CertificateFormState = {
   userId: string;
   title: string;
@@ -66,6 +67,7 @@ type CertificateFormState = {
 
 const tabs: Array<{ value: AdminTab; label: string }> = [
   { value: "overview", label: "Vue d'ensemble" },
+  { value: "content", label: "Alimenter" },
   { value: "moderation", label: "Modération" },
   { value: "publications", label: "Publications" },
   { value: "members", label: "Membres" },
@@ -114,6 +116,51 @@ const memberStatusLabels: Record<AdminMember["status"], string> = {
   SUSPENDED: "Suspendu",
   ARCHIVED: "Archivé",
 };
+
+const adminContentActions = [
+  {
+    href: "/espace-membre/publier?type=ANNOUNCEMENT&audience=PUBLIC",
+    icon: Megaphone,
+    title: "Annonce officielle",
+    text: "Communiqué CCA, information publique ou actualité importante.",
+    destination: "Accueil, réseau et page publique si l'audience est publique",
+  },
+  {
+    href: "/espace-membre/publier?type=TRAINING&audience=PUBLIC",
+    icon: GraduationCap,
+    title: "Formation CCA",
+    text: "Atelier, masterclass, programme certifiant ou session à venir.",
+    destination: "Formations, agenda si une date est renseignée",
+  },
+  {
+    href: "/espace-membre/publier?type=OPPORTUNITY&audience=PUBLIC",
+    icon: Lightbulb,
+    title: "Opportunité",
+    text: "Appel à projets, mission, résidence, financement ou collaboration.",
+    destination: "Opportunités, accueil et agenda si date limite",
+  },
+  {
+    href: "/espace-membre/publier?type=RESOURCE&audience=MEMBERS",
+    icon: BookOpen,
+    title: "Ressource",
+    text: "Guide, modèle, replay, PDF ou document réservé aux bons profils.",
+    destination: "Ressources et formations liées",
+  },
+  {
+    href: "/espace-membre/publier?type=EVENT&audience=PUBLIC",
+    icon: CalendarDays,
+    title: "Événement",
+    text: "Rencontre, exposition, panel, lancement ou activité datée.",
+    destination: "Agenda, accueil et réseau",
+  },
+  {
+    href: "/espace-membre/publier?type=PROJECT&audience=PUBLIC",
+    icon: Sparkles,
+    title: "Projet CCA",
+    text: "Initiative ou programme porté par CCA pour fédérer la communauté.",
+    destination: "Accueil, réseau et Creative ID CCA",
+  },
+];
 
 export function AdminPage() {
   const { accessToken, user } = useAppSelector((state) => state.auth);
@@ -357,9 +404,9 @@ export function AdminPage() {
             <h1>Piloter la plateforme CCA avec clarté.</h1>
             <p>Modération, comptes, contenus, disciplines et actions prioritaires sont réunis pour l'équipe.</p>
             <div className="admin-hero-actions">
-              <Link className="member-primary-button" href="/espace-membre/publier">
+              <button type="button" className="member-primary-button" onClick={() => setActiveTab("content")}>
                 <Plus aria-hidden="true" /> Alimenter
-              </Link>
+              </button>
               <button type="button" className="member-secondary-button" onClick={loadAdminData} disabled={isLoading}>
                 <RefreshCw aria-hidden="true" /> Actualiser
               </button>
@@ -411,13 +458,10 @@ export function AdminPage() {
 
                 <section className="member-card admin-section">
                   <SectionTitle icon={Sparkles} title="Alimenter l'application" subtitle="Créer les contenus qui donnent de la valeur aux membres." />
-                  <div className="admin-action-grid">
-                    <AdminQuickAction href="/espace-membre/publier?type=ANNOUNCEMENT" icon={Megaphone} title="Annonce officielle" text="Communication CCA visible dans le réseau." />
-                    <AdminQuickAction href="/espace-membre/publier?type=TRAINING" icon={GraduationCap} title="Formation" text="Programme, atelier, masterclass ou session certifiante." />
-                    <AdminQuickAction href="/espace-membre/publier?type=OPPORTUNITY" icon={Lightbulb} title="Opportunité" text="Appel, mission, résidence, financement ou emploi." />
-                    <AdminQuickAction href="/espace-membre/publier?type=EVENT" icon={CalendarDays} title="Événement" text="Rencontre, exposition, panel ou activation datée." />
-                    <AdminQuickAction href="/espace-membre/publier?type=RESOURCE" icon={BookOpen} title="Ressource" text="Guide, PDF, modèle, replay ou document utile." />
-                    <AdminQuickAction href="/espace-membre/publier?type=PROJECT" icon={Sparkles} title="Projet CCA" text="Initiative, campagne, production ou programme porté par CCA." />
+                  <div className="admin-action-grid is-compact">
+                    {adminContentActions.slice(0, 4).map((action) => (
+                      <AdminQuickAction key={action.title} {...action} />
+                    ))}
                     <AdminQuickButton icon={FileBadge} title="Certificat CCA" text="Créer et attribuer un certificat officiel." onClick={() => setActiveTab("certificates")} />
                   </div>
                 </section>
@@ -425,6 +469,10 @@ export function AdminPage() {
                 <ReportsPanel reports={visibleReports} busyKey={busyKey} onAction={handleReportAction} compact />
                 <PublicationsPanel publications={visiblePublications} busyKey={busyKey} onStatus={handlePublicationStatus} compact />
               </div>
+            ) : null}
+
+            {activeTab === "content" ? (
+              <ContentAdminPanel onOpenCertificates={() => setActiveTab("certificates")} />
             ) : null}
 
             {activeTab === "moderation" ? (
@@ -515,6 +563,56 @@ function AdminQuickAction({ href, icon: Icon, title, text }: { href: string; ico
       <strong>{title}</strong>
       <span>{text}</span>
     </Link>
+  );
+}
+
+function ContentAdminPanel({ onOpenCertificates }: { onOpenCertificates: () => void }) {
+  return (
+    <section className="member-card admin-section admin-content-panel">
+      <SectionTitle
+        icon={Globe2}
+        title="Alimenter la plateforme"
+        subtitle="Créer les contenus CCA qui nourrissent l'accueil, les formations, les opportunités, les ressources et l'agenda."
+      />
+
+      <div className="admin-content-layout">
+        <div className="admin-content-main">
+          {adminContentActions.map((action) => {
+            const Icon = action.icon;
+
+            return (
+              <Link className="admin-content-action" href={action.href} key={action.title}>
+                <span className="admin-content-action-icon">
+                  <Icon aria-hidden="true" />
+                </span>
+                <span className="admin-content-action-body">
+                  <strong>{action.title}</strong>
+                  <small>{action.text}</small>
+                  <em>{action.destination}</em>
+                </span>
+                <span className="admin-content-action-cta">Préparer</span>
+              </Link>
+            );
+          })}
+        </div>
+
+        <aside className="admin-content-aside">
+          <div className="admin-content-aside-card">
+            <FileBadge aria-hidden="true" />
+            <h3>Certificats CCA</h3>
+            <p>Les certificats restent un produit officiel CCA : l'équipe les crée et les attribue aux apprenants ou créateurs.</p>
+            <button type="button" className="member-primary-button" onClick={onOpenCertificates}>
+              Créer un certificat
+            </button>
+          </div>
+          <div className="admin-content-aside-card">
+            <ShieldCheck aria-hidden="true" />
+            <h3>Contrôle éditorial</h3>
+            <p>Les publications admin peuvent servir à alimenter les pages publiques, les onglets membres et les contenus officiels.</p>
+          </div>
+        </aside>
+      </div>
+    </section>
   );
 }
 
@@ -643,26 +741,66 @@ function MembersPanel({
   onStatus: (member: AdminMember, status: AdminMember["status"]) => void;
   onGrantAdminAccess: (member: AdminMember) => void;
 }) {
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | AdminMember["status"]>("ALL");
+  const filteredMembers = members.filter((member) => {
+    const searchable = [
+      member.displayName,
+      member.email,
+      accountTypeLabel(member.type),
+      member.discipline,
+      member.city,
+      member.country,
+    ].filter(Boolean).join(" ").toLowerCase();
+    const matchesQuery = !query.trim() || searchable.includes(query.trim().toLowerCase());
+    const matchesStatus = statusFilter === "ALL" || member.status === statusFilter;
+
+    return matchesQuery && matchesStatus;
+  });
+
   return (
     <section className="member-card admin-section">
       <SectionTitle icon={UsersRound} title="Membres" subtitle="Comptes inscrits et statut d'accès." />
-      <div className="admin-list">
-        {members.length ? members.map((member) => (
-          <article className="admin-list-item" key={member.id}>
-            <div className="admin-list-avatar">
-              <Avatar member={member} />
-            </div>
-            <div className="admin-list-body">
-              <div className="admin-list-heading">
-                <div>
-                  <strong>{member.displayName}</strong>
-                  <span>{accountTypeLabel(member.type)} · {member.email}</span>
-                </div>
-                <StatusPill status={member.status} label={memberStatusLabels[member.status]} />
+
+      <div className="admin-members-toolbar">
+        <label className="admin-search-field">
+          <Search aria-hidden="true" />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Rechercher un membre, email, ville..." />
+        </label>
+        <div className="admin-filter-pills" aria-label="Filtrer les membres par statut">
+          {(["ALL", "ACTIVE", "PENDING", "SUSPENDED"] as const).map((status) => (
+            <button
+              key={status}
+              type="button"
+              className={statusFilter === status ? "is-active" : ""}
+              onClick={() => setStatusFilter(status)}
+            >
+              {status === "ALL" ? "Tous" : memberStatusLabels[status]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="admin-members-list">
+        {filteredMembers.length ? filteredMembers.map((member) => (
+          <article className="admin-member-row" key={member.id}>
+            <div className="admin-member-identity">
+              <div className="admin-list-avatar">
+                <Avatar member={member} />
               </div>
-              <small>{[member.discipline, member.city, member.country].filter(Boolean).join(" · ") || "Profil à compléter"} · {member.emailVerified ? "E-mail vérifié" : "E-mail non vérifié"}</small>
+              <div className="admin-member-copy">
+                <strong>{member.displayName}</strong>
+                <span>{accountTypeLabel(member.type)} · {member.email}</span>
+                <small>{[member.discipline, member.city, member.country].filter(Boolean).join(" · ") || "Profil à compléter"}</small>
+              </div>
             </div>
-            <div className="admin-list-actions">
+
+            <div className="admin-member-badges">
+              <StatusPill status={member.status} label={memberStatusLabels[member.status]} />
+              <span className={member.emailVerified ? "is-verified" : ""}>{member.emailVerified ? "E-mail vérifié" : "E-mail non vérifié"}</span>
+            </div>
+
+            <div className="admin-list-actions admin-member-actions">
               {member.type !== "ADMIN" ? (
                 <button type="button" onClick={() => onGrantAdminAccess(member)} disabled={busyKey === `member-${member.id}-admin`}>
                   <ShieldCheck aria-hidden="true" /> Nommer admin
@@ -714,6 +852,11 @@ function CertificatesAdminPanel({
 
       <div className="admin-certificate-layout">
         <form className="admin-certificate-form" onSubmit={onSubmit}>
+          <div className="admin-form-intro">
+            <h3>Nouveau certificat</h3>
+            <p>Renseignez le bénéficiaire, le titre et les liens lorsque le document est prêt.</p>
+          </div>
+
           <label>
             <span>Bénéficiaire</span>
             <select
@@ -740,16 +883,25 @@ function CertificatesAdminPanel({
             />
           </label>
 
-          <label>
-            <span>Statut</span>
-            <select
-              value={form.status}
-              onChange={(event) => onChange({ ...form, status: event.target.value as CertificateFormState["status"] })}
+          <fieldset className="admin-certificate-status">
+            <legend>Statut</legend>
+            <button
+              type="button"
+              className={form.status === "ISSUED" ? "is-active" : ""}
+              onClick={() => onChange({ ...form, status: "ISSUED" })}
             >
-              <option value="ISSUED">Délivrer maintenant</option>
-              <option value="PENDING">Préparer seulement</option>
-            </select>
-          </label>
+              <CheckCircle2 aria-hidden="true" />
+              <span>Délivrer maintenant</span>
+            </button>
+            <button
+              type="button"
+              className={form.status === "PENDING" ? "is-active" : ""}
+              onClick={() => onChange({ ...form, status: "PENDING" })}
+            >
+              <Archive aria-hidden="true" />
+              <span>Préparer seulement</span>
+            </button>
+          </fieldset>
 
           <label>
             <span>Lien PDF du certificat</span>
@@ -787,7 +939,7 @@ function CertificatesAdminPanel({
               <div className="admin-list-avatar">
                 <Avatar member={selectedMember} />
               </div>
-              <div>
+              <div className="admin-certificate-target-copy">
                 <strong>{selectedMember.displayName}</strong>
                 <span>{accountTypeLabel(selectedMember.type)} · {selectedMember.email}</span>
                 <small>{[selectedMember.discipline, selectedMember.city, selectedMember.country].filter(Boolean).join(" · ") || "Profil à compléter"}</small>
@@ -796,8 +948,8 @@ function CertificatesAdminPanel({
           ) : (
             <div className="admin-certificate-help">
               <FileBadge aria-hidden="true" />
-              <strong>Choisissez un bénéficiaire</strong>
-              <span>La liste affiche uniquement les apprenants et créateurs actifs, car ce sont les profils qui peuvent recevoir les certificats CCA.</span>
+              <h3>Choisissez un bénéficiaire</h3>
+              <p>La liste affiche uniquement les apprenants et créateurs actifs. Les autres profils ne voient pas cet onglet tant que CCA ne certifie pas leurs contenus.</p>
             </div>
           )}
 
@@ -805,7 +957,7 @@ function CertificatesAdminPanel({
             <div className="admin-certificate-issued">
               <CheckCircle2 aria-hidden="true" />
               <div>
-                <span>Dernier certificat créé</span>
+                <p>Dernier certificat créé</p>
                 <strong>{issuedCertificate.number}</strong>
                 <small>{issuedCertificate.title} · {issuedCertificate.statusLabel}</small>
               </div>
@@ -831,28 +983,46 @@ function ReferencesPanel({
   onCreateDiscipline: () => void;
 }) {
   return (
-    <section className="member-card admin-section">
+    <section className="member-card admin-section admin-reference-section">
       <SectionTitle icon={BookOpen} title="Références" subtitle="Données utilisées dans les formulaires et filtres." />
-      <div className="admin-reference-form">
-        <label>
-          <span>Nouvelle discipline</span>
-          <div>
-            <Search aria-hidden="true" />
-            <input
-              value={disciplineName}
-              onChange={(event) => onChangeDisciplineName(event.target.value)}
-              placeholder="Ex. Production culturelle"
-            />
-          </div>
-        </label>
-        <button type="button" className="member-primary-button" onClick={onCreateDiscipline} disabled={!disciplineName.trim() || busyKey === "discipline-create"}>
-          <Plus aria-hidden="true" /> Ajouter
-        </button>
+
+      <div className="admin-reference-layout">
+        <div className="admin-reference-copy">
+          <h3>{disciplines.length} disciplines actives</h3>
+          <p>La même liste alimente l'inscription, le profil, Publier, l'annuaire et les filtres métier.</p>
+        </div>
+
+        <div className="admin-reference-form">
+          <label>
+            <span>Ajouter une discipline</span>
+            <div>
+              <Search aria-hidden="true" />
+              <input
+                value={disciplineName}
+                onChange={(event) => onChangeDisciplineName(event.target.value)}
+                placeholder="Ex. Production culturelle"
+              />
+            </div>
+          </label>
+          <button type="button" className="member-primary-button" onClick={onCreateDiscipline} disabled={!disciplineName.trim() || busyKey === "discipline-create"}>
+            <Plus aria-hidden="true" /> Ajouter
+          </button>
+        </div>
       </div>
-      <div className="admin-discipline-grid">
-        {disciplines.map((discipline) => (
-          <span key={discipline}>{discipline}</span>
-        ))}
+
+      <div className="admin-reference-list">
+        <div className="admin-reference-list-header">
+          <div className="admin-reference-list-copy">
+            <h3>Catalogue disciplines</h3>
+            <p>Valeurs visibles côté utilisateurs</p>
+          </div>
+          <span className="admin-reference-count">{disciplines.length} éléments</span>
+        </div>
+        <div className="admin-discipline-grid">
+          {disciplines.map((discipline) => (
+            <span key={discipline}>{discipline}</span>
+          ))}
+        </div>
       </div>
     </section>
   );
