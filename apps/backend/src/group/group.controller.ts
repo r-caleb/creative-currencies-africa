@@ -22,6 +22,8 @@ import { CreateGroupMessageDto } from "./dto/create-group-message.dto";
 import { CreateGroupDto } from "./dto/create-group.dto";
 import { GroupMemberCandidateQueryDto } from "./dto/group-member-candidate-query.dto";
 import { GroupQueryDto } from "./dto/group-query.dto";
+import { ReportGroupMessageDto } from "./dto/report-group-message.dto";
+import { ReviewGroupJoinRequestDto } from "./dto/review-group-join-request.dto";
 import { UpdateGroupMemberRoleDto } from "./dto/update-group-member-role.dto";
 import { UpdateGroupMessageDto } from "./dto/update-group-message.dto";
 import { UpdateGroupDto } from "./dto/update-group.dto";
@@ -147,6 +149,26 @@ export class GroupController {
     return this.groupService.uploadGroupPhoto(req.user, id, file);
   }
 
+  @Get(":id/join-requests")
+  @ApiOperation({ summary: "Lister les demandes d'accès à un groupe" })
+  @ApiOkResponse({ description: "Demandes en attente visibles aux admins du groupe" })
+  joinRequests(@Req() req: AuthedRequest, @Param("id") id: string) {
+    return this.groupService.listJoinRequests(req.user, id);
+  }
+
+  @Patch(":id/join-requests/:requestId")
+  @ApiOperation({ summary: "Accepter ou refuser une demande d'accès à un groupe" })
+  @ApiBody({ type: ReviewGroupJoinRequestDto })
+  @ApiOkResponse({ description: "Demande d'accès traitée" })
+  reviewJoinRequest(
+    @Req() req: AuthedRequest,
+    @Param("id") id: string,
+    @Param("requestId") requestId: string,
+    @Body() body: ReviewGroupJoinRequestDto,
+  ) {
+    return this.groupService.reviewJoinRequest(req.user, id, requestId, body);
+  }
+
   @Get(":id/invitations")
   @ApiOperation({ summary: "Lister les invitations envoyées pour un groupe" })
   @ApiOkResponse({ description: "Invitations en attente du groupe" })
@@ -222,5 +244,18 @@ export class GroupController {
   @ApiOkResponse({ description: "Message supprimé" })
   removeMessage(@Req() req: AuthedRequest, @Param("id") id: string, @Param("messageId") messageId: string) {
     return this.groupService.deleteMessage(req.user, id, messageId);
+  }
+
+  @Post(":id/messages/:messageId/reports")
+  @ApiOperation({ summary: "Signaler un message de groupe" })
+  @ApiBody({ type: ReportGroupMessageDto })
+  @ApiCreatedResponse({ description: "Signalement enregistré" })
+  reportMessage(
+    @Req() req: AuthedRequest,
+    @Param("id") id: string,
+    @Param("messageId") messageId: string,
+    @Body() body: ReportGroupMessageDto,
+  ) {
+    return this.groupService.reportMessage(req.user, id, messageId, body);
   }
 }

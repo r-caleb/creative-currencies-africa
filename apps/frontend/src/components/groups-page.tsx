@@ -38,6 +38,7 @@ import {
   declineCommunityGroupInvitation,
   getApiErrorMessage,
   getCommunityGroupInvitations,
+  getCommunityGroupJoinRequests,
   getCommunityGroupMemberCandidates,
   getCommunityGroupMembers,
   getCommunityGroupMessages,
@@ -48,6 +49,7 @@ import {
   joinCommunityGroup,
   leaveCommunityGroup,
   removeCommunityGroupMember,
+  reviewCommunityGroupJoinRequest,
   updateCommunityGroup,
   updateCommunityGroupMemberRole,
   uploadCommunityGroupPhoto,
@@ -55,6 +57,7 @@ import {
 import type {
   CommunityGroup,
   CommunityGroupInvitation,
+  CommunityGroupJoinRequest,
   CommunityGroupMember,
   CommunityGroupMemberCandidate,
   CommunityGroupMessage,
@@ -95,7 +98,7 @@ const emptyGroupForm: GroupFormState = {
   city: "Kinshasa",
   country: "Congo RDC",
   tags: "",
-  visibility: "MEMBERS",
+  visibility: "PUBLIC",
 };
 
 const fallbackGroups: DisplayGroup[] = [
@@ -236,6 +239,7 @@ export function GroupsPage() {
   const [memberOptions, setMemberOptions] = useState<CommunityGroupMemberCandidate[]>([]);
   const [myInvitations, setMyInvitations] = useState<CommunityGroupInvitation[]>([]);
   const [groupInvitations, setGroupInvitations] = useState<CommunityGroupInvitation[]>([]);
+  const [joinRequests, setJoinRequests] = useState<CommunityGroupJoinRequest[]>([]);
   const [isLoadingGroups, setIsLoadingGroups] = useState(false);
   const [hasLoadedGroups, setHasLoadedGroups] = useState(false);
   const [isSubmittingGroup, setIsSubmittingGroup] = useState(false);
@@ -244,11 +248,13 @@ export function GroupsPage() {
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [isLoadingMemberOptions, setIsLoadingMemberOptions] = useState(false);
   const [isLoadingInvitations, setIsLoadingInvitations] = useState(false);
+  const [isLoadingJoinRequests, setIsLoadingJoinRequests] = useState(false);
   const [addingMemberId, setAddingMemberId] = useState("");
   const [invitingMemberId, setInvitingMemberId] = useState("");
   const [uploadingGroupPhotoId, setUploadingGroupPhotoId] = useState("");
   const [memberActionId, setMemberActionId] = useState("");
   const [invitationActionId, setInvitationActionId] = useState("");
+  const [joinRequestActionId, setJoinRequestActionId] = useState("");
   const [groupError, setGroupError] = useState("");
   const [messageError, setMessageError] = useState("");
   const [memberAddError, setMemberAddError] = useState("");
@@ -360,6 +366,9 @@ export function GroupsPage() {
   const currentGroupInvitations = selectedGroupId
     ? groupInvitations.filter((invitation) => invitation.groupId === selectedGroupId)
     : [];
+  const currentJoinRequests = selectedGroupId
+    ? joinRequests.filter((request) => request.groupId === selectedGroupId)
+    : [];
 
   useEffect(() => {
     if (!accessToken) {
@@ -464,6 +473,41 @@ export function GroupsPage() {
       isMounted = false;
     };
   }, [accessToken, selectedGroupId, selectedGroupIsFallback, selectedGroupIsJoined]);
+
+  useEffect(() => {
+    if (!accessToken || !selectedGroupId || !selectedGroupCanManage) {
+      setJoinRequests([]);
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadJoinRequests = async () => {
+      setIsLoadingJoinRequests(true);
+
+      try {
+        const requests = await getCommunityGroupJoinRequests(accessToken, selectedGroupId);
+
+        if (isMounted) {
+          setJoinRequests(requests);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setMemberAddError(getApiErrorMessage(error, "Impossible de charger les demandes d'accès."));
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingJoinRequests(false);
+        }
+      }
+    };
+
+    void loadJoinRequests();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [accessToken, selectedGroupCanManage, selectedGroupId]);
 
   useEffect(() => {
     if (!accessToken || !selectedGroupId || !selectedGroupCanManage) {
@@ -640,11 +684,17 @@ export function GroupsPage() {
     setGroupError("");
     setNotice("");
 
+    if (!group.isJoined && group.pendingJoinRequestId) {
+      setNotice("Votre demande est déjà en attente de validation.");
+      return;
+    }
+
     try {
       const updatedGroup = group.isJoined
         ? await leaveCommunityGroup(accessToken, group.id)
         : await joinCommunityGroup(accessToken, group.id);
       setApiGroups((current) => current.map((item) => (item.id === updatedGroup.id ? updatedGroup : item)));
+      setNotice(group.isJoined ? "Vous avez quitté le groupe." : "Demande envoyée aux responsables du groupe.");
     } catch (error) {
       setGroupError(getApiErrorMessage(error, "Impossible de mettre à jour votre adhésion pour le moment."));
     }
@@ -755,6 +805,43 @@ export function GroupsPage() {
 
     const invitations = await getCommunityGroupInvitations(accessToken, groupId);
     setGroupInvitations(invitations);
+  };
+
+  const handleReviewJoinRequest = async (
+    request: CommunityGroupJoinRequest,
+    status: "ACCEPTED" | "DECLINED",
+  ) => {
+    if (!accessToken || !selectedGroup || selectedGroup.isFallback) {
+      return;
+    }
+
+    setJoinRequestActionId(`${request.id}:${status}`);
+    setMemberAddError("");
+    setNotice("");
+
+    try {
+      const result = await reviewCommunityGroupJoinRequest(accessToken, selectedGroup.id, request.id, {
+        status,
+        note:
+          status === "ACCEPTED"
+            ? "Demande acceptée par un responsable du groupe."
+            : "Demande refusée par un responsable du groupe.",
+      });
+
+      setApiGroups((current) => current.map((group) => (group.id === result.group.id ? result.group : group)));
+      setJoinRequests((current) => current.filter((item) => item.id !== request.id));
+      setNotice(
+        status === "ACCEPTED"
+          ? `${request.requester.displayName} peut maintenant accéder au groupe.`
+          : `Demande de ${request.requester.displayName} refusée.`,
+      );
+      await refreshGroupMembers(selectedGroup.id);
+      await refreshGroupMessages(selectedGroup.id);
+    } catch (error) {
+      setMemberAddError(getApiErrorMessage(error, "Impossible de traiter cette demande pour le moment."));
+    } finally {
+      setJoinRequestActionId("");
+    }
   };
 
   const handleAddMember = async (member: CommunityGroupMemberCandidate) => {
@@ -1076,8 +1163,8 @@ export function GroupsPage() {
                     }))
                   }
                 >
-                  <option value="MEMBERS">Membres CCA</option>
                   <option value="PUBLIC">Public</option>
+                  <option value="MEMBERS">Membres CCA</option>
                   <option value="PRIVATE">Privé</option>
                 </select>
               </label>
@@ -1218,8 +1305,16 @@ export function GroupsPage() {
                         <small>{formatRelativeDate(group.lastActivity)}</small>
                       </div>
                     </div>
-                    <span className={group.isJoined ? "social-state-pill is-on" : "social-state-pill"}>
-                      {group.isJoined ? "Membre" : "Ouvert"}
+                    <span
+                      className={
+                        group.isJoined
+                          ? "social-state-pill is-on"
+                          : group.pendingJoinRequestId
+                            ? "social-state-pill is-pending"
+                            : "social-state-pill"
+                      }
+                    >
+                      {group.isJoined ? "Membre" : group.pendingJoinRequestId ? "En attente" : "Accessible"}
                     </span>
                   </button>
                 ))}
@@ -1309,14 +1404,31 @@ export function GroupsPage() {
                     </small>
                   </div>
                   <div className="social-management-row">
-                    <button
-                      className={selectedGroup.isJoined ? "member-secondary-button" : "member-create-button"}
-                      type="button"
-                      onClick={() => handleJoinToggle(selectedGroup)}
-                    >
-                      {selectedGroup.isJoined ? <CheckCircle2 aria-hidden="true" /> : <Plus aria-hidden="true" />}
-                      {selectedGroup.isJoined ? "Quitter" : "Rejoindre"}
-                    </button>
+                    {(() => {
+                      const hasPendingJoinRequest = Boolean(selectedGroup.pendingJoinRequestId);
+
+                      return (
+                        <button
+                          className={selectedGroup.isJoined || hasPendingJoinRequest ? "member-secondary-button" : "member-create-button"}
+                          type="button"
+                          onClick={() => handleJoinToggle(selectedGroup)}
+                          disabled={hasPendingJoinRequest}
+                        >
+                          {selectedGroup.isJoined ? (
+                            <CheckCircle2 aria-hidden="true" />
+                          ) : hasPendingJoinRequest ? (
+                            <MailCheck aria-hidden="true" />
+                          ) : (
+                            <Plus aria-hidden="true" />
+                          )}
+                          {selectedGroup.isJoined
+                            ? "Quitter"
+                            : hasPendingJoinRequest
+                              ? "Demande envoyée"
+                              : "Demander à rejoindre"}
+                        </button>
+                      );
+                    })()}
                     {selectedGroup.canManage ? (
                       <>
                         <button className="member-secondary-button" type="button" onClick={() => openEditForm(selectedGroup)}>
@@ -1329,7 +1441,7 @@ export function GroupsPage() {
                         </button>
                       </>
                     ) : null}
-                    {!selectedGroup.isFallback ? (
+                    {!selectedGroup.isFallback && selectedGroupIsJoined ? (
                       <Link className="member-secondary-button" href={`/espace-membre/messages?groupId=${selectedGroup.id}`}>
                         <MessageCircle aria-hidden="true" />
                         Ouvrir la discussion
@@ -1408,6 +1520,45 @@ export function GroupsPage() {
                           </span>
                         )}
                       </div>
+                      {isLoadingJoinRequests || currentJoinRequests.length ? (
+                        <div className="social-pending-invites social-join-requests">
+                          <strong>Demandes d'accès en attente</strong>
+                          {isLoadingJoinRequests ? (
+                            <span className="social-member-muted">Chargement des demandes...</span>
+                          ) : (
+                            currentJoinRequests.map((request) => (
+                              <article key={request.id}>
+                                <span>{request.requester.displayName}</span>
+                                <small>
+                                  {[request.requester.headline, formatRelativeDate(request.createdAt)]
+                                    .filter(Boolean)
+                                    .join(" · ")}
+                                </small>
+                                <div className="social-request-actions">
+                                  {request.permissions.canAccept ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleReviewJoinRequest(request, "ACCEPTED")}
+                                      disabled={joinRequestActionId === `${request.id}:ACCEPTED`}
+                                    >
+                                      Accepter
+                                    </button>
+                                  ) : null}
+                                  {request.permissions.canDecline ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleReviewJoinRequest(request, "DECLINED")}
+                                      disabled={joinRequestActionId === `${request.id}:DECLINED`}
+                                    >
+                                      Refuser
+                                    </button>
+                                  ) : null}
+                                </div>
+                              </article>
+                            ))
+                          )}
+                        </div>
+                      ) : null}
                       {currentGroupInvitations.length ? (
                         <div className="social-pending-invites">
                           <strong>Invitations en attente</strong>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
 import {
   BadgeCheck,
@@ -22,13 +22,14 @@ import {
   Phone,
   Plus,
   ShieldCheck,
+  Trash2,
   UsersRound,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { MemberShell } from "@/components/member-shell";
-import { getApiErrorMessage, getMyPublications, updateMemberProfile } from "@/lib/api";
-import type { AuthMeResponse, MemberProfile, Publication } from "@/lib/api";
+import { createPortfolioItem, deletePortfolioItem, getApiErrorMessage, getCreativeIdRecord, getMyPublications, updateMemberProfile, updatePortfolioItem } from "@/lib/api";
+import type { AuthMeResponse, CreativeIdPortfolioItem, CreativeIdRecord, MemberProfile, PortfolioItemPayload, Publication } from "@/lib/api";
 import { accountTypeLabel, buildInitials, getMemberDisplayName, getMemberProfileTitle } from "@/lib/member-display";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { setCurrentMember } from "@/store/slices/auth-slice";
@@ -64,6 +65,26 @@ const visibilityContent: Record<
   },
 };
 
+type PortfolioFormState = {
+  title: string;
+  category: string;
+  year: string;
+  mediaUrl: string;
+  externalUrl: string;
+  description: string;
+  featured: boolean;
+};
+
+const emptyPortfolioForm: PortfolioFormState = {
+  title: "",
+  category: "",
+  year: "",
+  mediaUrl: "",
+  externalUrl: "",
+  description: "",
+  featured: false,
+};
+
 export function CreativeIdPage() {
   const dispatch = useAppDispatch();
   const { accessToken, user, profile, organizationProfile, partnerProfile } = useAppSelector((state) => state.auth);
@@ -76,6 +97,14 @@ export function CreativeIdPage() {
   const [creationPublications, setCreationPublications] = useState<Publication[]>([]);
   const [isLoadingCreations, setIsLoadingCreations] = useState(false);
   const [creationsError, setCreationsError] = useState("");
+  const [record, setRecord] = useState<CreativeIdRecord | null>(null);
+  const [isLoadingRecord, setIsLoadingRecord] = useState(false);
+  const [recordError, setRecordError] = useState("");
+  const [portfolioForm, setPortfolioForm] = useState<PortfolioFormState>(emptyPortfolioForm);
+  const [editingPortfolioId, setEditingPortfolioId] = useState<string | null>(null);
+  const [portfolioBusy, setPortfolioBusy] = useState<string | null>(null);
+  const [portfolioMessage, setPortfolioMessage] = useState("");
+  const [portfolioError, setPortfolioError] = useState("");
 
   const displayName = getMemberDisplayName({ user, profile, organizationProfile, partnerProfile });
   const profileTitle = getMemberProfileTitle({ user, profile, organizationProfile, partnerProfile });
@@ -110,6 +139,23 @@ export function CreativeIdPage() {
     { label: "Numéro membre", value: memberNumber || "En cours" },
     { label: "Complétude", value: `${completion}%` },
     { label: "Visibilité", value: visibilityState.label },
+  ];
+  const portfolioItems = record?.portfolioItems ?? [];
+  const officialHistory = record?.history ?? [];
+  const recordStats = record?.stats ?? null;
+  const heroHighlights = [
+    {
+      label: "Portfolio",
+      value: portfolioItems.length ? `${portfolioItems.length} projet${portfolioItems.length > 1 ? "s" : ""}` : "À enrichir",
+    },
+    {
+      label: "Historique CCA",
+      value: recordStats ? `${recordStats.trainings + recordStats.certificates + recordStats.opportunities + recordStats.events} trace${recordStats.trainings + recordStats.certificates + recordStats.opportunities + recordStats.events > 1 ? "s" : ""}` : "En cours",
+    },
+    {
+      label: "CV",
+      value: profile?.cvUrl ? "Disponible" : "À ajouter",
+    },
   ];
 
   useEffect(() => {
@@ -189,6 +235,39 @@ export function CreativeIdPage() {
     };
   }, [accessToken]);
 
+  useEffect(() => {
+    if (!accessToken) {
+      return;
+    }
+
+    let isMounted = true;
+    setIsLoadingRecord(true);
+
+    getCreativeIdRecord(accessToken)
+      .then((response) => {
+        if (!isMounted) {
+          return;
+        }
+
+        setRecord(response);
+        setRecordError("");
+      })
+      .catch((error) => {
+        if (isMounted) {
+          setRecordError(getApiErrorMessage(error, "Impossible de charger le dossier Creative ID pour le moment."));
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoadingRecord(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [accessToken]);
+
   async function copyPublicLink() {
     if (!publicUrl) {
       return;
@@ -223,6 +302,180 @@ export function CreativeIdPage() {
     }
   }
 
+  function resetPortfolioForm() {
+    setPortfolioForm(emptyPortfolioForm);
+    setEditingPortfolioId(null);
+    setPortfolioMessage("");
+    setPortfolioError("");
+  }
+
+  function editPortfolioItem(item: CreativeIdPortfolioItem) {
+    setPortfolioForm({
+      title: item.title,
+      category: item.category,
+      year: item.year ? String(item.year) : "",
+      mediaUrl: item.mediaUrl ?? "",
+      externalUrl: item.externalUrl ?? "",
+      description: item.description ?? "",
+      featured: item.featured,
+    });
+    setEditingPortfolioId(item.id);
+    setPortfolioMessage("");
+    setPortfolioError("");
+  }
+
+  async function submitPortfolioItem(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!accessToken) {
+      return;
+    }
+
+    const year = portfolioForm.year.trim() ? Number(portfolioForm.year) : undefined;
+    const payload: PortfolioItemPayload = {
+      title: portfolioForm.title.trim(),
+      category: portfolioForm.category.trim(),
+      description: portfolioForm.description.trim() || undefined,
+      mediaUrl: portfolioForm.mediaUrl.trim() || undefined,
+      externalUrl: portfolioForm.externalUrl.trim() || undefined,
+      year: Number.isFinite(year) ? year : undefined,
+      featured: portfolioForm.featured,
+    };
+
+    setPortfolioBusy(editingPortfolioId ?? "create");
+    setPortfolioMessage("");
+    setPortfolioError("");
+
+    try {
+      const savedItem = editingPortfolioId
+        ? await updatePortfolioItem(accessToken, editingPortfolioId, payload)
+        : await createPortfolioItem(accessToken, payload);
+
+      setRecord((current) => {
+        if (!current) {
+          return current;
+        }
+
+        const nextItems = editingPortfolioId
+          ? current.portfolioItems.map((item) => (item.id === savedItem.id ? savedItem : item))
+          : [savedItem, ...current.portfolioItems];
+
+        return {
+          ...current,
+          portfolioItems: nextItems.sort(comparePortfolioItems),
+          stats: { ...current.stats, portfolioItems: nextItems.length },
+        };
+      });
+      setPortfolioForm(emptyPortfolioForm);
+      setEditingPortfolioId(null);
+      setPortfolioMessage(editingPortfolioId ? "Projet portfolio mis à jour." : "Projet ajouté au portfolio.");
+    } catch (error) {
+      setPortfolioError(getApiErrorMessage(error, "Le projet portfolio n'a pas pu être enregistré."));
+    } finally {
+      setPortfolioBusy(null);
+    }
+  }
+
+  async function removePortfolioItem(item: CreativeIdPortfolioItem) {
+    if (!accessToken) {
+      return;
+    }
+
+    setPortfolioBusy(item.id);
+    setPortfolioMessage("");
+    setPortfolioError("");
+
+    try {
+      await deletePortfolioItem(accessToken, item.id);
+      setRecord((current) => {
+        if (!current) {
+          return current;
+        }
+
+        const nextItems = current.portfolioItems.filter((portfolioItem) => portfolioItem.id !== item.id);
+
+        return {
+          ...current,
+          portfolioItems: nextItems,
+          stats: { ...current.stats, portfolioItems: nextItems.length },
+        };
+      });
+      if (editingPortfolioId === item.id) {
+        setPortfolioForm(emptyPortfolioForm);
+        setEditingPortfolioId(null);
+      }
+      setPortfolioMessage("Projet retiré du portfolio.");
+    } catch (error) {
+      setPortfolioError(getApiErrorMessage(error, "Le projet portfolio n'a pas pu être supprimé."));
+    } finally {
+      setPortfolioBusy(null);
+    }
+  }
+
+  async function downloadCreativeIdCard() {
+    if (!memberNumber || !qrDataUrl) {
+      return;
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 1200;
+    canvas.height = 720;
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      return;
+    }
+
+    const gradient = context.createLinearGradient(0, 0, canvas.width, canvas.height);
+    gradient.addColorStop(0, "#080b12");
+    gradient.addColorStop(0.6, "#12101f");
+    gradient.addColorStop(1, "#2a123c");
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, canvas.width, canvas.height);
+
+    context.strokeStyle = "rgba(239, 184, 74, 0.55)";
+    context.lineWidth = 3;
+    context.strokeRect(34, 34, canvas.width - 68, canvas.height - 68);
+
+    context.fillStyle = "#efb84a";
+    context.font = "700 34px Arial";
+    context.fillText("CCA", 82, 110);
+    context.font = "600 22px Arial";
+    context.fillText("CREATIVE CURRENCIES AFRICA", 82, 145);
+
+    context.fillStyle = "#ffffff";
+    context.font = "700 58px Arial";
+    wrapCanvasText(context, displayName, 82, 275, 670, 68);
+    context.fillStyle = "#d5c8df";
+    context.font = "500 28px Arial";
+    wrapCanvasText(context, [accountLabel, profileTitle, location].filter(Boolean).join(" · "), 84, 385, 720, 38);
+
+    context.fillStyle = "#efb84a";
+    context.font = "700 34px Arial";
+    context.fillText(memberNumber, 84, 520);
+    context.fillStyle = "#d5c8df";
+    context.font = "500 24px Arial";
+    context.fillText(profileVerification, 84, 560);
+    context.fillText("CREATE. CONNECT. EMPOWER.", 84, 620);
+
+    const qrImage = new Image();
+    qrImage.onload = () => {
+      context.fillStyle = "#fffdf8";
+      context.fillRect(870, 180, 230, 230);
+      context.drawImage(qrImage, 886, 196, 198, 198);
+      context.fillStyle = "#ffffff";
+      context.font = "700 22px Arial";
+      context.textAlign = "center";
+      context.fillText("Scanner le Creative ID", 985, 450);
+      context.textAlign = "left";
+      const link = document.createElement("a");
+      link.download = `${memberNumber.toLowerCase()}-creative-id.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    };
+    qrImage.src = qrDataUrl;
+  }
+
   return (
     <MemberShell activeItem="Creative ID">
       <div className="creative-id-layout">
@@ -243,6 +496,14 @@ export function CreativeIdPage() {
                   <span>{location}</span>
                 </div>
               </div>
+            </div>
+            <div className="creative-id-hero-highlights" aria-label="Résumé du Creative ID">
+              {heroHighlights.map((highlight) => (
+                <article key={highlight.label}>
+                  <span>{highlight.label}</span>
+                  <strong>{highlight.value}</strong>
+                </article>
+              ))}
             </div>
             <div className="creative-id-hero-stats">
               {heroStats.map((stat) => (
@@ -273,6 +534,10 @@ export function CreativeIdPage() {
                 <ExternalLink aria-hidden="true" strokeWidth={1.8} />
                 Ouvrir
               </a>
+              <button className="member-secondary-button" type="button" onClick={downloadCreativeIdCard} disabled={!memberNumber || !qrDataUrl}>
+                <FileBadge aria-hidden="true" strokeWidth={1.8} />
+                Télécharger
+              </button>
             </div>
             {copyMessage ? <small>{copyMessage}</small> : null}
           </div>
@@ -330,16 +595,75 @@ export function CreativeIdPage() {
             <section className="member-card creative-id-section">
               <div className="member-card-title">
                 <div>
-                  <h2>Portfolio & documents</h2>
-                  <p>Les liens professionnels qui enrichissent votre Creative ID.</p>
+                  <h2>Portfolio structuré</h2>
+                  <p>Ajoutez les œuvres, projets ou références qui doivent convaincre un jury, partenaire ou recruteur.</p>
                 </div>
-                <Link href="/espace-membre/parametres">Gérer</Link>
+                {editingPortfolioId ? <button className="member-secondary-button" type="button" onClick={resetPortfolioForm}>Annuler</button> : null}
               </div>
+
+              <form className="creative-portfolio-form" onSubmit={submitPortfolioItem}>
+                <label>
+                  <span>Titre</span>
+                  <input value={portfolioForm.title} onChange={(event) => setPortfolioForm((current) => ({ ...current, title: event.target.value }))} placeholder="Ex. Série photo backstage" required />
+                </label>
+                <label>
+                  <span>Discipline</span>
+                  <input value={portfolioForm.category} onChange={(event) => setPortfolioForm((current) => ({ ...current, category: event.target.value }))} placeholder="Photographie, mode, design..." required />
+                </label>
+                <label>
+                  <span>Année</span>
+                  <input type="number" min="1990" max="2100" value={portfolioForm.year} onChange={(event) => setPortfolioForm((current) => ({ ...current, year: event.target.value }))} placeholder="2026" />
+                </label>
+                <label>
+                  <span>Média</span>
+                  <input value={portfolioForm.mediaUrl} onChange={(event) => setPortfolioForm((current) => ({ ...current, mediaUrl: event.target.value }))} placeholder="Lien image ou vidéo" />
+                </label>
+                <label>
+                  <span>Lien externe</span>
+                  <input value={portfolioForm.externalUrl} onChange={(event) => setPortfolioForm((current) => ({ ...current, externalUrl: event.target.value }))} placeholder="Behance, Drive, YouTube..." />
+                </label>
+                <label className="creative-portfolio-featured">
+                  <input type="checkbox" checked={portfolioForm.featured} onChange={(event) => setPortfolioForm((current) => ({ ...current, featured: event.target.checked }))} />
+                  <span>Mettre en avant</span>
+                </label>
+                <label className="creative-portfolio-description">
+                  <span>Description</span>
+                  <textarea value={portfolioForm.description} onChange={(event) => setPortfolioForm((current) => ({ ...current, description: event.target.value }))} placeholder="Contexte, rôle joué, résultat ou intention du projet." />
+                </label>
+                <button className="member-create-button" type="submit" disabled={!!portfolioBusy}>
+                  {portfolioBusy ? <Loader2 aria-hidden="true" strokeWidth={1.8} /> : <Plus aria-hidden="true" strokeWidth={1.8} />}
+                  {editingPortfolioId ? "Mettre à jour" : "Ajouter au portfolio"}
+                </button>
+              </form>
+              {portfolioMessage ? <p className="creative-inline-success">{portfolioMessage}</p> : null}
+              {portfolioError ? <p className="creative-inline-error" role="alert">{portfolioError}</p> : null}
+
+              <StructuredPortfolioList items={portfolioItems} busyKey={portfolioBusy} onEdit={editPortfolioItem} onDelete={(item) => void removePortfolioItem(item)} />
+
               <div className="creative-link-grid">
                 <CreativeLinkCard title="Portfolio" value={profile?.portfolioUrl} icon={ExternalLink} actionLabel="Voir" />
                 <CreativeLinkCard title="Site web" value={profile?.websiteUrl} icon={Globe2} actionLabel="Visiter" />
                 <CreativeLinkCard title="CV" value={profile?.cvUrl} icon={FileText} actionLabel="Ouvrir" />
               </div>
+            </section>
+
+            <section className="member-card creative-id-section">
+              <div className="member-card-title">
+                <div>
+                  <h2>Historique officiel</h2>
+                  <p>Formations, certificats, événements et candidatures suivis par CCA.</p>
+                </div>
+                {recordStats ? <span className="creative-history-count">{recordStats.trainings + recordStats.certificates + recordStats.opportunities + recordStats.events} éléments</span> : null}
+              </div>
+              {recordError ? <p className="creative-inline-error" role="alert">{recordError}</p> : null}
+              {isLoadingRecord ? (
+                <div className="creative-creation-loading">
+                  <Loader2 aria-hidden="true" strokeWidth={1.8} />
+                  <span>Chargement de l’historique...</span>
+                </div>
+              ) : (
+                <CreativeHistoryList items={officialHistory} />
+              )}
             </section>
 
             <section className="member-card creative-id-section">
@@ -441,6 +765,87 @@ export function CreativeIdPage() {
         </div>
       </div>
     </MemberShell>
+  );
+}
+
+function StructuredPortfolioList({
+  items,
+  busyKey,
+  onEdit,
+  onDelete,
+}: {
+  items: CreativeIdPortfolioItem[];
+  busyKey: string | null;
+  onEdit: (item: CreativeIdPortfolioItem) => void;
+  onDelete: (item: CreativeIdPortfolioItem) => void;
+}) {
+  if (!items.length) {
+    return (
+      <div className="creative-portfolio-empty">
+        <ImageIcon aria-hidden="true" strokeWidth={1.8} />
+        <div>
+          <strong>Aucun projet structuré</strong>
+          <p>Ajoutez quelques références fortes pour rendre votre Creative ID plus crédible.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="creative-portfolio-list">
+      {items.map((item) => (
+        <article key={item.id}>
+          <div className="creative-portfolio-media">
+            {item.mediaUrl ? <img src={item.mediaUrl} alt="" /> : <ImageIcon aria-hidden="true" strokeWidth={1.8} />}
+          </div>
+          <div>
+            <span>{[item.category, item.year].filter(Boolean).join(" · ")}</span>
+            <strong>{item.title}</strong>
+            <p>{item.description || "Description à compléter."}</p>
+            <div>
+              {item.featured ? <small>Mis en avant</small> : null}
+              {item.externalUrl ? <a href={item.externalUrl} target="_blank" rel="noreferrer">Voir le lien</a> : null}
+            </div>
+          </div>
+          <div className="creative-portfolio-actions">
+            <button type="button" onClick={() => onEdit(item)} disabled={busyKey === item.id}>
+              <Pencil aria-hidden="true" strokeWidth={1.8} />
+              Modifier
+            </button>
+            <button type="button" className="is-danger" onClick={() => onDelete(item)} disabled={busyKey === item.id}>
+              <Trash2 aria-hidden="true" strokeWidth={1.8} />
+              Supprimer
+            </button>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function CreativeHistoryList({ items }: { items: CreativeIdRecord["history"] }) {
+  if (!items.length) {
+    return (
+      <div className="creative-history-empty">
+        <FileBadge aria-hidden="true" strokeWidth={1.8} />
+        <div>
+          <strong>Aucun historique officiel pour le moment</strong>
+          <p>Les formations, certificats, participations et candidatures apparaîtront ici automatiquement.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="creative-history-list">
+      {items.map((item) => (
+        <Link key={`${item.kind}-${item.title}-${item.date}`} href={item.href}>
+          <span>{item.label}</span>
+          <strong>{item.title}</strong>
+          <small>{item.statusLabel} · {formatCreativeDate(item.date)} · {item.meta}</small>
+        </Link>
+      ))}
+    </div>
   );
 }
 
@@ -567,6 +972,48 @@ function readableLinkLabel(value: string) {
     return fileName || url.hostname.replace(/^www\./, "");
   } catch {
     return value;
+  }
+}
+
+function comparePortfolioItems(first: CreativeIdPortfolioItem, second: CreativeIdPortfolioItem) {
+  if (Number(second.featured) !== Number(first.featured)) {
+    return Number(second.featured) - Number(first.featured);
+  }
+
+  if (first.order !== second.order) {
+    return first.order - second.order;
+  }
+
+  return new Date(second.updatedAt).getTime() - new Date(first.updatedAt).getTime();
+}
+
+function formatCreativeDate(value: string) {
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function wrapCanvasText(context: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number) {
+  const words = text.split(" ");
+  let line = "";
+  let currentY = y;
+
+  words.forEach((word) => {
+    const testLine = line ? `${line} ${word}` : word;
+    if (context.measureText(testLine).width > maxWidth && line) {
+      context.fillText(line, x, currentY);
+      line = word;
+      currentY += lineHeight;
+      return;
+    }
+
+    line = testLine;
+  });
+
+  if (line) {
+    context.fillText(line, x, currentY);
   }
 }
 

@@ -1076,7 +1076,15 @@ export function RegistrationWizard({ account }: RegistrationWizardProps) {
                 required
               />
               <span>
-                J&apos;accepte les conditions d&apos;utilisation et la politique de confidentialité.
+                J&apos;accepte les{" "}
+                <a href="/conditions-utilisation" target="_blank" rel="noreferrer">
+                  conditions d&apos;utilisation
+                </a>{" "}
+                et la{" "}
+                <a href="/politique-de-confidentialite" target="_blank" rel="noreferrer">
+                  politique de confidentialité
+                </a>
+                .
                 <span className="auth-required-star" aria-label="obligatoire">*</span>
               </span>
             </label>

@@ -38,13 +38,35 @@ const filters = [
   "Mes publications",
 ];
 
+type OpportunityApplicationForm = {
+  motivation: string;
+  discipline: string;
+  city: string;
+  phone: string;
+  portfolioUrl: string;
+  cvUrl: string;
+  fileUrl: string;
+  linksText: string;
+  socialLinksText: string;
+};
+
 export function OpportunitiesPage() {
-  const { accessToken, profile } = useAppSelector((state) => state.auth);
+  const { accessToken, profile, user } = useAppSelector((state) => state.auth);
   const [data, setData] = useState<MemberOpportunitiesResponse | null>(null);
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("Toutes");
   const [selectedId, setSelectedId] = useState("");
-  const [motivation, setMotivation] = useState("");
+  const [applicationForm, setApplicationForm] = useState<OpportunityApplicationForm>({
+    motivation: "",
+    discipline: "",
+    city: "",
+    phone: "",
+    portfolioUrl: "",
+    cvUrl: "",
+    fileUrl: "",
+    linksText: "",
+    socialLinksText: "",
+  });
   const [status, setStatus] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isApplying, setIsApplying] = useState(false);
@@ -130,8 +152,8 @@ export function OpportunitiesPage() {
   const submittedCount = catalog.filter((opportunity) => opportunity.application?.status === "SUBMITTED").length;
   const draftCount = catalog.filter((opportunity) => opportunity.application?.status === "DRAFT").length;
   const recommendedCount = catalog.filter((opportunity) => opportunity.fit >= 80).length;
-  const preparationSteps = useMemo(() => buildPreparationSteps(profile, motivation), [motivation, profile]);
-  const readiness = calculateApplicationReadiness(profile, motivation);
+  const preparationSteps = useMemo(() => buildPreparationSteps(profile, applicationForm.motivation), [applicationForm.motivation, profile]);
+  const readiness = calculateApplicationReadiness(profile, applicationForm.motivation);
   const readyStepCount = preparationSteps.filter((step) => step.done).length;
   const visibleFilters = filters.filter((filter) => filter !== "Mes publications" || data?.canPublishOpportunity || (data?.myPublished.length ?? 0) > 0);
   const highlights = [
@@ -141,8 +163,30 @@ export function OpportunitiesPage() {
   ];
 
   useEffect(() => {
-    setMotivation(selectedOpportunity?.application?.motivation ?? "");
-  }, [selectedOpportunity?.application?.motivation, selectedOpportunity?.id]);
+    setApplicationForm({
+      motivation: selectedOpportunity?.application?.motivation ?? "",
+      discipline: selectedOpportunity?.application?.discipline ?? profile?.discipline ?? profile?.otherDiscipline ?? "",
+      city: selectedOpportunity?.application?.city ?? profile?.city ?? "",
+      phone: selectedOpportunity?.application?.phone ?? user?.phone ?? "",
+      portfolioUrl: selectedOpportunity?.application?.portfolioUrl ?? profile?.portfolioUrl ?? profile?.websiteUrl ?? "",
+      cvUrl: selectedOpportunity?.application?.cvUrl ?? profile?.cvUrl ?? "",
+      fileUrl: selectedOpportunity?.application?.fileUrl ?? "",
+      linksText: (selectedOpportunity?.application?.links ?? []).join("\n"),
+      socialLinksText: (selectedOpportunity?.application?.socialLinks ?? []).join("\n"),
+    });
+  }, [profile, selectedOpportunity?.application, selectedOpportunity?.id, user?.phone]);
+
+  const applicationPayload = () => ({
+    motivation: applicationForm.motivation.trim() || undefined,
+    discipline: applicationForm.discipline.trim() || undefined,
+    city: applicationForm.city.trim() || undefined,
+    phone: applicationForm.phone.trim() || undefined,
+    portfolioUrl: applicationForm.portfolioUrl.trim() || undefined,
+    cvUrl: applicationForm.cvUrl.trim() || undefined,
+    fileUrl: applicationForm.fileUrl.trim() || undefined,
+    links: splitTextareaList(applicationForm.linksText),
+    socialLinks: splitTextareaList(applicationForm.socialLinksText),
+  });
 
   const saveApplication = async (opportunity: MemberOpportunity) => {
     setSelectedId(opportunity.id);
@@ -169,8 +213,7 @@ export function OpportunitiesPage() {
     try {
       const response = await applyToOpportunity(accessToken, opportunity.id, {
         status: "DRAFT",
-        motivation: motivation.trim() || undefined,
-        portfolioUrl: profile?.portfolioUrl ?? undefined,
+        ...applicationPayload(),
       });
       setData(response.opportunities);
       setSelectedId(opportunity.id);
@@ -201,8 +244,7 @@ export function OpportunitiesPage() {
     try {
       const response = await applyToOpportunity(accessToken, opportunity.id, {
         status: "SUBMITTED",
-        motivation: motivation.trim() || undefined,
-        portfolioUrl: profile?.portfolioUrl ?? undefined,
+        ...applicationPayload(),
       });
       setData(response.opportunities);
       setSelectedId(opportunity.id);
@@ -315,7 +357,7 @@ export function OpportunitiesPage() {
                           </div>
                         </div>
                         <button className="member-secondary-button" type="button" disabled={isApplying} onClick={() => void saveApplication(item)}>
-                          {item.application ? statusLabel(item.application.status) : item.canApply ? "Préparer" : "Modalités"}
+                          {item.application ? statusLabel(item.application.status) : item.canApply ? "Postuler" : "Modalités"}
                         </button>
                       </article>
                     );
@@ -350,17 +392,29 @@ export function OpportunitiesPage() {
                 {data?.myApplications.length ? (
                   data.myApplications.map((opportunity) => {
                     const progress = applicationProgress(opportunity.application?.status);
+                    const application = opportunity.application;
 
                     return (
-                      <article key={opportunity.id}>
+                      <article key={opportunity.id} className="application-tracking-card">
                         <div>
                           <strong>{opportunity.title}</strong>
-                          <span>{statusLabel(opportunity.application?.status)}</span>
+                          <span>{statusLabel(application?.status)} · {opportunity.category}</span>
+                          <small>
+                            {application?.submittedAt
+                              ? `Envoyée le ${formatTrackingDate(application.submittedAt)}`
+                              : application?.createdAt
+                                ? `Ouverte le ${formatTrackingDate(application.createdAt)}`
+                                : "Dossier en préparation"}
+                          </small>
                         </div>
                         <div className="application-progress" aria-label={`Progression ${progress}%`}>
                           <span style={{ width: `${progress}%` }} />
                         </div>
-                        <small>{progress}%</small>
+                        <div className="application-tracking-actions">
+                          <small>{progress}%</small>
+                          {application?.adminNote ? <em>{application.adminNote}</em> : null}
+                          <button type="button" onClick={() => setSelectedId(opportunity.id)}>Ouvrir</button>
+                        </div>
                       </article>
                     );
                   })
@@ -402,19 +456,65 @@ export function OpportunitiesPage() {
                   ))}
                 </div>
                 {selectedOpportunity.source === "opportunity" && selectedOpportunity.canApply ? (
-                  <label className="opportunity-motivation-field">
-                    <span>Message de motivation</span>
-                    <textarea
-                      value={motivation}
-                      onChange={(event) => setMotivation(event.target.value)}
-                      placeholder="Expliquez en quelques lignes pourquoi cette opportunité vous intéresse."
-                      rows={4}
-                    />
-                  </label>
+                  <div className="opportunity-application-form">
+                    <label className="opportunity-motivation-field">
+                      <span>Message de motivation</span>
+                      <textarea
+                        value={applicationForm.motivation}
+                        onChange={(event) => setApplicationForm((current) => ({ ...current, motivation: event.target.value }))}
+                        placeholder="Expliquez en quelques lignes pourquoi cette opportunité vous intéresse."
+                        rows={4}
+                      />
+                    </label>
+                    <div className="opportunity-application-grid">
+                      <label>
+                        <span>Discipline</span>
+                        <input value={applicationForm.discipline} onChange={(event) => setApplicationForm((current) => ({ ...current, discipline: event.target.value }))} placeholder="Design, mode, musique..." />
+                      </label>
+                      <label>
+                        <span>Ville</span>
+                        <input value={applicationForm.city} onChange={(event) => setApplicationForm((current) => ({ ...current, city: event.target.value }))} placeholder="Kinshasa" />
+                      </label>
+                      <label>
+                        <span>Téléphone</span>
+                        <input value={applicationForm.phone} onChange={(event) => setApplicationForm((current) => ({ ...current, phone: event.target.value }))} placeholder="+243..." />
+                      </label>
+                      <label>
+                        <span>Portfolio</span>
+                        <input value={applicationForm.portfolioUrl} onChange={(event) => setApplicationForm((current) => ({ ...current, portfolioUrl: event.target.value }))} placeholder="https://..." />
+                      </label>
+                      <label>
+                        <span>CV</span>
+                        <input value={applicationForm.cvUrl} onChange={(event) => setApplicationForm((current) => ({ ...current, cvUrl: event.target.value }))} placeholder="/uploads/cv.pdf" />
+                      </label>
+                      <label>
+                        <span>Fichier dossier</span>
+                        <input value={applicationForm.fileUrl} onChange={(event) => setApplicationForm((current) => ({ ...current, fileUrl: event.target.value }))} placeholder="/uploads/dossier.pdf" />
+                      </label>
+                    </div>
+                    <label className="opportunity-motivation-field">
+                      <span>Liens utiles</span>
+                      <textarea
+                        value={applicationForm.linksText}
+                        onChange={(event) => setApplicationForm((current) => ({ ...current, linksText: event.target.value }))}
+                        placeholder={"Un lien par ligne : Behance, Drive, vidéo, article..."}
+                        rows={3}
+                      />
+                    </label>
+                    <label className="opportunity-motivation-field">
+                      <span>Réseaux sociaux</span>
+                      <textarea
+                        value={applicationForm.socialLinksText}
+                        onChange={(event) => setApplicationForm((current) => ({ ...current, socialLinksText: event.target.value }))}
+                        placeholder={"Un réseau par ligne : Instagram, LinkedIn, TikTok..."}
+                        rows={3}
+                      />
+                    </label>
+                  </div>
                 ) : null}
                 <div className="member-hero-actions">
                   <button className="member-secondary-button" type="button" disabled={isApplying} onClick={() => void saveApplication(selectedOpportunity)}>
-                    {selectedOpportunity.application ? "Dossier préparé" : selectedOpportunity.canApply ? "Préparer le dossier" : "Voir modalités"}
+                    {selectedOpportunity.application ? "Enregistrer le dossier" : selectedOpportunity.canApply ? "Préparer le dossier" : "Voir modalités"}
                   </button>
                   <button className="member-create-button" type="button" disabled={isApplying} onClick={() => void submitApplication(selectedOpportunity)}>
                     {selectedOpportunity.application?.status === "SUBMITTED" ? "Candidature envoyée" : selectedOpportunity.canApply ? "Soumettre" : "Ouvrir"}
@@ -521,6 +621,13 @@ function normalizeSearch(value: string) {
     .trim();
 }
 
+function splitTextareaList(value: string) {
+  return value
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function calculateApplicationReadiness(profile: MemberProfile | null | undefined, motivation: string) {
   const profileCompletion = Math.min(100, Math.max(0, profile?.profileCompletion ?? 0));
   const profileScore = Math.round(profileCompletion * 0.35);
@@ -566,7 +673,8 @@ function statusLabel(status?: string | null) {
     DRAFT: "Dossier ouvert",
     SUBMITTED: "Envoyée",
     UNDER_REVIEW: "En étude",
-    SELECTED: "Sélectionnée",
+    SELECTED: "Présélectionnée",
+    ACCEPTED: "Acceptée",
     REJECTED: "Non retenue",
     WITHDRAWN: "Retirée",
   };
@@ -575,7 +683,7 @@ function statusLabel(status?: string | null) {
 }
 
 function applicationProgress(status?: string) {
-  if (status === "SELECTED" || status === "REJECTED" || status === "WITHDRAWN") {
+  if (status === "SELECTED" || status === "ACCEPTED" || status === "REJECTED" || status === "WITHDRAWN") {
     return 100;
   }
 
@@ -588,6 +696,20 @@ function applicationProgress(status?: string) {
   }
 
   return 0;
+}
+
+function formatTrackingDate(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "date à confirmer";
+  }
+
+  return date.toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 function opportunityIcon(opportunity: MemberOpportunity): LucideIcon {

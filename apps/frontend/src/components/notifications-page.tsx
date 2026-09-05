@@ -20,10 +20,11 @@ import { useVisibleItems } from "@/hooks/use-visible-items";
 import {
   getApiErrorMessage,
   getNotifications,
+  getNotificationSummary,
   markAllNotificationsRead,
   markNotificationRead,
 } from "@/lib/api";
-import type { MemberNotification, NotificationType } from "@/lib/api";
+import type { MemberNotification, MemberNotificationSummary, NotificationType } from "@/lib/api";
 import { connectRealtimeSocket } from "@/lib/realtime";
 import { normalizeProfileOption } from "@/lib/profile-options";
 import { useAppSelector } from "@/store/hooks";
@@ -43,6 +44,7 @@ export function NotificationsPage() {
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("Toutes");
   const [notifications, setNotifications] = useState<MemberNotification[]>([]);
+  const [summary, setSummary] = useState<MemberNotificationSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isMarkingAll, setIsMarkingAll] = useState(false);
   const [error, setError] = useState("");
@@ -55,10 +57,14 @@ export function NotificationsPage() {
     let isMounted = true;
     setIsLoading(true);
 
-    getNotifications(accessToken, { limit: 80 })
-      .then((items) => {
+    Promise.all([
+      getNotifications(accessToken, { limit: 80 }),
+      getNotificationSummary(accessToken),
+    ])
+      .then(([items, smartSummary]) => {
         if (isMounted) {
           setNotifications(items);
+          setSummary(smartSummary);
           setError("");
         }
       })
@@ -208,11 +214,32 @@ export function NotificationsPage() {
             </div>
           </div>
           <div className="member-module-highlight-grid">
-            <article><Bell aria-hidden="true" /><strong>{notifications.length}</strong><span>Alertes</span></article>
-            <article><FileBadge aria-hidden="true" /><strong>{unreadCount}</strong><span>Non lues</span></article>
-            <article><ShieldCheck aria-hidden="true" /><strong>À jour</strong><span>Automatique</span></article>
+            <article><Bell aria-hidden="true" /><strong>{summary?.total ?? notifications.length}</strong><span>Alertes</span></article>
+            <article><FileBadge aria-hidden="true" /><strong>{summary?.last7Days ?? 0}</strong><span>7 jours</span></article>
+            <article><ShieldCheck aria-hidden="true" /><strong>{summary?.digestPreview.enabled ? "Résumé" : "Direct"}</strong><span>{summary?.digestPreview.enabled ? "Activé" : "Automatique"}</span></article>
           </div>
         </section>
+
+        {summary ? (
+          <section className="member-card notification-summary-card">
+            <div>
+              <strong>Historique intelligent</strong>
+              <span>{summary.unread} non lue{summary.unread > 1 ? "s" : ""} · {summary.last30Days} alertes sur 30 jours</span>
+            </div>
+            <div className="notification-summary-types">
+              {summary.byType.filter((item) => item.total > 0 || item.unread > 0).map((item) => {
+                const Icon = iconByType[item.type];
+                return (
+                  <article key={item.type}>
+                    <Icon aria-hidden="true" strokeWidth={1.8} />
+                    <strong>{notificationTypeLabel(item.type)}</strong>
+                    <span>{item.total} total · {item.unread} non lue{item.unread > 1 ? "s" : ""}</span>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
 
         <section className="member-card social-toolbar">
           <label className="social-search">
@@ -309,4 +336,16 @@ function formatNotificationTime(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
+}
+
+function notificationTypeLabel(type: NotificationType) {
+  const labels: Record<NotificationType, string> = {
+    MESSAGE: "Messages",
+    OPPORTUNITY: "Opportunités",
+    TRAINING: "Formations",
+    CERTIFICATE: "Certificats",
+    SYSTEM: "CCA",
+  };
+
+  return labels[type];
 }

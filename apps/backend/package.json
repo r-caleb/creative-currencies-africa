@@ -28,6 +28,7 @@
     "@nestjs/websockets": "^11.1.9",
     "@prisma/adapter-pg": "^7.3.0",
     "@prisma/client": "^7.3.0",
+    "@sendgrid/mail": "^8.1.6",
     "@types/multer": "^2.2.0",
     "argon2": "^0.45.1",
     "class-transformer": "^0.5.1",

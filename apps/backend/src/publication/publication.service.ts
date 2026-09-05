@@ -408,7 +408,7 @@ export class PublicationService {
       orderBy: [{ createdAt: "asc" }],
     });
 
-    return comments.map((comment) => this.serializePublicationComment(comment, user.id));
+    return comments.map((comment) => this.serializePublicationComment(comment, user.id, publication.authorId));
   }
 
   async updatePublication(authUser: AuthUser, id: string, input: UpdatePublicationDto) {
@@ -575,7 +575,64 @@ export class PublicationService {
       }).catch(() => undefined);
     }
 
-    return this.serializePublicationComment(comment, user.id);
+    return this.serializePublicationComment(comment, user.id, publication.authorId);
+  }
+
+  async deleteComment(authUser: AuthUser, publicationId: string, commentId: string) {
+    const user = await this.getActiveUser(authUser);
+    const publication = await this.findPublicationOrThrow(publicationId);
+    this.ensureCanRead(user, publication);
+
+    const comment = await this.prisma.publicationComment.findFirst({
+      where: {
+        id: commentId,
+        publicationId,
+      },
+      include: publicationCommentInclude,
+    });
+
+    if (!comment) {
+      throw new NotFoundException("Ce commentaire est introuvable.");
+    }
+
+    const canDelete = comment.authorId === user.id || publication.authorId === user.id || user.type === AccountType.ADMIN;
+
+    if (!canDelete) {
+      throw new ForbiddenException("Vous ne pouvez pas supprimer ce commentaire.");
+    }
+
+    await this.prisma.publicationComment.delete({
+      where: { id: commentId },
+    });
+
+    if (comment.authorId !== user.id && publication.authorId === user.id) {
+      await this.notifications.createForUser({
+        userId: comment.authorId,
+        type: NotificationType.SYSTEM,
+        title: "Commentaire supprimé",
+        message: `Votre commentaire sous “${publication.title}” a été retiré par l'auteur de la publication.`,
+        href: "/espace-membre",
+      }).catch(() => undefined);
+    }
+
+    if (user.type === AccountType.ADMIN) {
+      await this.prisma.adminAuditLog.create({
+        data: {
+          adminId: user.id,
+          targetUserId: comment.authorId,
+          action: "COMMENT_DELETED",
+          entityType: "PublicationComment",
+          entityId: comment.id,
+          message: `Commentaire supprimé sous “${publication.title}”.`,
+        },
+      }).catch(() => undefined);
+    }
+
+    return {
+      success: true,
+      commentId,
+      publicationId,
+    };
   }
 
   async toggleReaction(authUser: AuthUser, publicationId: string, input: TogglePublicationReactionDto = {}) {
@@ -1443,7 +1500,7 @@ export class PublicationService {
     };
   }
 
-  private serializePublicationComment(comment: PublicationCommentWithAuthor, currentUserId: string) {
+  private serializePublicationComment(comment: PublicationCommentWithAuthor, currentUserId: string, publicationAuthorId?: string) {
     return {
       id: comment.id,
       publicationId: comment.publicationId,
@@ -1454,7 +1511,7 @@ export class PublicationService {
       author: this.serializeAuthor(comment.author),
       permissions: {
         canEdit: comment.authorId === currentUserId,
-        canDelete: comment.authorId === currentUserId,
+        canDelete: comment.authorId === currentUserId || publicationAuthorId === currentUserId,
       },
     };
   }
@@ -1474,6 +1531,20 @@ export class PublicationService {
   }
 
   private serializeAuthor(author: PublicationAuthor | ActiveUser) {
+    if (author.type === AccountType.ADMIN) {
+      return {
+        id: author.id,
+        accountType: author.type,
+        displayName: "Creative Currencies Africa",
+        avatarUrl: "/assets/cca-mask-gold-transparent.png",
+        memberNumber: null,
+        discipline: "Compte officiel",
+        country: null,
+        city: null,
+        verified: true,
+      };
+    }
+
     const profile = author.profile;
     const organization = author.organizationProfile;
     const partner = author.partnerProfile;

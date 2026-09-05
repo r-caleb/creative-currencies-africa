@@ -228,6 +228,67 @@ export type NetworkMemberProfile = {
   }[];
 };
 
+export type CreativeIdPortfolioItem = {
+  id: string;
+  title: string;
+  description: string | null;
+  category: string;
+  mediaUrl: string | null;
+  externalUrl: string | null;
+  year: number | null;
+  featured: boolean;
+  order: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CreativeIdHistoryItem = {
+  kind: "training" | "event" | "opportunity" | "certificate";
+  label: string;
+  title: string;
+  status: string;
+  statusLabel: string;
+  date: string;
+  meta: string;
+  href: string;
+};
+
+export type CreativeIdRecord = {
+  profile: MemberProfile & {
+    socialLinks?: never;
+  };
+  socialLinks: {
+    id: string;
+    network: string;
+    url: string;
+  }[];
+  portfolioItems: CreativeIdPortfolioItem[];
+  history: CreativeIdHistoryItem[];
+  badges: {
+    title: string;
+    text: string;
+    status: string;
+  }[];
+  stats: {
+    portfolioItems: number;
+    trainings: number;
+    certificates: number;
+    opportunities: number;
+    events: number;
+  };
+};
+
+export type PortfolioItemPayload = {
+  title: string;
+  category: string;
+  description?: string;
+  mediaUrl?: string;
+  externalUrl?: string;
+  year?: number;
+  featured?: boolean;
+  order?: number;
+};
+
 export type NetworkMemberQuery = {
   q?: string;
   discipline?: string;
@@ -235,6 +296,33 @@ export type NetworkMemberQuery = {
   city?: string;
   language?: string;
   availability?: string;
+};
+
+export type GlobalSearchKind = "creator" | "publication" | "training" | "opportunity" | "resource" | "partner";
+
+export type GlobalSearchItem = {
+  id: string;
+  type: GlobalSearchKind;
+  label: string;
+  title: string;
+  description: string;
+  meta: string;
+  href: string;
+  imageUrl: string | null;
+};
+
+export type GlobalSearchResponse = {
+  query: string;
+  total: number;
+  results: GlobalSearchItem[];
+  sections: {
+    creators: GlobalSearchItem[];
+    publications: GlobalSearchItem[];
+    trainings: GlobalSearchItem[];
+    opportunities: GlobalSearchItem[];
+    resources: GlobalSearchItem[];
+    partners: GlobalSearchItem[];
+  };
 };
 
 export type PublicationType =
@@ -424,6 +512,61 @@ export type AdminReport = Omit<PublicationReport, "reporter" | "publication"> & 
   publication: AdminPublication;
 };
 
+export type AdminDirectMessage = Omit<DirectMessage, "author" | "readAt"> & {
+  author: AdminMember;
+};
+
+export type AdminDirectMessageReport = Omit<DirectMessageReport, "reporter" | "directMessage"> & {
+  reporter: AdminMember;
+  directMessage: AdminDirectMessage;
+};
+
+export type AdminGroupMessage = {
+  id: string;
+  groupId: string;
+  groupName: string;
+  content: string;
+  attachmentUrl: string | null;
+  attachmentName: string | null;
+  attachmentMimeType: string | null;
+  editedAt: string | null;
+  deletedAt: string | null;
+  createdAt: string;
+  author: AdminMember;
+  permissions: {
+    canEdit: boolean;
+    canDelete: boolean;
+  };
+};
+
+export type AdminGroupMessageReport = Omit<DirectMessageReport, "reporter" | "directMessage"> & {
+  reporter: AdminMember;
+  groupMessage: AdminGroupMessage;
+};
+
+export type AdminAuditLog = {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  message: string | null;
+  metadata: unknown;
+  createdAt: string;
+  admin: AdminMember | null;
+  targetUser: AdminMember | null;
+};
+
+export type AdminRiskUser = {
+  member: AdminMember;
+  totalReports: number;
+  publicationReports: number;
+  messageReports: number;
+  groupMessageReports?: number;
+  pendingReports: number;
+  reasons: string[];
+  lastReportedAt: string;
+};
+
 export type AdminOverviewResponse = {
   summary: {
     membersTotal: number;
@@ -453,6 +596,48 @@ export type AdminMembersResponse = {
   total: number;
 };
 
+export type AccountEvolutionStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
+
+export type AccountEvolutionRequest = {
+  id: string;
+  fromType: string;
+  requestedType: string;
+  status: AccountEvolutionStatus;
+  motivation: string | null;
+  portfolioUrl: string | null;
+  cvUrl: string | null;
+  note: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AccountEvolutionTarget = {
+  type: string;
+  mode: "automatic_training" | "request";
+  title: string;
+  text: string;
+};
+
+export type MemberAccountEvolutionResponse = {
+  accountType: string;
+  availableTargets: AccountEvolutionTarget[];
+  requests: AccountEvolutionRequest[];
+};
+
+export type AdminAccountEvolutionRequest = AccountEvolutionRequest & {
+  user: AdminMember;
+  reviewedBy: AdminMember | null;
+};
+
+export type AdminAccountEvolutionRequestsResponse = {
+  requests: AdminAccountEvolutionRequest[];
+  total: number;
+  pending: number;
+  page: number;
+  limit: number;
+};
+
 export type AdminPublicationsResponse = {
   publications: AdminPublication[];
   total: number;
@@ -462,6 +647,389 @@ export type AdminReportsResponse = {
   reports: AdminReport[];
   total: number;
   pending: number;
+};
+
+export type AdminDirectMessageReportsResponse = {
+  reports: AdminDirectMessageReport[];
+  total: number;
+  pending: number;
+};
+
+export type AdminGroupMessageReportsResponse = {
+  reports: AdminGroupMessageReport[];
+  total: number;
+  pending: number;
+};
+
+export type AdminAuditLogsResponse = {
+  logs: AdminAuditLog[];
+  total: number;
+};
+
+export type AdminRiskUsersResponse = {
+  users: AdminRiskUser[];
+  total: number;
+};
+
+export type AdminDiscipline = {
+  id: string;
+  name: string;
+  slug: string;
+  isActive: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminDisciplinesResponse = {
+  disciplines: AdminDiscipline[];
+  total: number;
+};
+
+export type AdminPartner = {
+  id: string;
+  name: string;
+  type: string | null;
+  description: string | null;
+  logoUrl: string | null;
+  website: string | null;
+  order: number;
+  published: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminPartnersResponse = {
+  partners: AdminPartner[];
+  total: number;
+};
+
+export type PartnerPayload = {
+  name: string;
+  type?: string;
+  description?: string;
+  logoUrl?: string;
+  website?: string;
+  order?: number;
+  published?: boolean;
+};
+
+export type AdminTrainingStatus = "DRAFT" | "PUBLISHED" | "COMPLETED" | "ARCHIVED";
+export type AdminEventType = "WORKSHOP" | "MASTERCLASS" | "CONFERENCE" | "PANEL" | "ACTIVATION" | "VISIT" | "FESTIVAL";
+export type AdminResourceType = "PDF" | "TEMPLATE" | "CONTRACT" | "GUIDE" | "VIDEO" | "PODCAST";
+export type AdminResourceAccessLevel = "PUBLIC" | "MEMBERS" | "ENROLLED" | "ADMIN_ONLY";
+export type AdminOpportunityType = "CONTEST" | "RESIDENCY" | "MISSION" | "FUNDING" | "CASTING" | "FESTIVAL" | "TRAINING";
+export type AdminOpportunityStatus = "DRAFT" | "OPEN" | "CLOSED" | "ARCHIVED";
+export type AdminApplicationStatus = "DRAFT" | "SUBMITTED" | "UNDER_REVIEW" | "SELECTED" | "ACCEPTED" | "REJECTED" | "WITHDRAWN";
+export type AdminEnrollmentStatus = "ENROLLED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+export type GalleryAlbumCategory = "FORMATION" | "EVENT" | "BACKSTAGE" | "ACTIVATION" | "PARTNER" | "VISIT" | "CONFERENCE";
+
+export type AdminTraining = {
+  id: string;
+  title: string;
+  slug: string;
+  description: string;
+  startsAt: string | null;
+  endsAt: string | null;
+  location: string | null;
+  coverImageUrl: string | null;
+  capacity: number | null;
+  priceCents: number | null;
+  currency: string;
+  status: AdminTrainingStatus;
+  certificateEnabled: boolean;
+  featuredOnLanding: boolean;
+  createdAt: string;
+  updatedAt: string;
+  counts: {
+    modules: number;
+    enrollments: number;
+    resources: number;
+    certificates: number;
+  };
+};
+
+export type AdminEvent = {
+  id: string;
+  title: string;
+  slug: string;
+  description: string;
+  type: AdminEventType;
+  startsAt: string;
+  endsAt: string;
+  location: string;
+  coverImageUrl: string | null;
+  whatsappUrl: string | null;
+  facebookEventUrl: string | null;
+  published: boolean;
+  featuredOnLanding: boolean;
+  createdAt: string;
+  updatedAt: string;
+  counts: {
+    registrations: number;
+  };
+};
+
+export type AdminResource = {
+  id: string;
+  title: string;
+  description: string | null;
+  type: AdminResourceType;
+  url: string;
+  accessLevel: AdminResourceAccessLevel;
+  published: boolean;
+  training: { id: string; title: string; slug: string } | null;
+  counts: {
+    views: number;
+    downloads: number;
+    usefulMarks: number;
+  };
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminOpportunity = {
+  id: string;
+  title: string;
+  slug: string;
+  description: string;
+  type: AdminOpportunityType;
+  status: AdminOpportunityStatus;
+  deadline: string | null;
+  location: string | null;
+  eligibilityUrl: string | null;
+  published: boolean;
+  createdAt: string;
+  updatedAt: string;
+  counts: {
+    applications: number;
+  };
+};
+
+export type AdminDossierMember = {
+  id: string;
+  email: string;
+  displayName: string;
+  firstName: string;
+  lastName: string;
+  avatarUrl: string | null;
+  type: string;
+  phone: string | null;
+  discipline: string | null;
+  country: string | null;
+  city: string | null;
+  portfolioUrl: string | null;
+  cvUrl: string | null;
+};
+
+export type AdminOpportunityApplication = {
+  id: string;
+  status: AdminApplicationStatus;
+  statusLabel: string;
+  motivation: string | null;
+  discipline: string | null;
+  city: string | null;
+  phone: string | null;
+  portfolioUrl: string | null;
+  cvUrl: string | null;
+  fileUrl: string | null;
+  links: string[];
+  socialLinks: string[];
+  submittedAt: string | null;
+  reviewedAt: string | null;
+  adminNote: string | null;
+  createdAt: string;
+  updatedAt: string;
+  opportunity: {
+    id: string;
+    title: string;
+    slug: string;
+    type: AdminOpportunityType;
+    status: AdminOpportunityStatus;
+    deadline: string | null;
+    location: string | null;
+  };
+  member: AdminDossierMember;
+};
+
+export type AdminTrainingEnrollment = {
+  id: string;
+  status: AdminEnrollmentStatus;
+  statusLabel: string;
+  progress: number;
+  motivation: string | null;
+  phone: string | null;
+  adminNote: string | null;
+  enrolledAt: string;
+  reviewedAt: string | null;
+  completedAt: string | null;
+  training: {
+    id: string;
+    title: string;
+    slug: string;
+    status: AdminTrainingStatus;
+    startsAt: string | null;
+    endsAt: string | null;
+    location: string | null;
+    certificateEnabled: boolean;
+  };
+  member: AdminDossierMember;
+};
+
+export type GalleryPhoto = {
+  id: string;
+  title: string | null;
+  caption: string | null;
+  imageUrl: string;
+  altText: string | null;
+  sortOrder: number;
+  published: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type GalleryAlbum = {
+  id: string;
+  title: string;
+  slug: string;
+  description: string | null;
+  category: GalleryAlbumCategory;
+  coverImageUrl: string | null;
+  published: boolean;
+  featuredOnLanding: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  photos: GalleryPhoto[];
+};
+
+export type AdminTrainingsResponse = {
+  trainings: AdminTraining[];
+  total: number;
+};
+
+export type AdminEventsResponse = {
+  events: AdminEvent[];
+  total: number;
+};
+
+export type AdminResourcesResponse = {
+  resources: AdminResource[];
+  total: number;
+  stats: {
+    total: number;
+    published: number;
+    views: number;
+    downloads: number;
+    usefulMarks: number;
+    topViewed: Array<{ id: string; title: string; type: AdminResourceType; views: number; downloads: number; usefulMarks: number }>;
+    topDownloaded: Array<{ id: string; title: string; type: AdminResourceType; views: number; downloads: number; usefulMarks: number }>;
+  };
+};
+
+export type AdminOpportunitiesResponse = {
+  opportunities: AdminOpportunity[];
+  total: number;
+};
+
+export type AdminOpportunityApplicationsResponse = {
+  applications: AdminOpportunityApplication[];
+  total: number;
+  page: number;
+  limit: number;
+};
+
+export type AdminTrainingEnrollmentsResponse = {
+  enrollments: AdminTrainingEnrollment[];
+  total: number;
+  page: number;
+  limit: number;
+};
+
+export type GalleryAlbumsResponse = {
+  albums: GalleryAlbum[];
+  total: number;
+};
+
+export type TrainingPayload = {
+  title: string;
+  description: string;
+  startsAt?: string;
+  endsAt?: string;
+  location?: string;
+  coverImageUrl?: string;
+  capacity?: number;
+  priceCents?: number;
+  currency?: string;
+  status?: AdminTrainingStatus;
+  certificateEnabled?: boolean;
+  featuredOnLanding?: boolean;
+};
+
+export type EventPayload = {
+  title: string;
+  description: string;
+  type?: AdminEventType;
+  startsAt: string;
+  endsAt: string;
+  location: string;
+  coverImageUrl?: string;
+  whatsappUrl?: string;
+  facebookEventUrl?: string;
+  published?: boolean;
+  featuredOnLanding?: boolean;
+};
+
+export type ResourcePayload = {
+  title: string;
+  description?: string;
+  type: AdminResourceType;
+  url: string;
+  accessLevel?: AdminResourceAccessLevel;
+  published?: boolean;
+  trainingId?: string;
+};
+
+export type OpportunityPayload = {
+  title: string;
+  description: string;
+  type: AdminOpportunityType;
+  status?: AdminOpportunityStatus;
+  deadline?: string;
+  location?: string;
+  eligibilityUrl?: string;
+  published?: boolean;
+};
+
+export type GalleryPhotoPayload = {
+  imageUrl: string;
+  title?: string;
+  caption?: string;
+  altText?: string;
+  sortOrder?: number;
+  published?: boolean;
+};
+
+export type GalleryAlbumPayload = {
+  title: string;
+  description?: string;
+  category?: GalleryAlbumCategory;
+  coverImageUrl?: string;
+  published?: boolean;
+  featuredOnLanding?: boolean;
+  sortOrder?: number;
+  photos?: GalleryPhotoPayload[];
+};
+
+export type AdminUploadPurpose = "training" | "event" | "gallery" | "resource" | "partner" | "certificate";
+
+export type AdminUploadResponse = {
+  url: string;
+  name: string;
+  mimeType: string;
+  sizeBytes: number;
+  purpose: AdminUploadPurpose;
+  uploadedById: string;
 };
 
 export type MemberTrainingResource = {
@@ -474,7 +1042,11 @@ export type MemberTrainingEnrollment = {
   id: string;
   status: string;
   progress: number;
+  motivation: string | null;
+  phone: string | null;
+  adminNote: string | null;
   enrolledAt: string;
+  reviewedAt: string | null;
   completedAt: string | null;
 };
 
@@ -523,9 +1095,16 @@ export type TrainingEnrollmentResponse = {
 
 export type MemberOpportunityApplication = {
   id: string;
-  status: "DRAFT" | "SUBMITTED" | "UNDER_REVIEW" | "SELECTED" | "REJECTED" | "WITHDRAWN";
+  status: AdminApplicationStatus;
   motivation: string | null;
+  discipline: string | null;
+  city: string | null;
+  phone: string | null;
   portfolioUrl: string | null;
+  cvUrl: string | null;
+  fileUrl: string | null;
+  links: string[];
+  socialLinks: string[];
   submittedAt: string | null;
   reviewedAt: string | null;
   adminNote: string | null;
@@ -596,9 +1175,24 @@ export type MemberResource = {
   recommended: boolean;
   training: { id: string; title: string; slug: string } | null;
   attachments: Array<{ name: string; type: string; url: string }>;
+  isUseful: boolean;
+  secureDownload: boolean;
+  counts: {
+    views: number;
+    downloads: number;
+    usefulMarks: number;
+  };
   canManage: boolean;
   createdAt: string;
   updatedAt: string;
+};
+
+export type MemberResourceActionResponse = {
+  success: boolean;
+  useful?: boolean;
+  url?: string;
+  filename?: string;
+  resource: MemberResource;
 };
 
 export type MemberResourcesResponse = {
@@ -774,6 +1368,9 @@ export type CommunityGroupRole = "OWNER" | "MODERATOR" | "MEMBER";
 export type CommunityGroupInvitationStatus = "PENDING" | "ACCEPTED" | "DECLINED" | "CANCELLED";
 export type CommunityGroupMessageType = "TEXT" | "FILE" | "SYSTEM";
 export type NotificationType = "SYSTEM" | "TRAINING" | "OPPORTUNITY" | "CERTIFICATE" | "MESSAGE";
+export type NotificationFrequency = "IMMEDIATE" | "DAILY" | "WEEKLY" | "DISABLED";
+export type DirectMessageReportReason = "SPAM" | "ABUSE" | "HARASSMENT" | "INAPPROPRIATE" | "OTHER";
+export type DirectMessageReportStatus = "PENDING" | "REVIEWED" | "DISMISSED";
 
 export type MemberNotification = {
   id: string;
@@ -785,6 +1382,45 @@ export type MemberNotification = {
   readAt: string | null;
   read: boolean;
   createdAt: string;
+};
+
+export type MemberNotificationPreference = {
+  id: string;
+  userId: string;
+  type: NotificationType;
+  platform: boolean;
+  email: boolean;
+  whatsapp: boolean;
+  push: boolean;
+  frequency: NotificationFrequency;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type MemberNotificationSummary = {
+  total: number;
+  unread: number;
+  last7Days: number;
+  last30Days: number;
+  byType: Array<{
+    type: NotificationType;
+    total: number;
+    unread: number;
+    lastAt: string | null;
+  }>;
+  latest: MemberNotification[];
+  digestPreview: {
+    enabled: boolean;
+    preferences: MemberNotificationPreference[];
+    dailyEligible: number;
+    weeklyEligible: number;
+  };
+  channels: {
+    platform: boolean;
+    email: boolean;
+    whatsapp: boolean;
+    push: boolean;
+  };
 };
 
 export type DirectMessageUser = {
@@ -805,6 +1441,7 @@ export type DirectMessage = {
   attachmentMimeType: string | null;
   editedAt: string | null;
   deletedAt: string | null;
+  readAt?: string | null;
   createdAt: string;
   author: DirectMessageUser;
   permissions: {
@@ -813,14 +1450,52 @@ export type DirectMessage = {
   };
 };
 
+export type DirectMessageReport = {
+  id: string;
+  reason: DirectMessageReportReason;
+  message: string | null;
+  status: DirectMessageReportStatus;
+  reviewedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  reporter: DirectMessageUser;
+  directMessage: DirectMessage;
+};
+
 export type DirectConversation = {
   id: string;
   target: DirectMessageUser | null;
   lastMessage: DirectMessage | null;
   unread: number;
   lastMessageAt: string | null;
+  archived?: boolean;
   createdAt: string;
   updatedAt: string;
+};
+
+export type DirectConversationAttachment = {
+  id: string;
+  url: string | null;
+  name: string;
+  mimeType: string | null;
+  kind: "image" | "document" | "file";
+  createdAt: string;
+  author: DirectMessageUser;
+};
+
+export type DirectMessageSearchResponse = {
+  results: Array<{
+    message: DirectMessage;
+    conversation: DirectConversation;
+  }>;
+  total: number;
+};
+
+export type DirectConversationAttachmentsResponse = {
+  attachments: DirectConversationAttachment[];
+  total: number;
+  images: number;
+  documents: number;
 };
 
 export type CreateDirectConversationPayload = {
@@ -852,6 +1527,8 @@ export type CommunityGroup = {
   members: number;
   posts: number;
   isJoined: boolean;
+  pendingJoinRequestId?: string | null;
+  pendingJoinRequestStatus?: CommunityGroupInvitationStatus | null;
   currentUserRole: CommunityGroupRole | null;
   canManage: boolean;
   lastActivity: string;
@@ -863,6 +1540,24 @@ export type CommunityGroup = {
   };
   createdAt: string;
   updatedAt: string;
+};
+
+export type CommunityGroupJoinRequest = {
+  id: string;
+  groupId: string;
+  requesterId: string;
+  status: CommunityGroupInvitationStatus;
+  message: string | null;
+  respondedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  group: CommunityGroup;
+  requester: CommunityGroupMemberCandidate;
+  reviewedBy: CommunityGroupMemberCandidate | null;
+  permissions: {
+    canAccept: boolean;
+    canDecline: boolean;
+  };
 };
 
 export type CommunityGroupMemberCandidate = {
@@ -1082,6 +1777,31 @@ async function authenticatedApiRequest<T>(path: string, init: RequestInit = {}, 
     const nextTokens = await refreshAccessToken(refreshToken);
     return apiRequest<T>(path, withAuthorization(init, nextTokens.accessToken));
   }
+}
+
+async function authenticatedTextRequest(path: string, init: RequestInit = {}, accessToken?: string | null): Promise<string> {
+  const tokens = getAuthTokens();
+  const token = accessToken ?? tokens.accessToken;
+
+  if (!token) {
+    throw new ApiError("Votre connexion a expiré. Connectez-vous à nouveau.", 401);
+  }
+
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_URL}${path}`, withAuthorization(init, token));
+  } catch {
+    throw new ApiError("Impossible de joindre le service. Vérifiez votre connexion internet puis réessayez.", 0);
+  }
+
+  const payload = await response.text();
+
+  if (!response.ok) {
+    throw new ApiError(payload || fallbackMessageByStatus(response.status), response.status);
+  }
+
+  return payload;
 }
 
 function withAuthorization(init: RequestInit, accessToken: string): RequestInit {
@@ -1324,6 +2044,32 @@ export function updateMemberProfile(accessToken: string | null | undefined, body
   }, accessToken);
 }
 
+export function getCreativeIdRecord(accessToken?: string | null) {
+  return authenticatedApiRequest<CreativeIdRecord>("/member/creative-id", {
+    method: "GET",
+  }, accessToken);
+}
+
+export function createPortfolioItem(accessToken: string | null | undefined, body: PortfolioItemPayload) {
+  return authenticatedApiRequest<CreativeIdPortfolioItem>("/member/creative-id/portfolio", {
+    method: "POST",
+    body: JSON.stringify(body),
+  }, accessToken);
+}
+
+export function updatePortfolioItem(accessToken: string | null | undefined, id: string, body: Partial<PortfolioItemPayload>) {
+  return authenticatedApiRequest<CreativeIdPortfolioItem>(`/member/creative-id/portfolio/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  }, accessToken);
+}
+
+export function deletePortfolioItem(accessToken: string | null | undefined, id: string) {
+  return authenticatedApiRequest<{ success: boolean }>(`/member/creative-id/portfolio/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  }, accessToken);
+}
+
 export function uploadProfileAsset(accessToken: string | null | undefined, kind: UploadProfileAssetKind, file: File) {
   const body = new FormData();
   body.append("kind", kind);
@@ -1332,6 +2078,28 @@ export function uploadProfileAsset(accessToken: string | null | undefined, kind:
   return authenticatedApiRequest<UploadProfileAssetResponse>("/member/uploads", {
     method: "POST",
     body,
+  }, accessToken);
+}
+
+export function getMemberAccountEvolution(accessToken?: string | null) {
+  return authenticatedApiRequest<MemberAccountEvolutionResponse>("/member/account-evolution", {
+    method: "GET",
+  }, accessToken);
+}
+
+export function requestMemberAccountEvolution(
+  accessToken: string | null | undefined,
+  body: { requestedType: "CREATOR"; motivation?: string; portfolioUrl?: string; cvUrl?: string },
+) {
+  return authenticatedApiRequest<{ success: boolean; message: string; request: AccountEvolutionRequest }>("/member/account-evolution", {
+    method: "POST",
+    body: JSON.stringify(body),
+  }, accessToken);
+}
+
+export function searchMemberGlobal(accessToken?: string | null, query: { q?: string; limit?: number } = {}) {
+  return authenticatedApiRequest<GlobalSearchResponse>(`/member/search${buildQueryString(query)}`, {
+    method: "GET",
   }, accessToken);
 }
 
@@ -1387,9 +2155,10 @@ export function getMemberTrainings(accessToken?: string | null) {
   }, accessToken);
 }
 
-export function enrollInTraining(accessToken: string | null | undefined, trainingId: string) {
+export function enrollInTraining(accessToken: string | null | undefined, trainingId: string, body: { motivation?: string; phone?: string } = {}) {
   return authenticatedApiRequest<TrainingEnrollmentResponse>(`/member/trainings/${trainingId}/enroll`, {
     method: "POST",
+    body: JSON.stringify(body),
   }, accessToken);
 }
 
@@ -1402,6 +2171,24 @@ export function getMemberOpportunities(accessToken?: string | null) {
 export function getMemberResources(accessToken?: string | null) {
   return authenticatedApiRequest<MemberResourcesResponse>("/member/resources", {
     method: "GET",
+  }, accessToken);
+}
+
+export function viewMemberResource(accessToken: string | null | undefined, id: string) {
+  return authenticatedApiRequest<MemberResourceActionResponse>(`/member/resources/${id}/view`, {
+    method: "POST",
+  }, accessToken);
+}
+
+export function downloadMemberResource(accessToken: string | null | undefined, id: string) {
+  return authenticatedApiRequest<MemberResourceActionResponse>(`/member/resources/${id}/download`, {
+    method: "GET",
+  }, accessToken);
+}
+
+export function toggleMemberResourceUseful(accessToken: string | null | undefined, id: string) {
+  return authenticatedApiRequest<MemberResourceActionResponse>(`/member/resources/${id}/useful`, {
+    method: "POST",
   }, accessToken);
 }
 
@@ -1433,7 +2220,18 @@ export function issueMemberCertificate(accessToken: string | null | undefined, b
 export function applyToOpportunity(
   accessToken: string | null | undefined,
   opportunityId: string,
-  body: { status?: "DRAFT" | "SUBMITTED" | "draft" | "submitted"; motivation?: string; portfolioUrl?: string } = {},
+  body: {
+    status?: "DRAFT" | "SUBMITTED" | "draft" | "submitted";
+    motivation?: string;
+    discipline?: string;
+    city?: string;
+    phone?: string;
+    portfolioUrl?: string;
+    cvUrl?: string;
+    fileUrl?: string;
+    links?: string[];
+    socialLinks?: string[];
+  } = {},
 ) {
   return authenticatedApiRequest<OpportunityApplicationResponse>(`/member/opportunities/${opportunityId}/apply`, {
     method: "POST",
@@ -1526,6 +2324,12 @@ export function commentPublication(accessToken: string | null | undefined, publi
   }, accessToken);
 }
 
+export function deletePublicationComment(accessToken: string | null | undefined, publicationId: string, commentId: string) {
+  return authenticatedApiRequest<{ success: boolean; publicationId: string; commentId: string }>(`/publications/${publicationId}/comments/${commentId}`, {
+    method: "DELETE",
+  }, accessToken);
+}
+
 export function reactToPublication(accessToken: string | null | undefined, publicationId: string, type: PublicationReactionType = "LIKE") {
   return authenticatedApiRequest<{ active: boolean; type: PublicationReactionType; count: number }>(`/publications/${publicationId}/reactions`, {
     method: "POST",
@@ -1601,6 +2405,33 @@ export function grantAdminAccess(accessToken: string | null | undefined, memberI
   }, accessToken);
 }
 
+export function updateAdminMemberVerification(accessToken: string | null | undefined, memberId: string, verified: boolean) {
+  return authenticatedApiRequest<AdminMember>(`/admin/members/${memberId}/verification`, {
+    method: "PATCH",
+    body: JSON.stringify({ verified }),
+  }, accessToken);
+}
+
+export function getAdminAccountEvolutionRequests(
+  accessToken?: string | null,
+  query: { q?: string; status?: AccountEvolutionStatus; requestedType?: string; page?: number; limit?: number } = {},
+) {
+  return authenticatedApiRequest<AdminAccountEvolutionRequestsResponse>(`/admin/account-evolution-requests${buildQueryString(query)}`, {
+    method: "GET",
+  }, accessToken);
+}
+
+export function updateAdminAccountEvolutionRequest(
+  accessToken: string | null | undefined,
+  id: string,
+  body: { status: Exclude<AccountEvolutionStatus, "PENDING">; note?: string },
+) {
+  return authenticatedApiRequest<AdminAccountEvolutionRequest>(`/admin/account-evolution-requests/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  }, accessToken);
+}
+
 export function getAdminPublications(
   accessToken?: string | null,
   query: { q?: string; type?: PublicationType; status?: PublicationStatus; limit?: number } = {},
@@ -1638,6 +2469,376 @@ export function updateAdminReport(
   return authenticatedApiRequest<{ success: boolean; report: AdminReport | null }>(`/admin/reports/${reportId}`, {
     method: "PATCH",
     body: JSON.stringify(input),
+  }, accessToken);
+}
+
+export function getAdminMessageReports(
+  accessToken?: string | null,
+  query: { status?: DirectMessageReportStatus; reason?: DirectMessageReportReason; q?: string; from?: string; to?: string; limit?: number } = {},
+) {
+  return authenticatedApiRequest<AdminDirectMessageReportsResponse>(`/admin/message-reports${buildQueryString(query)}`, {
+    method: "GET",
+  }, accessToken);
+}
+
+export function updateAdminMessageReport(
+  accessToken: string | null | undefined,
+  reportId: string,
+  input: { status: Exclude<DirectMessageReportStatus, "PENDING">; deleteMessage?: boolean; note?: string },
+) {
+  return authenticatedApiRequest<{ success: boolean; report: AdminDirectMessageReport }>(`/admin/message-reports/${reportId}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  }, accessToken);
+}
+
+export function getAdminGroupMessageReports(
+  accessToken?: string | null,
+  query: { status?: DirectMessageReportStatus; reason?: DirectMessageReportReason; q?: string; from?: string; to?: string; limit?: number } = {},
+) {
+  return authenticatedApiRequest<AdminGroupMessageReportsResponse>(`/admin/group-message-reports${buildQueryString(query)}`, {
+    method: "GET",
+  }, accessToken);
+}
+
+export function updateAdminGroupMessageReport(
+  accessToken: string | null | undefined,
+  reportId: string,
+  input: { status: Exclude<DirectMessageReportStatus, "PENDING">; deleteMessage?: boolean; note?: string },
+) {
+  return authenticatedApiRequest<{ success: boolean; report: AdminGroupMessageReport }>(`/admin/group-message-reports/${reportId}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  }, accessToken);
+}
+
+export function getAdminAuditLogs(
+  accessToken?: string | null,
+  query: { action?: string; entityType?: string; limit?: number } = {},
+) {
+  return authenticatedApiRequest<AdminAuditLogsResponse>(`/admin/audit-logs${buildQueryString(query)}`, {
+    method: "GET",
+  }, accessToken);
+}
+
+export function getAdminRiskUsers(accessToken?: string | null) {
+  return authenticatedApiRequest<AdminRiskUsersResponse>("/admin/risk-users", {
+    method: "GET",
+  }, accessToken);
+}
+
+export function getAdminTrainings(
+  accessToken?: string | null,
+  query: { q?: string; status?: AdminTrainingStatus } = {},
+) {
+  return authenticatedApiRequest<AdminTrainingsResponse>(`/admin/trainings${buildQueryString(query)}`, {
+    method: "GET",
+  }, accessToken);
+}
+
+export function createAdminTraining(accessToken: string | null | undefined, body: TrainingPayload) {
+  return authenticatedApiRequest<AdminTraining>("/admin/trainings", {
+    method: "POST",
+    body: JSON.stringify(body),
+  }, accessToken);
+}
+
+export function updateAdminTraining(accessToken: string | null | undefined, id: string, body: Partial<TrainingPayload>) {
+  return authenticatedApiRequest<AdminTraining>(`/admin/trainings/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  }, accessToken);
+}
+
+export function deleteAdminTraining(accessToken: string | null | undefined, id: string) {
+  return authenticatedApiRequest<{ success: boolean }>(`/admin/trainings/${id}`, {
+    method: "DELETE",
+  }, accessToken);
+}
+
+export function getAdminTrainingEnrollments(
+  accessToken?: string | null,
+  query: { q?: string; status?: AdminEnrollmentStatus; trainingId?: string; page?: number; limit?: number } = {},
+) {
+  return authenticatedApiRequest<AdminTrainingEnrollmentsResponse>(`/admin/training-enrollments${buildQueryString(query)}`, {
+    method: "GET",
+  }, accessToken);
+}
+
+export function exportAdminTrainingEnrollmentsCsv(
+  accessToken?: string | null,
+  query: { q?: string; status?: AdminEnrollmentStatus; trainingId?: string; page?: number; limit?: number } = {},
+) {
+  return authenticatedTextRequest(`/admin/training-enrollments/export.csv${buildQueryString(query)}`, {
+    method: "GET",
+  }, accessToken);
+}
+
+export function updateAdminTrainingEnrollment(
+  accessToken: string | null | undefined,
+  id: string,
+  body: { status?: AdminEnrollmentStatus; progress?: number; adminNote?: string },
+) {
+  return authenticatedApiRequest<AdminTrainingEnrollment>(`/admin/training-enrollments/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  }, accessToken);
+}
+
+export function uploadAdminAsset(accessToken: string | null | undefined, purpose: AdminUploadPurpose, file: File) {
+  const body = new FormData();
+  body.append("purpose", purpose);
+  body.append("file", file);
+
+  return authenticatedApiRequest<AdminUploadResponse>("/admin/uploads", {
+    method: "POST",
+    body,
+  }, accessToken);
+}
+
+export function getAdminEvents(
+  accessToken?: string | null,
+  query: { q?: string; type?: AdminEventType; published?: boolean } = {},
+) {
+  return authenticatedApiRequest<AdminEventsResponse>(`/admin/events${buildQueryString(query)}`, {
+    method: "GET",
+  }, accessToken);
+}
+
+export function createAdminEvent(accessToken: string | null | undefined, body: EventPayload) {
+  return authenticatedApiRequest<AdminEvent>("/admin/events", {
+    method: "POST",
+    body: JSON.stringify(body),
+  }, accessToken);
+}
+
+export function updateAdminEvent(accessToken: string | null | undefined, id: string, body: Partial<EventPayload>) {
+  return authenticatedApiRequest<AdminEvent>(`/admin/events/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  }, accessToken);
+}
+
+export function deleteAdminEvent(accessToken: string | null | undefined, id: string) {
+  return authenticatedApiRequest<{ success: boolean }>(`/admin/events/${id}`, {
+    method: "DELETE",
+  }, accessToken);
+}
+
+export function getAdminResources(
+  accessToken?: string | null,
+  query: { q?: string; type?: AdminResourceType; accessLevel?: AdminResourceAccessLevel; published?: boolean } = {},
+) {
+  return authenticatedApiRequest<AdminResourcesResponse>(`/admin/resources${buildQueryString(query)}`, {
+    method: "GET",
+  }, accessToken);
+}
+
+export function createAdminResource(accessToken: string | null | undefined, body: ResourcePayload) {
+  return authenticatedApiRequest<AdminResource>("/admin/resources", {
+    method: "POST",
+    body: JSON.stringify(body),
+  }, accessToken);
+}
+
+export function updateAdminResource(accessToken: string | null | undefined, id: string, body: Partial<ResourcePayload>) {
+  return authenticatedApiRequest<AdminResource>(`/admin/resources/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  }, accessToken);
+}
+
+export function deleteAdminResource(accessToken: string | null | undefined, id: string) {
+  return authenticatedApiRequest<{ success: boolean }>(`/admin/resources/${id}`, {
+    method: "DELETE",
+  }, accessToken);
+}
+
+export function getAdminOpportunities(
+  accessToken?: string | null,
+  query: { q?: string; type?: AdminOpportunityType; status?: AdminOpportunityStatus; published?: boolean } = {},
+) {
+  return authenticatedApiRequest<AdminOpportunitiesResponse>(`/admin/opportunities${buildQueryString(query)}`, {
+    method: "GET",
+  }, accessToken);
+}
+
+export function createAdminOpportunity(accessToken: string | null | undefined, body: OpportunityPayload) {
+  return authenticatedApiRequest<AdminOpportunity>("/admin/opportunities", {
+    method: "POST",
+    body: JSON.stringify(body),
+  }, accessToken);
+}
+
+export function updateAdminOpportunity(accessToken: string | null | undefined, id: string, body: Partial<OpportunityPayload>) {
+  return authenticatedApiRequest<AdminOpportunity>(`/admin/opportunities/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  }, accessToken);
+}
+
+export function deleteAdminOpportunity(accessToken: string | null | undefined, id: string) {
+  return authenticatedApiRequest<{ success: boolean }>(`/admin/opportunities/${id}`, {
+    method: "DELETE",
+  }, accessToken);
+}
+
+export function getAdminOpportunityApplications(
+  accessToken?: string | null,
+  query: {
+    q?: string;
+    status?: AdminApplicationStatus;
+    opportunityId?: string;
+    discipline?: string;
+    city?: string;
+    page?: number;
+    limit?: number;
+  } = {},
+) {
+  return authenticatedApiRequest<AdminOpportunityApplicationsResponse>(`/admin/opportunity-applications${buildQueryString(query)}`, {
+    method: "GET",
+  }, accessToken);
+}
+
+export function exportAdminOpportunityApplicationsCsv(
+  accessToken?: string | null,
+  query: {
+    q?: string;
+    status?: AdminApplicationStatus;
+    opportunityId?: string;
+    discipline?: string;
+    city?: string;
+    page?: number;
+    limit?: number;
+  } = {},
+) {
+  return authenticatedTextRequest(`/admin/opportunity-applications/export.csv${buildQueryString(query)}`, {
+    method: "GET",
+  }, accessToken);
+}
+
+export function updateAdminOpportunityApplication(
+  accessToken: string | null | undefined,
+  id: string,
+  body: { status?: AdminApplicationStatus; adminNote?: string },
+) {
+  return authenticatedApiRequest<AdminOpportunityApplication>(`/admin/opportunity-applications/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  }, accessToken);
+}
+
+export function getGalleryAlbums(
+  accessToken?: string | null,
+  query: { q?: string; category?: GalleryAlbumCategory; published?: boolean } = {},
+) {
+  return authenticatedApiRequest<GalleryAlbumsResponse>(`/admin/gallery/albums${buildQueryString(query)}`, {
+    method: "GET",
+  }, accessToken);
+}
+
+export function createGalleryAlbum(accessToken: string | null | undefined, body: GalleryAlbumPayload) {
+  return authenticatedApiRequest<GalleryAlbum>("/admin/gallery/albums", {
+    method: "POST",
+    body: JSON.stringify(body),
+  }, accessToken);
+}
+
+export function updateGalleryAlbum(accessToken: string | null | undefined, id: string, body: Partial<GalleryAlbumPayload>) {
+  return authenticatedApiRequest<GalleryAlbum>(`/admin/gallery/albums/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  }, accessToken);
+}
+
+export function deleteGalleryAlbum(accessToken: string | null | undefined, id: string) {
+  return authenticatedApiRequest<{ success: boolean }>(`/admin/gallery/albums/${id}`, {
+    method: "DELETE",
+  }, accessToken);
+}
+
+export function createGalleryPhoto(accessToken: string | null | undefined, albumId: string, body: GalleryPhotoPayload) {
+  return authenticatedApiRequest<GalleryPhoto>(`/admin/gallery/albums/${albumId}/photos`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  }, accessToken);
+}
+
+export function updateGalleryPhoto(accessToken: string | null | undefined, id: string, body: Partial<GalleryPhotoPayload>) {
+  return authenticatedApiRequest<GalleryPhoto>(`/admin/gallery/photos/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  }, accessToken);
+}
+
+export function deleteGalleryPhoto(accessToken: string | null | undefined, id: string) {
+  return authenticatedApiRequest<{ success: boolean }>(`/admin/gallery/photos/${id}`, {
+    method: "DELETE",
+  }, accessToken);
+}
+
+export function getAdminDisciplines(
+  accessToken?: string | null,
+  query: { q?: string; isActive?: boolean } = {},
+) {
+  return authenticatedApiRequest<AdminDisciplinesResponse>(`/admin/disciplines${buildQueryString(query)}`, {
+    method: "GET",
+  }, accessToken);
+}
+
+export function createAdminDiscipline(
+  accessToken: string | null | undefined,
+  body: { name: string; slug?: string; sortOrder?: number; isActive?: boolean },
+) {
+  return authenticatedApiRequest<AdminDiscipline>("/admin/disciplines", {
+    method: "POST",
+    body: JSON.stringify(body),
+  }, accessToken);
+}
+
+export function updateAdminDiscipline(
+  accessToken: string | null | undefined,
+  id: string,
+  body: { name?: string; slug?: string; sortOrder?: number; isActive?: boolean },
+) {
+  return authenticatedApiRequest<AdminDiscipline>(`/admin/disciplines/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  }, accessToken);
+}
+
+export function deleteAdminDiscipline(accessToken: string | null | undefined, id: string) {
+  return authenticatedApiRequest<{ success: boolean }>(`/admin/disciplines/${id}`, {
+    method: "DELETE",
+  }, accessToken);
+}
+
+export function getAdminPartners(
+  accessToken?: string | null,
+  query: { q?: string; published?: boolean } = {},
+) {
+  return authenticatedApiRequest<AdminPartnersResponse>(`/admin/partners${buildQueryString(query)}`, {
+    method: "GET",
+  }, accessToken);
+}
+
+export function createAdminPartner(accessToken: string | null | undefined, body: PartnerPayload) {
+  return authenticatedApiRequest<AdminPartner>("/admin/partners", {
+    method: "POST",
+    body: JSON.stringify(body),
+  }, accessToken);
+}
+
+export function updateAdminPartner(accessToken: string | null | undefined, id: string, body: Partial<PartnerPayload>) {
+  return authenticatedApiRequest<AdminPartner>(`/admin/partners/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  }, accessToken);
+}
+
+export function deleteAdminPartner(accessToken: string | null | undefined, id: string) {
+  return authenticatedApiRequest<{ success: boolean }>(`/admin/partners/${id}`, {
+    method: "DELETE",
   }, accessToken);
 }
 
@@ -1728,6 +2929,24 @@ export function getMyCommunityGroupInvitations(accessToken: string | null | unde
 export function getCommunityGroupInvitations(accessToken: string | null | undefined, groupId: string) {
   return authenticatedApiRequest<CommunityGroupInvitation[]>(`/groups/${groupId}/invitations`, {
     method: "GET",
+  }, accessToken);
+}
+
+export function getCommunityGroupJoinRequests(accessToken: string | null | undefined, groupId: string) {
+  return authenticatedApiRequest<CommunityGroupJoinRequest[]>(`/groups/${groupId}/join-requests`, {
+    method: "GET",
+  }, accessToken);
+}
+
+export function reviewCommunityGroupJoinRequest(
+  accessToken: string | null | undefined,
+  groupId: string,
+  requestId: string,
+  body: { status: "ACCEPTED" | "DECLINED"; note?: string },
+) {
+  return authenticatedApiRequest<{ request: CommunityGroupJoinRequest; group: CommunityGroup }>(`/groups/${groupId}/join-requests/${requestId}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
   }, accessToken);
 }
 
@@ -1838,8 +3057,32 @@ export function deleteCommunityGroupMessage(accessToken: string | null | undefin
   }, accessToken);
 }
 
+export function reportCommunityGroupMessage(
+  accessToken: string | null | undefined,
+  groupId: string,
+  messageId: string,
+  body: { reason: DirectMessageReportReason; message?: string },
+) {
+  return authenticatedApiRequest<{ success: boolean; reportId: string; status: DirectMessageReportStatus }>(`/groups/${groupId}/messages/${messageId}/reports`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  }, accessToken);
+}
+
 export function getDirectConversations(accessToken?: string | null) {
   return authenticatedApiRequest<DirectConversation[]>("/messages/conversations", {
+    method: "GET",
+  }, accessToken);
+}
+
+export function getArchivedDirectConversations(accessToken?: string | null) {
+  return authenticatedApiRequest<DirectConversation[]>("/messages/conversations/archived", {
+    method: "GET",
+  }, accessToken);
+}
+
+export function searchDirectMessages(accessToken: string | null | undefined, query: { q?: string; limit?: number }) {
+  return authenticatedApiRequest<DirectMessageSearchResponse>(`/messages/search${buildQueryString(query)}`, {
     method: "GET",
   }, accessToken);
 }
@@ -1869,9 +3112,63 @@ export function markDirectConversationRead(accessToken: string | null | undefine
   }, accessToken);
 }
 
+export function archiveDirectConversation(accessToken: string | null | undefined, conversationId: string) {
+  return authenticatedApiRequest<{ success: boolean; conversationId: string; archived: boolean }>(`/messages/conversations/${conversationId}/archive`, {
+    method: "PATCH",
+  }, accessToken);
+}
+
+export function unarchiveDirectConversation(accessToken: string | null | undefined, conversationId: string) {
+  return authenticatedApiRequest<{ success: boolean; conversation: DirectConversation }>(`/messages/conversations/${conversationId}/unarchive`, {
+    method: "PATCH",
+  }, accessToken);
+}
+
+export function getDirectConversationAttachments(accessToken: string | null | undefined, conversationId: string) {
+  return authenticatedApiRequest<DirectConversationAttachmentsResponse>(`/messages/conversations/${conversationId}/attachments`, {
+    method: "GET",
+  }, accessToken);
+}
+
 export function createDirectMessage(accessToken: string | null | undefined, conversationId: string, body: CreateDirectMessagePayload) {
   return authenticatedApiRequest<DirectMessage>(`/messages/conversations/${conversationId}/messages`, {
     method: "POST",
+    body: JSON.stringify(body),
+  }, accessToken);
+}
+
+export function reportDirectMessage(
+  accessToken: string | null | undefined,
+  conversationId: string,
+  messageId: string,
+  body: { reason: DirectMessageReportReason; message?: string },
+) {
+  return authenticatedApiRequest<{ success: boolean; reportId: string; status: DirectMessageReportStatus }>(`/messages/conversations/${conversationId}/messages/${messageId}/reports`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  }, accessToken);
+}
+
+export function blockDirectMessageUser(accessToken: string | null | undefined, userId: string, reason?: string) {
+  return authenticatedApiRequest<{ success: boolean; blockId: string; blockedUser: DirectMessageUser }>(`/messages/blocks/${userId}`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  }, accessToken);
+}
+
+export function getDirectMessageReports(accessToken: string | null | undefined) {
+  return authenticatedApiRequest<{ reports: DirectMessageReport[]; total: number; pending: number }>("/messages/reports", {
+    method: "GET",
+  }, accessToken);
+}
+
+export function moderateDirectMessageReport(
+  accessToken: string | null | undefined,
+  reportId: string,
+  body: { status: DirectMessageReportStatus; deleteMessage?: boolean; note?: string },
+) {
+  return authenticatedApiRequest<{ success: boolean; report: DirectMessageReport }>(`/messages/reports/${reportId}`, {
+    method: "PATCH",
     body: JSON.stringify(body),
   }, accessToken);
 }
@@ -1900,6 +3197,12 @@ export function getUnreadNotificationCount(accessToken?: string | null) {
   }, accessToken);
 }
 
+export function getNotificationSummary(accessToken?: string | null) {
+  return authenticatedApiRequest<MemberNotificationSummary>("/notifications/summary", {
+    method: "GET",
+  }, accessToken);
+}
+
 export function markNotificationRead(accessToken: string | null | undefined, id: string) {
   return authenticatedApiRequest<MemberNotification>(`/notifications/${id}/read`, {
     method: "PATCH",
@@ -1909,6 +3212,22 @@ export function markNotificationRead(accessToken: string | null | undefined, id:
 export function markAllNotificationsRead(accessToken?: string | null) {
   return authenticatedApiRequest<{ success: boolean; unreadCount: number }>("/notifications/read-all", {
     method: "PATCH",
+  }, accessToken);
+}
+
+export function getNotificationPreferences(accessToken?: string | null) {
+  return authenticatedApiRequest<MemberNotificationPreference[]>("/notifications/preferences", {
+    method: "GET",
+  }, accessToken);
+}
+
+export function updateNotificationPreferences(
+  accessToken: string | null | undefined,
+  preferences: Array<Pick<MemberNotificationPreference, "type" | "platform" | "email" | "whatsapp" | "push" | "frequency">>,
+) {
+  return authenticatedApiRequest<MemberNotificationPreference[]>("/notifications/preferences", {
+    method: "PATCH",
+    body: JSON.stringify({ preferences }),
   }, accessToken);
 }
 

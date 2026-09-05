@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import type { ChangeEvent, ComponentType, FocusEvent, KeyboardEvent, ReactNode } from "react";
 import {
   AtSign,
@@ -22,12 +22,33 @@ import {
   Trash2,
   Upload,
   UserRound,
+  Workflow,
   X,
 } from "lucide-react";
 import { MemberShell } from "@/components/member-shell";
 import { useReferenceDisciplines } from "@/hooks/use-reference-disciplines";
-import { getApiErrorMessage, updateMemberProfile, uploadProfileAsset } from "@/lib/api";
-import type { AuthMeResponse, AuthUser, MemberProfile, OrganizationProfile, PartnerProfile, UploadProfileAssetKind } from "@/lib/api";
+import {
+  getApiErrorMessage,
+  getMemberAccountEvolution,
+  getNotificationPreferences,
+  requestMemberAccountEvolution,
+  updateMemberProfile,
+  updateNotificationPreferences,
+  uploadProfileAsset,
+} from "@/lib/api";
+import type {
+  AccountEvolutionRequest,
+  AuthMeResponse,
+  AuthUser,
+  MemberAccountEvolutionResponse,
+  MemberNotificationPreference,
+  MemberProfile,
+  NotificationFrequency,
+  NotificationType,
+  OrganizationProfile,
+  PartnerProfile,
+  UploadProfileAssetKind,
+} from "@/lib/api";
 import { buildInitials, getMemberDisplayName } from "@/lib/member-display";
 import {
   formatCustomLanguage,
@@ -78,11 +99,12 @@ type ProfileEditorProps = {
   initialForm: SettingsForm;
 };
 
-type SettingsTabId = "profile" | "account" | "security" | "notifications" | "privacy" | "accessibility" | "activity";
+type SettingsTabId = "profile" | "account" | "journey" | "security" | "notifications" | "privacy" | "accessibility" | "activity";
 
 const settingsTabs: Array<{ id: SettingsTabId; label: string; icon: ComponentType<{ "aria-hidden"?: boolean; strokeWidth?: number }> }> = [
   { id: "profile", label: "Profil", icon: UserRound },
   { id: "account", label: "Compte", icon: AtSign },
+  { id: "journey", label: "Parcours", icon: Workflow },
   { id: "security", label: "Sécurité", icon: LockKeyhole },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "privacy", label: "Confidentialité", icon: Eye },
@@ -90,12 +112,28 @@ const settingsTabs: Array<{ id: SettingsTabId; label: string; icon: ComponentTyp
   { id: "activity", label: "Activité", icon: FileText },
 ];
 
-const notificationSettings = [
-  { title: "Opportunités", text: "Appels à projets, missions, résidences et financements.", icon: Bell, enabled: true },
-  { title: "Formations", text: "Workshops, masterclass, rappels et ressources liées.", icon: Bell, enabled: true },
-  { title: "Messages", text: "Conversations, réponses et nouvelles mises en relation.", icon: Bell, enabled: true },
-  { title: "Agenda", text: "Événements, visites, panels et échéances importantes.", icon: Bell, enabled: false },
-];
+const notificationLabels: Record<NotificationType, { title: string; text: string }> = {
+  SYSTEM: {
+    title: "Informations importantes",
+    text: "Sécurité, compte, annonces officielles et décisions CCA.",
+  },
+  TRAINING: {
+    title: "Formations",
+    text: "Workshops, masterclass, rappels, inscriptions et certificats liés.",
+  },
+  OPPORTUNITY: {
+    title: "Opportunités",
+    text: "Appels à projets, missions, résidences, financements et concours.",
+  },
+  CERTIFICATE: {
+    title: "Certificats",
+    text: "Badges, attestations et documents disponibles dans votre parcours.",
+  },
+  MESSAGE: {
+    title: "Messages privés",
+    text: "Conversations, réponses, collaborations et nouvelles mises en relation.",
+  },
+};
 
 const privacySettings = [
   { title: "Creative ID visible", text: "Afficher votre profil dans l’espace membre CCA.", icon: Eye, enabled: true },
@@ -171,8 +209,9 @@ export function SettingsPage() {
             ) : null}
 
             {activeTab === "account" ? <SettingsAccountPanel user={user} displayName={displayName} /> : null}
+            {activeTab === "journey" ? <SettingsJourneyPanel accessToken={accessToken} user={user} profile={profile} /> : null}
             {activeTab === "security" ? <SettingsSecurityPanel user={user} /> : null}
-            {activeTab === "notifications" ? <SettingsTogglePanel title="Notifications" items={notificationSettings} /> : null}
+            {activeTab === "notifications" ? <SettingsNotificationPanel accessToken={accessToken} /> : null}
             {activeTab === "privacy" ? <SettingsTogglePanel title="Confidentialité" items={privacySettings} /> : null}
             {activeTab === "accessibility" ? <SettingsAccessibilityPanel /> : null}
             {activeTab === "activity" ? <SettingsActivityPanel user={user} profile={profile} /> : null}
@@ -237,6 +276,191 @@ function SettingsAccountPanel({ user, displayName }: { user: AuthUser | null; di
   );
 }
 
+function SettingsJourneyPanel({ accessToken, user, profile }: { accessToken: string | null; user: AuthUser | null; profile: MemberProfile | null }) {
+  const [evolution, setEvolution] = useState<MemberAccountEvolutionResponse | null>(null);
+  const [motivation, setMotivation] = useState("");
+  const [portfolioUrl, setPortfolioUrl] = useState(profile?.portfolioUrl ?? "");
+  const [cvUrl, setCvUrl] = useState(profile?.cvUrl ?? "");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!accessToken) {
+      setIsLoading(false);
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    getMemberAccountEvolution(accessToken)
+      .then((response) => {
+        if (isMounted) {
+          setEvolution(response);
+        }
+      })
+      .catch((requestError) => {
+        if (isMounted) {
+          setError(getApiErrorMessage(requestError, "Le parcours n'a pas pu être chargé."));
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [accessToken]);
+
+  const hasPendingCreatorRequest = evolution?.requests.some((request) => (
+    request.requestedType === "CREATOR" && request.status === "PENDING"
+  )) ?? false;
+  const canRequestCreator = evolution?.availableTargets.some((target) => target.type === "CREATOR" && target.mode === "request") ?? false;
+  const hasAutomaticLearner = evolution?.availableTargets.some((target) => target.type === "LEARNER" && target.mode === "automatic_training") ?? false;
+  const accountType = evolution?.accountType ?? user?.type ?? "";
+  const isPublic = accountType === "PUBLIC";
+  const isLearner = accountType === "LEARNER";
+  const isCreator = accountType === "CREATOR";
+  const isStructure = accountType === "ORGANIZATION" || accountType === "PARTNER";
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!accessToken || !canRequestCreator || hasPendingCreatorRequest) {
+      return;
+    }
+
+    setIsSaving(true);
+    setMessage("");
+    setError("");
+
+    try {
+      const response = await requestMemberAccountEvolution(accessToken, {
+        requestedType: "CREATOR",
+        motivation,
+        portfolioUrl,
+        cvUrl,
+      });
+      const refreshed = await getMemberAccountEvolution(accessToken);
+      setEvolution(refreshed);
+      setMotivation("");
+      setMessage(response.message);
+    } catch (requestError) {
+      setError(getApiErrorMessage(requestError, "La demande n'a pas pu être envoyée."));
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <section className="member-card settings-panel settings-journey-panel">
+      <div className="member-card-title">
+        <div>
+          <h2>Parcours</h2>
+          <p>{journeyIntroText(accountType)}</p>
+        </div>
+      </div>
+
+      {isLoading ? <p className="settings-muted">Chargement du parcours...</p> : null}
+      {error ? <p className="settings-form-error">{error}</p> : null}
+      {message ? <p className="settings-form-success">{message}</p> : null}
+
+      <div className="settings-journey-stack">
+        <article className="settings-journey-status-card">
+          <span className="settings-journey-status-icon">
+            <Sparkles aria-hidden="true" strokeWidth={1.8} />
+          </span>
+          <div>
+            <span>Statut actuel</span>
+            <strong>{accountTypeName(accountType)}</strong>
+            <p>{journeyCurrentText(accountType)}</p>
+          </div>
+        </article>
+
+        {isPublic && hasAutomaticLearner ? (
+          <div className="settings-note-card settings-journey-action-card">
+            <strong>Prochaine étape : devenir apprenant</strong>
+            <p>Inscrivez-vous à une formation CCA pour activer automatiquement votre parcours apprenant.</p>
+            <a className="member-secondary-button" href="/espace-membre/formations">Voir les formations</a>
+          </div>
+        ) : null}
+
+        {canRequestCreator ? (
+          <form className="settings-journey-form" onSubmit={handleSubmit}>
+            <div className="member-card-title">
+              <div>
+                <h3>{isLearner ? "Prochaine étape : passer créateur" : "Demander un profil créateur"}</h3>
+                <p>{isLearner ? "Lorsque votre démarche et votre portfolio sont prêts, CCA peut valider votre profil créateur." : "Si vous avez déjà une pratique créative claire, vous pouvez demander une validation CCA."}</p>
+              </div>
+            </div>
+            <div className="settings-field-grid">
+              <SettingsInput label="Portfolio" icon={Link2} value={portfolioUrl} onChange={(event) => setPortfolioUrl(event.target.value)} placeholder="https://..." />
+              <SettingsInput label="CV ou dossier" icon={FileText} value={cvUrl} onChange={(event) => setCvUrl(event.target.value)} placeholder="https://..." />
+            </div>
+            <SettingsTextarea
+              label="Motivation"
+              value={motivation}
+              onChange={(event) => setMotivation(event.target.value)}
+              placeholder="Expliquez votre discipline, votre démarche et pourquoi votre profil doit être validé comme créateur."
+            />
+            <button className="settings-save-button" type="submit" disabled={isSaving || hasPendingCreatorRequest}>
+              <ShieldCheck aria-hidden="true" strokeWidth={1.8} />
+              {hasPendingCreatorRequest ? "Demande en attente" : isSaving ? "Envoi..." : "Envoyer la demande"}
+            </button>
+          </form>
+        ) : null}
+
+        {isCreator ? (
+          <div className="settings-note-card settings-journey-action-card">
+            <strong>Profil créateur actif</strong>
+            <p>Votre prochaine priorité est de maintenir votre Creative ID, votre portfolio et vos disponibilités à jour.</p>
+            <a className="member-secondary-button" href="/espace-membre/creative-id">Mettre à jour le Creative ID</a>
+          </div>
+        ) : null}
+
+        {isStructure ? (
+          <div className="settings-note-card settings-journey-action-card">
+            <strong>Compte structure actif</strong>
+            <p>Votre parcours se concentre sur les opportunités, les collaborations et la visibilité de votre structure.</p>
+          </div>
+        ) : null}
+
+        {evolution?.requests.length ? <AccountEvolutionHistory requests={evolution.requests} /> : null}
+      </div>
+    </section>
+  );
+}
+
+function AccountEvolutionHistory({ requests }: { requests: AccountEvolutionRequest[] }) {
+  return (
+    <div className="settings-note-card">
+      <strong>Historique des demandes</strong>
+      {requests.length ? (
+        <div className="settings-history-list">
+          {requests.map((request) => (
+            <article key={request.id}>
+              <div>
+                <span>{accountTypeName(request.fromType)} vers {accountTypeName(request.requestedType)}</span>
+                <small>{new Date(request.createdAt).toLocaleDateString("fr-FR")}</small>
+              </div>
+              <strong>{accountEvolutionStatusName(request.status)}</strong>
+              {request.note ? <p>{request.note}</p> : null}
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p>Aucune demande de changement de parcours pour le moment.</p>
+      )}
+    </div>
+  );
+}
+
 function SettingsSecurityPanel({ user }: { user: AuthUser | null }) {
   return (
     <section className="member-card settings-panel">
@@ -281,6 +505,157 @@ function SettingsTogglePanel({
         ))}
       </div>
     </section>
+  );
+}
+
+function SettingsNotificationPanel({ accessToken }: { accessToken: string | null }) {
+  const [preferences, setPreferences] = useState<MemberNotificationPreference[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!accessToken) {
+      setIsLoading(false);
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    getNotificationPreferences(accessToken)
+      .then((items) => {
+        if (isMounted) {
+          setPreferences(sortNotificationPreferences(items));
+        }
+      })
+      .catch((err) => {
+        if (isMounted) {
+          setError(getApiErrorMessage(err, "Impossible de charger les préférences de notifications."));
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [accessToken]);
+
+  async function savePreference(nextPreference: MemberNotificationPreference) {
+    if (!accessToken) {
+      setError("Connectez-vous pour modifier vos notifications.");
+      return;
+    }
+
+    const nextPreferences = preferences.map((preference) =>
+      preference.type === nextPreference.type ? nextPreference : preference,
+    );
+
+    setPreferences(nextPreferences);
+    setIsSaving(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const saved = await updateNotificationPreferences(accessToken, nextPreferences.map(toNotificationPreferencePayload));
+      setPreferences(sortNotificationPreferences(saved));
+      setMessage("Préférences mises à jour.");
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Impossible de sauvegarder ces préférences."));
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <section className="member-card settings-panel">
+      <div className="member-card-title">
+        <div>
+          <h2>Notifications</h2>
+          <p>Choisissez les alertes utiles à votre parcours CCA et les canaux à préparer.</p>
+        </div>
+      </div>
+
+      {error ? <p className="auth-form-error">{error}</p> : null}
+      {message ? <p className="auth-form-success">{message}</p> : null}
+
+      {isLoading ? (
+        <div className="settings-empty-state">Chargement des préférences...</div>
+      ) : (
+        <div className="settings-notification-list" aria-busy={isSaving}>
+          {preferences.map((preference) => {
+            const label = notificationLabels[preference.type];
+
+            return (
+              <article key={preference.type} className="settings-notification-item">
+                <Bell aria-hidden="true" strokeWidth={1.8} />
+                <div>
+                  <strong>{label.title}</strong>
+                  <span>{label.text}</span>
+                </div>
+                <div className="settings-notification-controls">
+                  <NotificationSwitch
+                    label="Plateforme"
+                    enabled={preference.platform}
+                    onToggle={() => savePreference({ ...preference, platform: !preference.platform })}
+                  />
+                  <NotificationSwitch
+                    label="E-mail"
+                    enabled={preference.email}
+                    onToggle={() => savePreference({ ...preference, email: !preference.email })}
+                  />
+                  <NotificationSwitch
+                    label="WhatsApp"
+                    enabled={preference.whatsapp}
+                    onToggle={() => savePreference({ ...preference, whatsapp: !preference.whatsapp })}
+                  />
+                  <NotificationSwitch
+                    label="Push"
+                    enabled={preference.push}
+                    onToggle={() => savePreference({ ...preference, push: !preference.push })}
+                  />
+                  <label>
+                    <span>Fréquence</span>
+                    <select
+                      value={preference.frequency}
+                      onChange={(event) => savePreference({ ...preference, frequency: event.target.value as NotificationFrequency })}
+                    >
+                      <option value="IMMEDIATE">Immédiat</option>
+                      <option value="DAILY">Résumé quotidien</option>
+                      <option value="WEEKLY">Résumé hebdomadaire</option>
+                      <option value="DISABLED">Désactivé</option>
+                    </select>
+                  </label>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function NotificationSwitch({
+  label,
+  enabled,
+  onToggle,
+}: {
+  label: string;
+  enabled: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button className={enabled ? "is-enabled" : undefined} type="button" aria-pressed={enabled} onClick={onToggle}>
+      {label}
+      <span>{enabled ? "Actif" : "Off"}</span>
+    </button>
   );
 }
 
@@ -403,6 +778,23 @@ function SettingsActivityItem({ title, text }: { title: string; text: string }) 
       </div>
     </article>
   );
+}
+
+function sortNotificationPreferences(preferences: MemberNotificationPreference[]) {
+  const order: NotificationType[] = ["SYSTEM", "MESSAGE", "OPPORTUNITY", "TRAINING", "CERTIFICATE"];
+
+  return [...preferences].sort((left, right) => order.indexOf(left.type) - order.indexOf(right.type));
+}
+
+function toNotificationPreferencePayload(preference: MemberNotificationPreference) {
+  return {
+    type: preference.type,
+    platform: preference.platform,
+    email: preference.email,
+    whatsapp: preference.whatsapp,
+    push: preference.push,
+    frequency: preference.frequency,
+  };
 }
 
 function SettingsProfileEditor({
@@ -995,6 +1387,7 @@ function persistCurrentMember(response: AuthMeResponse) {
 
 function accountTypeName(type?: string) {
   const labels: Record<string, string> = {
+    PUBLIC: "Public",
     CREATOR: "Créateur",
     LEARNER: "Apprenant",
     ORGANIZATION: "Organisation",
@@ -1003,6 +1396,43 @@ function accountTypeName(type?: string) {
   };
 
   return type ? labels[type] ?? "Membre" : "Membre";
+}
+
+function journeyIntroText(type?: string) {
+  const labels: Record<string, string> = {
+    PUBLIC: "Commencez par une formation CCA ou demandez une validation créateur si votre démarche est déjà prête.",
+    LEARNER: "Votre prochaine évolution naturelle est le profil créateur, après validation de votre démarche par CCA.",
+    CREATOR: "Votre statut créateur est actif. Gardez votre Creative ID et votre portfolio à jour.",
+    ORGANIZATION: "Votre compte structure est actif. Les actions utiles concernent la visibilité et les collaborations.",
+    PARTNER: "Votre compte partenaire est actif. Les actions utiles concernent les opportunités et collaborations.",
+    ADMIN: "Votre compte admin sert à gérer, valider et accompagner les parcours membres.",
+  };
+
+  return type ? labels[type] ?? "Consultez les actions disponibles pour votre compte." : "Consultez les actions disponibles pour votre compte.";
+}
+
+function journeyCurrentText(type?: string) {
+  const labels: Record<string, string> = {
+    PUBLIC: "Vous pouvez consulter l'espace membre et commencer votre parcours avec une formation CCA.",
+    LEARNER: "Vous suivez un parcours d'apprentissage et pouvez évoluer vers un profil créateur validé.",
+    CREATOR: "Votre profil créatif est reconnu dans la communauté CCA.",
+    ORGANIZATION: "Votre espace sert à présenter votre structure et gérer ses collaborations.",
+    PARTNER: "Votre espace sert à suivre vos collaborations et opportunités avec CCA.",
+    ADMIN: "Vous disposez des droits de gestion et de validation des parcours.",
+  };
+
+  return type ? labels[type] ?? "Votre compte est actif dans l'espace membre CCA." : "Votre compte est actif dans l'espace membre CCA.";
+}
+
+function accountEvolutionStatusName(status?: string) {
+  const labels: Record<string, string> = {
+    PENDING: "En attente",
+    APPROVED: "Approuvée",
+    REJECTED: "Refusée",
+    CANCELLED: "Annulée",
+  };
+
+  return status ? labels[status] ?? "En attente" : "En attente";
 }
 
 function accountStatusName(status?: string) {

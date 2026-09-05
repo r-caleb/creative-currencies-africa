@@ -32,6 +32,8 @@ test("defines core Creative Currencies platform models", async () => {
     "OpportunityApplication",
     "Event",
     "EventRegistration",
+    "GalleryAlbum",
+    "GalleryPhoto",
     "Resource",
     "Certificate",
     "Partner",
@@ -69,6 +71,12 @@ test("defines core Creative Currencies platform models", async () => {
   assert.match(schema, /enum CommunityGroupRole/);
   assert.match(schema, /enum CommunityGroupInvitationStatus/);
   assert.match(schema, /enum CommunityGroupMessageType/);
+  assert.match(schema, /enum GalleryAlbumCategory/);
+  assert.match(schema, /BACKSTAGE/);
+  assert.match(schema, /ACTIVATION/);
+  assert.match(schema, /model GalleryAlbum[\s\S]*?featuredOnLanding\s+Boolean\s+@default\(false\)/);
+  assert.match(schema, /model GalleryAlbum[\s\S]*?photos\s+GalleryPhoto\[\]/);
+  assert.match(schema, /model GalleryPhoto[\s\S]*?album\s+GalleryAlbum/);
   assert.match(schema, /model CommunityGroup[\s\S]*?avatarUrl\s+String\?/);
   assert.match(schema, /model NetworkConnection/);
   assert.match(schema, /@@unique\(\[ownerId, memberId\]\)/);
@@ -85,6 +93,10 @@ test("defines core Creative Currencies platform models", async () => {
   assert.match(schema, /slug\s+String\s+@unique/);
   assert.match(schema, /isActive\s+Boolean\s+@default\(true\)/);
   assert.match(schema, /sortOrder\s+Int\s+@default\(0\)/);
+  assert.match(schema, /model Partner[\s\S]*?type\s+String\?/);
+  assert.match(schema, /model Partner[\s\S]*?description\s+String\?/);
+  assert.match(schema, /model Partner[\s\S]*?logoUrl\s+String\?/);
+  assert.match(schema, /model Partner[\s\S]*?published\s+Boolean\s+@default\(true\)/);
 });
 
 test("keeps backend bootstrap aligned with the frontend and API contract", async () => {
@@ -130,6 +142,19 @@ test("keeps backend bootstrap aligned with the frontend and API contract", async
     groupAvatarMigration,
     disciplineMigration,
     uploadMigration,
+    adminController,
+    adminService,
+    createAdminTrainingDto,
+    updateAdminTrainingDto,
+    createAdminEventDto,
+    updateAdminEventDto,
+    listAdminContentQueryDto,
+    createPartnerDto,
+    updatePartnerDto,
+    listAdminReferenceQueryDto,
+    partnerMigration,
+    landingFeatureMigration,
+    schema,
   ] =
     await Promise.all([
     readFile(new URL("../src/main.ts", import.meta.url), "utf8"),
@@ -173,6 +198,19 @@ test("keeps backend bootstrap aligned with the frontend and API contract", async
     readFile(new URL("../prisma/migrations/20260825151500_add_community_group_avatar/migration.sql", import.meta.url), "utf8"),
     readFile(new URL("../prisma/migrations/20260819124500_add_disciplines_reference/migration.sql", import.meta.url), "utf8"),
     readFile(new URL("../prisma/migrations/20260819191000_add_profile_logo_uploads/migration.sql", import.meta.url), "utf8"),
+    readFile(new URL("../src/admin/admin.controller.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/admin/admin.service.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/admin/dto/create-admin-training.dto.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/admin/dto/update-admin-training.dto.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/admin/dto/create-admin-event.dto.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/admin/dto/update-admin-event.dto.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/admin/dto/list-admin-content.query.dto.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/admin/dto/create-partner.dto.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/admin/dto/update-partner.dto.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/admin/dto/list-admin-reference.query.dto.ts", import.meta.url), "utf8"),
+    readFile(new URL("../prisma/migrations/20260902213119_add_partner_backoffice_fields/migration.sql", import.meta.url), "utf8"),
+    readFile(new URL("../prisma/migrations/20260903102000_add_landing_feature_flags/migration.sql", import.meta.url), "utf8"),
+    readFile(new URL("../prisma/schema.prisma", import.meta.url), "utf8"),
   ]);
 
   assert.match(main, /setGlobalPrefix\("api"\)/);
@@ -254,6 +292,9 @@ test("keeps backend bootstrap aligned with the frontend and API contract", async
   assert.match(verifyPasswordResetCodeDto, /Le code de vérification doit contenir 6 chiffres/);
   assert.match(emailService, /EMAIL_PROVIDER/);
   assert.match(emailService, /console/);
+  assert.match(emailService, /sendgrid/);
+  assert.match(emailService, /SENDGRID_TEMPLATE_ID_OTP/);
+  assert.match(emailService, /SENDGRID_TEMPLATE_ID_RESET_PASSWORD/);
   assert.match(emailService, /sendPasswordResetCode/);
   assert.match(memberController, /@Controller\("member"\)/);
   assert.match(memberController, /@Patch\("profile"\)/);
@@ -293,15 +334,75 @@ test("keeps backend bootstrap aligned with the frontend and API contract", async
   assert.match(updateMemberProfileDto, /value !== ""/);
   assert.match(referenceController, /@Controller\("reference"\)/);
   assert.match(referenceController, /@Get\("disciplines"\)/);
+  assert.match(referenceController, /@Get\("partners"\)/);
   assert.match(referenceController, /@Post\("disciplines"\)/);
   assert.match(referenceController, /@Patch\("disciplines\/:id"\)/);
   assert.match(referenceController, /JwtAuthGuard/);
   assert.match(referenceController, /@Get\("onboarding-fields"\)/);
   assert.match(referenceService, /prisma\.discipline\.findMany/);
   assert.match(referenceService, /ensureDefaultDisciplines/);
+  assert.match(referenceService, /getPartners/);
+  assert.match(referenceService, /published: true/);
   assert.match(referenceService, /createDiscipline/);
   assert.match(referenceService, /updateDiscipline/);
   assert.match(referenceService, /AccountType\.ADMIN/);
+  assert.match(schema, /model Training[\s\S]*?featuredOnLanding\s+Boolean\s+@default\(false\)/);
+  assert.match(schema, /model Event[\s\S]*?featuredOnLanding\s+Boolean\s+@default\(false\)/);
+  assert.match(adminController, /@Post\("uploads"\)/);
+  assert.match(adminController, /FileInterceptor\("file"/);
+  assert.match(adminController, /multipart\/form-data/);
+  assert.match(adminController, /@Get\("trainings"\)/);
+  assert.match(adminController, /@Post\("trainings"\)/);
+  assert.match(adminController, /@Patch\("trainings\/:id"\)/);
+  assert.match(adminController, /@Delete\("trainings\/:id"\)/);
+  assert.match(adminController, /@Get\("events"\)/);
+  assert.match(adminController, /@Post\("events"\)/);
+  assert.match(adminController, /@Patch\("events\/:id"\)/);
+  assert.match(adminController, /@Delete\("events\/:id"\)/);
+  assert.match(adminController, /@Get\("disciplines"\)/);
+  assert.match(adminController, /@Post\("disciplines"\)/);
+  assert.match(adminController, /@Patch\("disciplines\/:id"\)/);
+  assert.match(adminController, /@Delete\("disciplines\/:id"\)/);
+  assert.match(adminController, /@Get\("partners"\)/);
+  assert.match(adminController, /@Post\("partners"\)/);
+  assert.match(adminController, /@Patch\("partners\/:id"\)/);
+  assert.match(adminController, /@Delete\("partners\/:id"\)/);
+  assert.match(adminService, /listTrainings/);
+  assert.match(adminService, /createTraining/);
+  assert.match(adminService, /updateTraining/);
+  assert.match(adminService, /deleteTraining/);
+  assert.match(adminService, /listEvents/);
+  assert.match(adminService, /createEvent/);
+  assert.match(adminService, /updateEvent/);
+  assert.match(adminService, /deleteEvent/);
+  assert.match(adminService, /uploadAdminAsset/);
+  assert.match(adminService, /validateAdminUpload/);
+  assert.match(adminService, /PUBLIC_BACKEND_URL/);
+  assert.match(adminService, /writeFile/);
+  assert.match(adminService, /featuredOnLanding: true/);
+  assert.match(adminService, /data: \{ featuredOnLanding: false \}/);
+  assert.match(adminService, /listDisciplines/);
+  assert.match(adminService, /createDiscipline/);
+  assert.match(adminService, /updateDiscipline/);
+  assert.match(adminService, /deleteDiscipline/);
+  assert.match(adminService, /listPartners/);
+  assert.match(adminService, /createPartner/);
+  assert.match(adminService, /updatePartner/);
+  assert.match(adminService, /deletePartner/);
+  assert.match(createAdminTrainingDto, /CreateAdminTrainingDto/);
+  assert.match(createAdminTrainingDto, /featuredOnLanding/);
+  assert.match(updateAdminTrainingDto, /PartialType\(CreateAdminTrainingDto\)/);
+  assert.match(createAdminEventDto, /CreateAdminEventDto/);
+  assert.match(createAdminEventDto, /featuredOnLanding/);
+  assert.match(updateAdminEventDto, /PartialType\(CreateAdminEventDto\)/);
+  assert.match(listAdminContentQueryDto, /ListAdminContentQueryDto/);
+  assert.match(createPartnerDto, /CreatePartnerDto/);
+  assert.match(createPartnerDto, /logoUrl/);
+  assert.match(updatePartnerDto, /UpdatePartnerDto/);
+  assert.match(listAdminReferenceQueryDto, /published/);
+  assert.match(partnerMigration, /ALTER TABLE "Partner"/);
+  assert.match(landingFeatureMigration, /ALTER TABLE "Training" ADD COLUMN "featuredOnLanding"/);
+  assert.match(landingFeatureMigration, /ALTER TABLE "Event" ADD COLUMN "featuredOnLanding"/);
   assert.match(referenceService, /Arts numériques/);
   assert.match(referenceService, /Mode, couture & stylisme/);
   assert.match(referenceService, /Beauté, coiffure & esthétique/);
@@ -463,6 +564,9 @@ test("keeps backend bootstrap aligned with the frontend and API contract", async
   assert.match(envExample, /JWT_ACCESS_SECRET/);
   assert.match(envExample, /JWT_REFRESH_SECRET/);
   assert.match(envExample, /EMAIL_PROVIDER/);
+  assert.match(envExample, /SENDGRID_API_KEY/);
+  assert.match(envExample, /SENDGRID_TEMPLATE_ID_OTP/);
+  assert.match(envExample, /SENDGRID_TEMPLATE_ID_RESET_PASSWORD/);
   assert.match(envExample, /PUBLIC_BACKEND_URL/);
   assert.match(envExample, /UPLOADS_DIR/);
   assert.match(envExample, /EMAIL_VERIFICATION_OTP_TTL_MINUTES/);

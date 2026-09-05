@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiOperation } from "@nestjs/swagger";
 import type { AuthUser } from "../auth/auth.types";
@@ -126,6 +126,13 @@ export class PublicationController {
   @ApiCreatedResponse({ description: "Commentaire créé" })
   comment(@Req() req: AuthedRequest, @Param("id") id: string, @Body() body: CreatePublicationCommentDto) {
     return this.publicationService.addComment(req.user, id, body);
+  }
+
+  @Delete(":id/comments/:commentId")
+  @ApiOperation({ summary: "Supprimer un commentaire" })
+  @ApiOkResponse({ description: "Commentaire supprimé" })
+  deleteComment(@Req() req: AuthedRequest, @Param("id") id: string, @Param("commentId") commentId: string) {
+    return this.publicationService.deleteComment(req.user, id, commentId);
   }
 
   @Post(":id/reactions")

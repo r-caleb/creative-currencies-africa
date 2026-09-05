@@ -39,7 +39,7 @@ export class CreateGroupDto {
   @IsString({ each: true, message: "Chaque mot-clé doit être un texte." })
   tags?: string[];
 
-  @ApiPropertyOptional({ enum: CommunityGroupVisibility, example: CommunityGroupVisibility.MEMBERS })
+  @ApiPropertyOptional({ enum: CommunityGroupVisibility, example: CommunityGroupVisibility.PUBLIC })
   @IsOptional()
   @IsEnum(CommunityGroupVisibility, { message: "Choisissez une visibilité valide." })
   visibility?: CommunityGroupVisibility;

@@ -16,9 +16,9 @@ export class CreateDisciplineDto {
   @IsBoolean({ message: "Le statut actif doit être vrai ou faux." })
   isActive?: boolean;
 
-  @ApiPropertyOptional({ example: 40 })
+  @ApiPropertyOptional({ example: 1 })
   @IsOptional()
-  @IsInt({ message: "L'ordre d'affichage doit être un nombre entier." })
-  @Min(0, { message: "L'ordre d'affichage ne peut pas être négatif." })
+  @IsInt({ message: "Le numéro d'affichage doit être un nombre entier." })
+  @Min(1, { message: "Le numéro d'affichage doit être supérieur ou égal à 1." })
   sortOrder?: number;
 }

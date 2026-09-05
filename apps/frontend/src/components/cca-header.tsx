@@ -1,6 +1,7 @@
 "use client";
 
 import { Menu, Moon, Sun, X } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 type Theme = "dark" | "light";
@@ -12,19 +13,21 @@ function isTheme(value: string | undefined | null): value is Theme {
 }
 
 const navItems = [
-  { label: "Accueil", href: "#accueil" },
-  { label: "À propos", href: "#a-propos" },
-  { label: "Événements", href: "#evenement" },
-  { label: "Industries", href: "#industries" },
-  { label: "Créateurs", href: "#createurs" },
-  { label: "Communauté", href: "#communaute" },
+  { label: "Accueil", href: "/#accueil", sectionId: "accueil" },
+  { label: "À propos", href: "/#a-propos", sectionId: "a-propos" },
+  { label: "Événements", href: "/#evenement", sectionId: "evenement" },
+  { label: "Industries", href: "/#industries", sectionId: "industries" },
+  { label: "Créateurs", href: "/#createurs", sectionId: "createurs" },
+  { label: "Communauté", href: "/#communaute", sectionId: "communaute" },
 ];
 
 export function CcaHeader() {
+  const pathname = usePathname();
+  const isLandingPage = pathname === "/";
   const [theme, setTheme] = useState<Theme>("light");
   const [isThemeReady, setIsThemeReady] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
-  const [activeSection, setActiveSection] = useState(navItems[0].href);
+  const [activeSection, setActiveSection] = useState(navItems[0].sectionId);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -107,17 +110,21 @@ export function CcaHeader() {
   }, []);
 
   useEffect(() => {
-    const sectionIds = navItems.map((item) => item.href.replace("#", ""));
+    if (!isLandingPage) {
+      return;
+    }
+
+    const sectionIds = navItems.map((item) => item.sectionId);
 
     const updateActiveSection = () => {
       const scrollPosition = window.scrollY + 150;
-      let currentSection = navItems[0].href;
+      let currentSection = navItems[0].sectionId;
 
       for (const sectionId of sectionIds) {
         const section = document.getElementById(sectionId);
 
         if (section && section.offsetTop <= scrollPosition) {
-          currentSection = `#${sectionId}`;
+          currentSection = sectionId;
         }
       }
 
@@ -132,7 +139,7 @@ export function CcaHeader() {
       window.removeEventListener("scroll", updateActiveSection);
       window.removeEventListener("resize", updateActiveSection);
     };
-  }, []);
+  }, [isLandingPage]);
 
   return (
     <header
@@ -141,7 +148,7 @@ export function CcaHeader() {
     >
       <a
         className="brand-lockup"
-        href="#accueil"
+        href="/#accueil"
         aria-label="Creative Currencies Africa"
         onClick={() => setIsMobileMenuOpen(false)}
       >
@@ -152,9 +159,9 @@ export function CcaHeader() {
         {navItems.map((item) => (
           <a
             key={item.href}
-            className={activeSection === item.href ? "is-active" : undefined}
+            className={isLandingPage && activeSection === item.sectionId ? "is-active" : undefined}
             href={item.href}
-            aria-current={activeSection === item.href ? "page" : undefined}
+            aria-current={isLandingPage && activeSection === item.sectionId ? "page" : undefined}
           >
             {item.label}
           </a>
@@ -206,9 +213,9 @@ export function CcaHeader() {
           {navItems.map((item) => (
             <a
               key={item.href}
-              className={activeSection === item.href ? "is-active" : undefined}
+              className={isLandingPage && activeSection === item.sectionId ? "is-active" : undefined}
               href={item.href}
-              aria-current={activeSection === item.href ? "page" : undefined}
+              aria-current={isLandingPage && activeSection === item.sectionId ? "page" : undefined}
               onClick={() => setIsMobileMenuOpen(false)}
             >
               {item.label}

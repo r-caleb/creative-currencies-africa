@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
   BookOpen,
+  Download,
+  Eye,
   ExternalLink,
   FileBadge,
   FileText,
@@ -14,13 +16,14 @@ import {
   Search,
   ShieldCheck,
   Star,
+  ThumbsUp,
   UsersRound,
   Video,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { MemberShell } from "@/components/member-shell";
 import { useVisibleItems } from "@/hooks/use-visible-items";
-import { getApiErrorMessage, getMemberResources } from "@/lib/api";
+import { downloadMemberResource, getApiErrorMessage, getMemberResources, toggleMemberResourceUseful, viewMemberResource } from "@/lib/api";
 import type { MemberResource, MemberResourcesResponse } from "@/lib/api";
 import { useAppSelector } from "@/store/hooks";
 
@@ -52,6 +55,7 @@ export function ResourcesPage() {
   const [activeFilter, setActiveFilter] = useState(resourceFilters[0]);
   const [status, setStatus] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [busyResourceKey, setBusyResourceKey] = useState<string | null>(null);
 
   useEffect(() => {
     if (!accessToken) {
@@ -129,6 +133,87 @@ export function ResourcesPage() {
   const officialCount = library.filter((resource) => resource.official).length;
   const trainingCount = data.trainingResources.length;
   const recommendedCount = library.filter((resource) => resource.recommended).length;
+
+  function replaceResource(updatedResource: MemberResource) {
+    setData((current) => ({
+      ...current,
+      library: current.library.map((resource) => (resource.id === updatedResource.id ? updatedResource : resource)),
+      trainingResources: current.trainingResources.map((resource) => (resource.id === updatedResource.id ? updatedResource : resource)),
+      myPublished: current.myPublished.map((resource) => (resource.id === updatedResource.id ? updatedResource : resource)),
+    }));
+  }
+
+  async function handleViewResource(resource: MemberResource) {
+    const fallbackHref = resource.href ?? resource.attachments[0]?.url ?? "";
+
+    if (!fallbackHref) {
+      setStatus("Cette ressource n'a pas encore de fichier ou de lien disponible.");
+      return;
+    }
+
+    if (resource.source !== "resource") {
+      window.open(fallbackHref, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    setBusyResourceKey(`${resource.id}:view`);
+    setStatus("");
+
+    try {
+      const response = await viewMemberResource(accessToken, resource.id);
+      replaceResource(response.resource);
+      window.open(response.resource.href ?? fallbackHref, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      setStatus(getApiErrorMessage(error, "Impossible d'ouvrir cette ressource avec vos droits actuels."));
+    } finally {
+      setBusyResourceKey(null);
+    }
+  }
+
+  async function handleDownloadResource(resource: MemberResource) {
+    const fallbackHref = resource.href ?? resource.attachments[0]?.url ?? "";
+
+    if (!fallbackHref) {
+      setStatus("Cette ressource n'a pas encore de fichier à télécharger.");
+      return;
+    }
+
+    if (resource.source !== "resource") {
+      window.open(fallbackHref, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    setBusyResourceKey(`${resource.id}:download`);
+    setStatus("");
+
+    try {
+      const response = await downloadMemberResource(accessToken, resource.id);
+      replaceResource(response.resource);
+      window.open(response.url ?? response.resource.href ?? fallbackHref, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      setStatus(getApiErrorMessage(error, "Impossible de télécharger cette ressource avec vos droits actuels."));
+    } finally {
+      setBusyResourceKey(null);
+    }
+  }
+
+  async function handleToggleUsefulResource(resource: MemberResource) {
+    if (resource.source !== "resource") {
+      return;
+    }
+
+    setBusyResourceKey(`${resource.id}:useful`);
+    setStatus("");
+
+    try {
+      const response = await toggleMemberResourceUseful(accessToken, resource.id);
+      replaceResource(response.resource);
+    } catch (error) {
+      setStatus(getApiErrorMessage(error, "Impossible de mettre à jour cette ressource."));
+    } finally {
+      setBusyResourceKey(null);
+    }
+  }
 
   return (
     <MemberShell activeItem="Ressources">
@@ -209,7 +294,14 @@ export function ResourcesPage() {
               ) : filteredResources.length ? (
                 <div className="member-resource-list">
                   {visibleResources.visibleItems.map((item) => (
-                    <ResourceRow key={item.id} item={item} />
+                    <ResourceRow
+                      key={item.id}
+                      item={item}
+                      busyKey={busyResourceKey}
+                      onView={handleViewResource}
+                      onDownload={handleDownloadResource}
+                      onToggleUseful={handleToggleUsefulResource}
+                    />
                   ))}
                   {visibleResources.hasMore ? (
                     <div className="member-feed-load-more" ref={visibleResources.loadMoreRef}>
@@ -308,9 +400,22 @@ export function ResourcesPage() {
   );
 }
 
-function ResourceRow({ item }: { item: MemberResource }) {
+function ResourceRow({
+  item,
+  busyKey,
+  onView,
+  onDownload,
+  onToggleUseful,
+}: {
+  item: MemberResource;
+  busyKey: string | null;
+  onView: (resource: MemberResource) => void;
+  onDownload: (resource: MemberResource) => void;
+  onToggleUseful: (resource: MemberResource) => void;
+}) {
   const Icon = resourceIcon(item);
   const href = item.href ?? item.attachments[0]?.url ?? "";
+  const isOfficialResource = item.source === "resource";
 
   return (
     <article>
@@ -320,12 +425,33 @@ function ResourceRow({ item }: { item: MemberResource }) {
         <span>{item.type} · {item.accessLabel}</span>
         <small>{item.meta}</small>
         <p>{item.description}</p>
+        <div className="resource-usage">
+          <span>{item.counts.views} vue{item.counts.views > 1 ? "s" : ""}</span>
+          <span>{item.counts.downloads} téléchargement{item.counts.downloads > 1 ? "s" : ""}</span>
+          <span>{item.counts.usefulMarks} utile{item.counts.usefulMarks > 1 ? "s" : ""}</span>
+        </div>
       </div>
       {href ? (
-        <a className="member-secondary-button" href={href} target="_blank" rel="noreferrer">
-          Consulter
-          <ExternalLink aria-hidden="true" strokeWidth={1.8} />
-        </a>
+        <div className="resource-row-actions">
+          <button className="member-secondary-button" type="button" onClick={() => onView(item)} disabled={busyKey === `${item.id}:view`}>
+            <Eye aria-hidden="true" strokeWidth={1.8} />
+            Voir
+          </button>
+          <button className="member-secondary-button" type="button" onClick={() => onDownload(item)} disabled={busyKey === `${item.id}:download`}>
+            <Download aria-hidden="true" strokeWidth={1.8} />
+            Télécharger
+          </button>
+          {isOfficialResource ? (
+            <button className={`member-secondary-button resource-useful-button${item.isUseful ? " is-active" : ""}`} type="button" onClick={() => onToggleUseful(item)} disabled={busyKey === `${item.id}:useful`}>
+              <ThumbsUp aria-hidden="true" strokeWidth={1.8} />
+              Utile
+            </button>
+          ) : (
+            <a className="member-secondary-button" href={href} target="_blank" rel="noreferrer" aria-label="Ouvrir la ressource communautaire">
+              <ExternalLink aria-hidden="true" strokeWidth={1.8} />
+            </a>
+          )}
+        </div>
       ) : (
         <button className="member-secondary-button" type="button" disabled>
           Indisponible

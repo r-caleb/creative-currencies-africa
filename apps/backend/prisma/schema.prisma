@@ -22,6 +22,13 @@ enum AccountStatus {
   ARCHIVED
 }
 
+enum AccountEvolutionRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
 enum AuthProvider {
   GOOGLE
   APPLE
@@ -98,6 +105,7 @@ enum ApplicationStatus {
   SUBMITTED
   UNDER_REVIEW
   SELECTED
+  ACCEPTED
   REJECTED
   WITHDRAWN
 }
@@ -118,6 +126,16 @@ enum EventRegistrationStatus {
   CANCELLED
 }
 
+enum GalleryAlbumCategory {
+  FORMATION
+  EVENT
+  BACKSTAGE
+  ACTIVATION
+  PARTNER
+  VISIT
+  CONFERENCE
+}
+
 enum CertificateStatus {
   PENDING
   ISSUED
@@ -130,6 +148,27 @@ enum NotificationType {
   OPPORTUNITY
   CERTIFICATE
   MESSAGE
+}
+
+enum NotificationFrequency {
+  IMMEDIATE
+  DAILY
+  WEEKLY
+  DISABLED
+}
+
+enum DirectMessageReportReason {
+  SPAM
+  ABUSE
+  HARASSMENT
+  INAPPROPRIATE
+  OTHER
+}
+
+enum DirectMessageReportStatus {
+  PENDING
+  REVIEWED
+  DISMISSED
 }
 
 enum PublicationType {
@@ -241,41 +280,81 @@ model User {
   status          AccountStatus @default(PENDING)
   emailVerifiedAt DateTime?
 
-  sessions                      AuthSession[]
-  identities                    UserIdentity[]
-  verificationTokens            VerificationToken[]
-  profile                       CreativeProfile?
-  organizationProfile           OrganizationProfile?
-  partnerProfile                PartnerProfile?
-  portfolioItems                PortfolioItem[]
-  enrollments                   TrainingEnrollment[]
-  opportunityApplications       OpportunityApplication[]
-  eventRegistrations            EventRegistration[]
-  certificates                  Certificate[]
-  uploadedResources             Resource[]                      @relation("ResourceUploader")
-  notifications                 Notification[]
-  publications                  Publication[]                   @relation("PublicationAuthor")
-  publicationComments           PublicationComment[]
-  publicationReactions          PublicationReaction[]
-  publicationShares             PublicationShare[]
-  publicationReports            PublicationReport[]             @relation("PublicationReporter")
-  publicationMentions           PublicationMention[]
-  networkConnections            NetworkConnection[]             @relation("NetworkConnectionOwner")
-  networkSavedBy                NetworkConnection[]             @relation("NetworkConnectionMember")
-  communityGroupsOwned          CommunityGroup[]                @relation("CommunityGroupOwner")
-  communityGroupMemberships     CommunityGroupMembership[]
-  communityGroupMessages        CommunityGroupMessage[]
-  communityGroupInvitesSent     CommunityGroupInvitation[]      @relation("CommunityGroupInvitationInviter")
-  communityGroupInvitesReceived CommunityGroupInvitation[]      @relation("CommunityGroupInvitationInvitee")
-  directConversationsCreated    DirectConversation[]            @relation("DirectConversationCreator")
-  directConversationMemberships DirectConversationParticipant[]
-  directMessages                DirectMessage[]
+  sessions                           AuthSession[]
+  identities                         UserIdentity[]
+  verificationTokens                 VerificationToken[]
+  profile                            CreativeProfile?
+  organizationProfile                OrganizationProfile?
+  partnerProfile                     PartnerProfile?
+  portfolioItems                     PortfolioItem[]
+  enrollments                        TrainingEnrollment[]
+  opportunityApplications            OpportunityApplication[]
+  eventRegistrations                 EventRegistration[]
+  certificates                       Certificate[]
+  uploadedResources                  Resource[]                      @relation("ResourceUploader")
+  resourceViews                      ResourceView[]
+  resourceDownloads                  ResourceDownload[]
+  resourceUsefulMarks                ResourceUsefulMark[]
+  accountEvolutionRequests           AccountEvolutionRequest[]       @relation("AccountEvolutionRequester")
+  reviewedAccountEvolutionRequests   AccountEvolutionRequest[]       @relation("AccountEvolutionReviewer")
+  notifications                      Notification[]
+  notificationPreferences            NotificationPreference[]
+  publications                       Publication[]                   @relation("PublicationAuthor")
+  publicationComments                PublicationComment[]
+  publicationReactions               PublicationReaction[]
+  publicationShares                  PublicationShare[]
+  publicationReports                 PublicationReport[]             @relation("PublicationReporter")
+  publicationMentions                PublicationMention[]
+  networkConnections                 NetworkConnection[]             @relation("NetworkConnectionOwner")
+  networkSavedBy                     NetworkConnection[]             @relation("NetworkConnectionMember")
+  communityGroupsOwned               CommunityGroup[]                @relation("CommunityGroupOwner")
+  communityGroupMemberships          CommunityGroupMembership[]
+  communityGroupJoinRequests         CommunityGroupJoinRequest[]     @relation("CommunityGroupJoinRequester")
+  reviewedCommunityGroupJoinRequests CommunityGroupJoinRequest[]     @relation("CommunityGroupJoinReviewer")
+  communityGroupMessages             CommunityGroupMessage[]
+  communityGroupInvitesSent          CommunityGroupInvitation[]      @relation("CommunityGroupInvitationInviter")
+  communityGroupInvitesReceived      CommunityGroupInvitation[]      @relation("CommunityGroupInvitationInvitee")
+  directConversationsCreated         DirectConversation[]            @relation("DirectConversationCreator")
+  directConversationMemberships      DirectConversationParticipant[]
+  directMessages                     DirectMessage[]
+  directMessageReports               DirectMessageReport[]           @relation("DirectMessageReporter")
+  communityGroupMessageReports       CommunityGroupMessageReport[]   @relation("CommunityGroupMessageReporter")
+  blockedUsers                       UserBlock[]                     @relation("UserBlocker")
+  blockedByUsers                     UserBlock[]                     @relation("UserBlocked")
+  adminAuditActions                  AdminAuditLog[]                 @relation("AdminAuditActor")
+  adminAuditTargets                  AdminAuditLog[]                 @relation("AdminAuditTarget")
+  createdGalleryAlbums               GalleryAlbum[]                  @relation("GalleryAlbumCreator")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([type])
   @@index([status])
+  @@index([createdAt])
+}
+
+model AccountEvolutionRequest {
+  id            String                        @id @default(cuid())
+  userId        String
+  fromType      AccountType
+  requestedType AccountType
+  status        AccountEvolutionRequestStatus @default(PENDING)
+  motivation    String?
+  portfolioUrl  String?
+  cvUrl         String?
+  note          String?
+  reviewedById  String?
+  reviewedAt    DateTime?
+
+  user       User  @relation("AccountEvolutionRequester", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy User? @relation("AccountEvolutionReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([requestedType])
   @@index([createdAt])
 }
 
@@ -483,6 +562,7 @@ model Training {
   currency           String         @default("USD")
   status             TrainingStatus @default(DRAFT)
   certificateEnabled Boolean        @default(true)
+  featuredOnLanding  Boolean        @default(false)
 
   modules      TrainingModule[]
   enrollments  TrainingEnrollment[]
@@ -494,6 +574,7 @@ model Training {
 
   @@index([status])
   @@index([startsAt])
+  @@index([featuredOnLanding])
 }
 
 model TrainingModule {
@@ -519,7 +600,11 @@ model TrainingEnrollment {
   userId      String
   status      EnrollmentStatus @default(ENROLLED)
   progress    Int              @default(0)
+  motivation  String?
+  phone       String?
+  adminNote   String?
   enrolledAt  DateTime         @default(now())
+  reviewedAt  DateTime?
   completedAt DateTime?
 
   training Training @relation(fields: [trainingId], references: [id], onDelete: Cascade)
@@ -541,8 +626,11 @@ model Resource {
   trainingId   String?
   uploadedById String?
 
-  training   Training? @relation(fields: [trainingId], references: [id], onDelete: SetNull)
-  uploadedBy User?     @relation("ResourceUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  training    Training?            @relation(fields: [trainingId], references: [id], onDelete: SetNull)
+  uploadedBy  User?                @relation("ResourceUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  views       ResourceView[]
+  downloads   ResourceDownload[]
+  usefulMarks ResourceUsefulMark[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -551,6 +639,49 @@ model Resource {
   @@index([accessLevel])
   @@index([published])
   @@index([trainingId])
+}
+
+model ResourceView {
+  id         String   @id @default(cuid())
+  resourceId String
+  userId     String?
+  createdAt  DateTime @default(now())
+
+  resource Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  user     User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([resourceId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model ResourceDownload {
+  id         String   @id @default(cuid())
+  resourceId String
+  userId     String?
+  createdAt  DateTime @default(now())
+
+  resource Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  user     User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([resourceId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model ResourceUsefulMark {
+  id         String   @id @default(cuid())
+  resourceId String
+  userId     String
+  createdAt  DateTime @default(now())
+
+  resource Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([resourceId, userId])
+  @@index([resourceId])
+  @@index([userId])
+  @@index([createdAt])
 }
 
 model Opportunity {
@@ -582,7 +713,14 @@ model OpportunityApplication {
   userId        String
   status        ApplicationStatus @default(DRAFT)
   motivation    String?
+  discipline    String?
+  city          String?
+  phone         String?
   portfolioUrl  String?
+  cvUrl         String?
+  fileUrl       String?
+  links         Json?
+  socialLinks   Json?
   submittedAt   DateTime?
   reviewedAt    DateTime?
   adminNote     String?
@@ -599,18 +737,19 @@ model OpportunityApplication {
 }
 
 model Event {
-  id               String    @id @default(cuid())
-  title            String
-  slug             String    @unique
-  description      String
-  type             EventType @default(WORKSHOP)
-  startsAt         DateTime
-  endsAt           DateTime
-  location         String
-  coverImageUrl    String?
-  whatsappUrl      String?
-  facebookEventUrl String?
-  published        Boolean   @default(false)
+  id                String    @id @default(cuid())
+  title             String
+  slug              String    @unique
+  description       String
+  type              EventType @default(WORKSHOP)
+  startsAt          DateTime
+  endsAt            DateTime
+  location          String
+  coverImageUrl     String?
+  whatsappUrl       String?
+  facebookEventUrl  String?
+  published         Boolean   @default(false)
+  featuredOnLanding Boolean   @default(false)
 
   registrations EventRegistration[]
 
@@ -620,6 +759,7 @@ model Event {
   @@index([type])
   @@index([startsAt])
   @@index([published])
+  @@index([featuredOnLanding])
 }
 
 model EventRegistration {
@@ -636,6 +776,50 @@ model EventRegistration {
   @@unique([eventId, userId])
   @@index([userId])
   @@index([status])
+}
+
+model GalleryAlbum {
+  id                String               @id @default(cuid())
+  title             String
+  slug              String               @unique
+  description       String?
+  category          GalleryAlbumCategory @default(EVENT)
+  coverImageUrl     String?
+  published         Boolean              @default(false)
+  featuredOnLanding Boolean              @default(false)
+  sortOrder         Int                  @default(0)
+  createdById       String?
+
+  createdBy User?          @relation("GalleryAlbumCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  photos    GalleryPhoto[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+  @@index([published])
+  @@index([featuredOnLanding])
+  @@index([sortOrder])
+  @@index([createdById])
+}
+
+model GalleryPhoto {
+  id        String  @id @default(cuid())
+  albumId   String
+  title     String?
+  caption   String?
+  imageUrl  String
+  altText   String?
+  sortOrder Int     @default(0)
+  published Boolean @default(true)
+
+  album GalleryAlbum @relation(fields: [albumId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([albumId, sortOrder])
+  @@index([published])
 }
 
 model Certificate {
@@ -662,14 +846,16 @@ model Certificate {
 }
 
 model Partner {
-  id        String   @id @default(cuid())
-  name      String
-  logoUrl   String?
-  website   String?
-  order     Int      @default(0)
-  published Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  name        String
+  type        String?
+  description String?
+  logoUrl     String?
+  website     String?
+  order       Int      @default(0)
+  published   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([published])
   @@index([order])
@@ -691,6 +877,26 @@ model Notification {
   @@index([userId])
   @@index([readAt])
   @@index([createdAt])
+}
+
+model NotificationPreference {
+  id        String                @id @default(cuid())
+  userId    String
+  type      NotificationType
+  platform  Boolean               @default(true)
+  email     Boolean               @default(false)
+  whatsapp  Boolean               @default(false)
+  push      Boolean               @default(false)
+  frequency NotificationFrequency @default(IMMEDIATE)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, type])
+  @@index([userId])
+  @@index([type])
 }
 
 model NetworkConnection {
@@ -763,8 +969,9 @@ model DirectMessage {
   editedAt           DateTime?
   deletedAt          DateTime?
 
-  conversation DirectConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  author       User               @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  conversation DirectConversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  author       User                  @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  reports      DirectMessageReport[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -772,6 +979,67 @@ model DirectMessage {
   @@index([conversationId, createdAt])
   @@index([authorId])
   @@index([deletedAt])
+}
+
+model DirectMessageReport {
+  id         String                    @id @default(cuid())
+  messageId  String
+  reporterId String
+  reason     DirectMessageReportReason @default(OTHER)
+  message    String?
+  status     DirectMessageReportStatus @default(PENDING)
+  reviewedAt DateTime?
+
+  directMessage DirectMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  reporter      User          @relation("DirectMessageReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([messageId, reporterId])
+  @@index([messageId])
+  @@index([reporterId])
+  @@index([reason])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model UserBlock {
+  id        String  @id @default(cuid())
+  blockerId String
+  blockedId String
+  reason    String?
+
+  blocker User @relation("UserBlocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("UserBlocked", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([blockerId, blockedId])
+  @@index([blockedId])
+  @@index([createdAt])
+}
+
+model AdminAuditLog {
+  id           String  @id @default(cuid())
+  adminId      String?
+  targetUserId String?
+  action       String
+  entityType   String
+  entityId     String
+  message      String?
+  metadata     Json?
+
+  admin      User? @relation("AdminAuditActor", fields: [adminId], references: [id], onDelete: SetNull)
+  targetUser User? @relation("AdminAuditTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([adminId])
+  @@index([targetUserId])
+  @@index([entityType, entityId])
+  @@index([action])
+  @@index([createdAt])
 }
 
 model Publication {
@@ -950,10 +1218,11 @@ model CommunityGroup {
   visibility  CommunityGroupVisibility @default(MEMBERS)
   status      CommunityGroupStatus     @default(ACTIVE)
 
-  owner       User                       @relation("CommunityGroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  memberships CommunityGroupMembership[]
-  messages    CommunityGroupMessage[]
-  invitations CommunityGroupInvitation[]
+  owner        User                        @relation("CommunityGroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  memberships  CommunityGroupMembership[]
+  joinRequests CommunityGroupJoinRequest[]
+  messages     CommunityGroupMessage[]
+  invitations  CommunityGroupInvitation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -981,6 +1250,30 @@ model CommunityGroupMembership {
   @@index([userId])
   @@index([role])
   @@index([lastReadAt])
+}
+
+model CommunityGroupJoinRequest {
+  id           String                         @id @default(cuid())
+  groupId      String
+  requesterId  String
+  status       CommunityGroupInvitationStatus @default(PENDING)
+  message      String?
+  reviewedById String?
+  respondedAt  DateTime?
+
+  group      CommunityGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  requester  User           @relation("CommunityGroupJoinRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  reviewedBy User?          @relation("CommunityGroupJoinReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([groupId])
+  @@index([groupId, requesterId, status])
+  @@index([requesterId, status])
+  @@index([reviewedById])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model CommunityGroupInvitation {
@@ -1019,8 +1312,9 @@ model CommunityGroupMessage {
   editedAt           DateTime?
   deletedAt          DateTime?
 
-  group  CommunityGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  author User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  group   CommunityGroup                @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  author  User                          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  reports CommunityGroupMessageReport[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1028,4 +1322,27 @@ model CommunityGroupMessage {
   @@index([groupId, createdAt])
   @@index([authorId])
   @@index([deletedAt])
+}
+
+model CommunityGroupMessageReport {
+  id         String                    @id @default(cuid())
+  messageId  String
+  reporterId String
+  reason     DirectMessageReportReason @default(OTHER)
+  message    String?
+  status     DirectMessageReportStatus @default(PENDING)
+  reviewedAt DateTime?
+
+  groupMessage CommunityGroupMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  reporter     User                  @relation("CommunityGroupMessageReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([messageId, reporterId])
+  @@index([messageId])
+  @@index([reporterId])
+  @@index([reason])
+  @@index([status])
+  @@index([createdAt])
 }

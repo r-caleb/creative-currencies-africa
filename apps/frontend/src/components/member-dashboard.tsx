@@ -6,10 +6,14 @@ import {
   ArrowRight,
   BadgeCheck,
   Bell,
+  BookOpen,
+  BriefcaseBusiness,
+  Building2,
   CalendarDays,
   CheckCircle2,
   FileText,
   Flag,
+  GraduationCap,
   Heart,
   Image as ImageIcon,
   Lightbulb,
@@ -18,13 +22,15 @@ import {
   Newspaper,
   Repeat2,
   Send,
+  ShieldCheck,
   Sparkles,
   UserPlus,
+  UsersRound,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { MemberShell } from "@/components/member-shell";
-import { commentPublication, getApiErrorMessage, getPublicationCapabilities, getPublicationComments, getPublicationsPage, reactToPublication, reportPublication, saveNetworkMember, sharePublication } from "@/lib/api";
-import type { Publication, PublicationCapability, PublicationComment, PublicationType } from "@/lib/api";
+import { commentPublication, deletePublicationComment, getApiErrorMessage, getPublicationCapabilities, getPublicationComments, getPublicationsPage, reactToPublication, reportPublication, saveNetworkMember, sharePublication } from "@/lib/api";
+import type { MemberProfile, OrganizationProfile, PartnerProfile, Publication, PublicationCapability, PublicationComment, PublicationType } from "@/lib/api";
 import { accountTypeLabel, buildInitials, getMemberDisplayName, getMemberProfileTitle } from "@/lib/member-display";
 import { useAppSelector } from "@/store/hooks";
 
@@ -36,6 +42,20 @@ type QuickPublishAction = {
   label: string;
   href: string;
   icon: LucideIcon;
+};
+type DashboardRoleConfig = {
+  kicker: string;
+  heroTitle: (name: string) => string;
+  heroDescription: string;
+  primaryAction: { label: string; href: string };
+  secondaryAction: { label: string; href: string };
+  prioritiesTitle: string;
+  prioritiesDescription: string;
+  priorities: Array<{ title: string; description: string; href: string; icon: LucideIcon }>;
+  insightTitle: string;
+  insightDescription: string;
+  insights: Array<{ label: string; icon: LucideIcon; value: (posts: Publication[]) => number }>;
+  notificationsText: string;
 };
 
 const quickPublishActions: QuickPublishAction[] = [
@@ -56,6 +76,121 @@ const reportReasons: Array<{ value: ReportReason; label: string }> = [
   { value: "HARASSMENT", label: "Harcèlement" },
   { value: "OTHER", label: "Autre raison" },
 ];
+
+const creatorDashboardConfig: DashboardRoleConfig = {
+  kicker: "Espace créateur",
+  heroTitle: (name) => `Bonjour ${name}, construisez votre visibilité créative.`,
+  heroDescription: "Votre accueil rassemble Creative ID, portfolio, réseau, opportunités et publications pour transformer votre travail en parcours professionnel visible.",
+  primaryAction: { label: "Publier une création", href: "/espace-membre/publier?type=CREATION" },
+  secondaryAction: { label: "Voir mon Creative ID", href: "/espace-membre/creative-id" },
+  prioritiesTitle: "Vos priorités créateur",
+  prioritiesDescription: "Les actions qui donnent de la valeur à votre profil public et à vos candidatures.",
+  priorities: [
+    { title: "Renforcer le portfolio", description: "Ajoutez vos œuvres, projets, vidéos ou références pour crédibiliser votre Creative ID.", href: "/espace-membre/creative-id", icon: ImageIcon },
+    { title: "Postuler aux opportunités", description: "Repérez les concours, résidences, financements et missions liés à votre discipline.", href: "/espace-membre/opportunites", icon: Lightbulb },
+    { title: "Développer le réseau", description: "Connectez-vous aux créatifs, structures, partenaires et profils qui peuvent faire avancer vos projets.", href: "/espace-membre/reseau", icon: UsersRound },
+  ],
+  insightTitle: "Repères créateur",
+  insightDescription: "Activité utile pour suivre les opportunités et la dynamique du réseau.",
+  insights: [
+    { label: "Créations", icon: ImageIcon, value: (posts) => posts.filter((post) => post.type === "CREATION").length },
+    { label: "Opportunités", icon: Lightbulb, value: (posts) => posts.filter((post) => post.routingDestinations.includes("opportunities")).length },
+    { label: "Réseau", icon: UsersRound, value: (posts) => new Set(posts.map((post) => post.author.id)).size },
+  ],
+  notificationsText: "Candidatures, commentaires, messages, invitations et rappels liés à votre parcours arrivent ici.",
+};
+
+const learnerDashboardConfig: DashboardRoleConfig = {
+  kicker: "Espace apprenant",
+  heroTitle: (name) => `Bonjour ${name}, avancez dans votre parcours d'apprentissage.`,
+  heroDescription: "Votre accueil vous aide à suivre les formations, ressources, certificats et opportunités qui renforcent vos compétences créatives.",
+  primaryAction: { label: "Explorer les formations", href: "/espace-membre/formations" },
+  secondaryAction: { label: "Voir mes certificats", href: "/espace-membre/certificats" },
+  prioritiesTitle: "Vos priorités apprenant",
+  prioritiesDescription: "Un parcours clair pour apprendre, pratiquer, documenter et progresser vers un profil créatif plus solide.",
+  priorities: [
+    { title: "Choisir une formation", description: "Inscrivez-vous aux ateliers, masterclass et parcours alignés avec votre niveau.", href: "/espace-membre/formations", icon: GraduationCap },
+    { title: "Consulter les ressources", description: "Retrouvez supports, guides, modèles et replays accessibles selon vos formations.", href: "/espace-membre/ressources", icon: BookOpen },
+    { title: "Préparer la suite", description: "Construisez votre Creative ID pour passer progressivement vers un profil créateur.", href: "/espace-membre/creative-id", icon: FileText },
+  ],
+  insightTitle: "Repères apprenant",
+  insightDescription: "Ce qui vous aide à suivre formations, ressources et échéances.",
+  insights: [
+    { label: "Formations", icon: GraduationCap, value: (posts) => posts.filter((post) => post.routingDestinations.includes("trainings")).length },
+    { label: "Ressources", icon: BookOpen, value: (posts) => posts.filter((post) => post.routingDestinations.includes("resources")).length },
+    { label: "Échéances", icon: CalendarDays, value: (posts) => posts.filter((post) => post.routingDestinations.includes("agenda")).length },
+  ],
+  notificationsText: "Inscriptions, ressources disponibles, certificats, messages et rappels de formations arrivent ici.",
+};
+
+const publicDashboardConfig: DashboardRoleConfig = {
+  kicker: "Espace découverte",
+  heroTitle: (name) => `Bonjour ${name}, choisissez votre parcours CCA.`,
+  heroDescription: "Votre compte public vous permet de découvrir la communauté, les formations, les ressources ouvertes et les opportunités avant de passer vers un profil apprenant, créateur ou structure.",
+  primaryAction: { label: "Choisir mon parcours", href: "/espace-membre/parametres" },
+  secondaryAction: { label: "Découvrir les formations", href: "/espace-membre/formations" },
+  prioritiesTitle: "Vos prochaines étapes",
+  prioritiesDescription: "L'objectif est de transformer ce compte d'accès en vrai profil utile pour la plateforme.",
+  priorities: [
+    { title: "Définir le profil", description: "Choisissez si vous avancez comme apprenant, créateur ou structure pour débloquer les bons outils.", href: "/espace-membre/parametres", icon: FileText },
+    { title: "Explorer les contenus", description: "Consultez les ressources publiques, formations et opportunités déjà visibles.", href: "/espace-membre/ressources", icon: BookOpen },
+    { title: "Comprendre la communauté", description: "Découvrez les profils, échanges et activités qui structurent l'écosystème CCA.", href: "/espace-membre/reseau", icon: UsersRound },
+  ],
+  insightTitle: "Repères découverte",
+  insightDescription: "Aperçu des contenus ouverts pour vous aider à choisir le bon parcours.",
+  insights: [
+    { label: "Publications", icon: Newspaper, value: (posts) => posts.length },
+    { label: "Formations", icon: GraduationCap, value: (posts) => posts.filter((post) => post.routingDestinations.includes("trainings")).length },
+    { label: "Opportunités", icon: Lightbulb, value: (posts) => posts.filter((post) => post.routingDestinations.includes("opportunities")).length },
+  ],
+  notificationsText: "Actualités publiques, confirmations importantes et rappels liés à votre compte arrivent ici.",
+};
+
+const structureDashboardConfig: DashboardRoleConfig = {
+  kicker: "Espace structure",
+  heroTitle: (name) => `Bonjour ${name}, pilotez vos actions avec la communauté CCA.`,
+  heroDescription: "Votre accueil centralise formations, événements, opportunités, ressources et collaborations pour structurer vos actions auprès des créatifs.",
+  primaryAction: { label: "Créer une activité", href: "/espace-membre/publier?type=TRAINING" },
+  secondaryAction: { label: "Voir les opportunités", href: "/espace-membre/opportunites" },
+  prioritiesTitle: "Vos priorités structure",
+  prioritiesDescription: "Des entrées rapides pour publier, soutenir, mobiliser et suivre les interactions avec les créatifs.",
+  priorities: [
+    { title: "Publier une formation", description: "Présentez un atelier, une masterclass ou un parcours avec ses ressources liées.", href: "/espace-membre/publier?type=TRAINING", icon: GraduationCap },
+    { title: "Partager une opportunité", description: "Diffusez appels, missions, résidences ou financements utiles aux créatifs.", href: "/espace-membre/publier?type=OPPORTUNITY", icon: BriefcaseBusiness },
+    { title: "Animer le réseau", description: "Documentez vos activités et trouvez des partenaires ou participants qualifiés.", href: "/espace-membre/reseau", icon: UsersRound },
+  ],
+  insightTitle: "Repères structure",
+  insightDescription: "Vue rapide sur les contenus d'action visibles dans la communauté.",
+  insights: [
+    { label: "Activités", icon: CalendarDays, value: (posts) => posts.filter((post) => post.routingDestinations.includes("agenda") || post.routingDestinations.includes("trainings")).length },
+    { label: "Opportunités", icon: Lightbulb, value: (posts) => posts.filter((post) => post.routingDestinations.includes("opportunities")).length },
+    { label: "Ressources", icon: BookOpen, value: (posts) => posts.filter((post) => post.routingDestinations.includes("resources")).length },
+  ],
+  notificationsText: "Inscriptions, messages, collaborations, candidatures et rappels liés à vos activités arrivent ici.",
+};
+
+const adminDashboardConfig: DashboardRoleConfig = {
+  kicker: "Pilotage CCA",
+  heroTitle: (name) => `Bonjour ${name}, pilotez la plateforme et la communauté.`,
+  heroDescription: "Votre accueil donne accès aux contenus, membres, modération, candidatures, formations et ressources qui structurent l'écosystème CCA.",
+  primaryAction: { label: "Ouvrir le back-office", href: "/espace-membre/admin" },
+  secondaryAction: { label: "Publier une annonce", href: "/espace-membre/publier?type=ANNOUNCEMENT" },
+  prioritiesTitle: "Priorités administrateur",
+  prioritiesDescription: "Les zones à surveiller pour garder la plateforme claire, vivante et professionnelle.",
+  priorities: [
+    { title: "Alimenter la vitrine", description: "Gérez événements, formations, galeries, ressources, partenaires et opportunités publiques.", href: "/espace-membre/admin", icon: Building2 },
+    { title: "Suivre les dossiers", description: "Traitez inscriptions aux formations, candidatures aux opportunités et certificats.", href: "/espace-membre/admin", icon: FileText },
+    { title: "Modérer la communauté", description: "Surveillez signalements, messages, publications et comptes à risque.", href: "/espace-membre/admin", icon: ShieldCheck },
+  ],
+  insightTitle: "Repères admin",
+  insightDescription: "Vue rapide sur le contenu publié et les signaux communautaires.",
+  insights: [
+    { label: "Publications", icon: Newspaper, value: (posts) => posts.length },
+    { label: "Opportunités", icon: Lightbulb, value: (posts) => posts.filter((post) => post.routingDestinations.includes("opportunities")).length },
+    { label: "Auteurs actifs", icon: UsersRound, value: (posts) => new Set(posts.map((post) => post.author.id)).size },
+  ],
+  notificationsText: "Signalements, nouveaux dossiers, demandes membres, messages et alertes de gestion arrivent ici.",
+};
 
 export function MemberDashboard() {
   const { accessToken, user, profile, organizationProfile, partnerProfile } = useAppSelector((state) => state.auth);
@@ -88,21 +223,23 @@ export function MemberDashboard() {
   const profileCompletion = profile?.profileCompletion ?? 0;
   const memberNumber = profile?.memberNumber ?? "En cours";
   const avatarUrl = profile?.avatarUrl ?? organizationProfile?.logoUrl ?? partnerProfile?.logoUrl ?? "";
+  const dashboardConfig = getDashboardRoleConfig(user?.type);
 
   const profileTasks = useMemo(
-    () => [
-      { label: "Creative ID", state: profile?.memberNumber ? "Actif" : "En cours", done: !!profile?.memberNumber },
-      { label: "Portfolio", state: profile?.portfolioUrl || profile?.websiteUrl ? "Ajouté" : "À compléter", done: !!(profile?.portfolioUrl || profile?.websiteUrl) },
-      { label: "Langues", state: profile?.languages?.length ? `${profile.languages.length} renseignée${profile.languages.length > 1 ? "s" : ""}` : "À compléter", done: !!profile?.languages?.length },
-    ],
-    [profile],
+    () => buildProfileTasks({
+      userType: user?.type,
+      profile,
+      organizationProfile,
+      partnerProfile,
+    }),
+    [organizationProfile, partnerProfile, profile, user?.type],
   );
 
   const recommendedAuthors = useMemo(() => {
     const authors = new Map<string, FeedAuthor>();
 
     feedPosts.forEach((post) => {
-      if (post.author.id !== user?.id && !authors.has(post.author.id)) {
+      if (post.author.id !== user?.id && !isOfficialAccount(post.author.accountType) && !authors.has(post.author.id)) {
         authors.set(post.author.id, post.author);
       }
     });
@@ -117,12 +254,12 @@ export function MemberDashboard() {
     return quickPublishActions.filter((action) => allowedTypes.has(action.type)).slice(0, 4);
   }, [publicationCapabilities, user?.type]);
   const feedInsights = useMemo(
-    () => [
-      { label: "Publications", value: feedPosts.length, icon: Newspaper },
-      { label: "Opportunités", value: feedPosts.filter((post) => post.routingDestinations.includes("opportunities")).length, icon: Lightbulb },
-      { label: "Échéances", value: feedPosts.filter((post) => post.routingDestinations.includes("agenda")).length, icon: CalendarDays },
-    ],
-    [feedPosts],
+    () => dashboardConfig.insights.map((insight) => ({
+      label: insight.label,
+      value: insight.value(feedPosts),
+      icon: insight.icon,
+    })),
+    [dashboardConfig, feedPosts],
   );
 
   useEffect(() => {
@@ -393,23 +530,55 @@ export function MemberDashboard() {
     }
   }
 
+  async function removeComment(post: Publication, comment: PublicationComment) {
+    if (!accessToken) {
+      return;
+    }
+
+    try {
+      await deletePublicationComment(accessToken, post.id, comment.id);
+      setCommentsByPostId((current) => {
+        const next = new Map(current);
+        const removedIds = new Set([comment.id]);
+        let changed = true;
+        const currentComments = next.get(post.id) ?? [];
+
+        while (changed) {
+          changed = false;
+          currentComments.forEach((item) => {
+            if (item.parentId && removedIds.has(item.parentId) && !removedIds.has(item.id)) {
+              removedIds.add(item.id);
+              changed = true;
+            }
+          });
+        }
+
+        next.set(post.id, currentComments.filter((item) => !removedIds.has(item.id)));
+        setFeedPosts((items) => items.map((item) => item.id === post.id ? {
+          ...item,
+          counts: { ...item.counts, comments: Math.max(0, item.counts.comments - removedIds.size) },
+        } : item));
+        return next;
+      });
+    } catch (requestError) {
+      setFeedError(getApiErrorMessage(requestError, "Impossible de supprimer ce commentaire pour le moment."));
+    }
+  }
+
   return (
     <MemberShell activeItem="Accueil">
       <div className="member-dashboard-home">
         <section className="member-hero-card member-home-hero">
           <div className="member-hero-copy">
-            <span className="member-kicker">Espace {accountTypeLabel(user?.type).toLowerCase()}</span>
-            <h1>Bonjour {displayName}, suivez ce qui bouge dans le réseau CCA.</h1>
-            <p>
-              Retrouvez les projets, créations, questions, collaborations, opportunités,
-              ressources et annonces visibles par la communauté.
-            </p>
+            <span className="member-kicker">{dashboardConfig.kicker}</span>
+            <h1>{dashboardConfig.heroTitle(displayName)}</h1>
+            <p>{dashboardConfig.heroDescription}</p>
             <div className="member-hero-actions">
-              <Link className="member-create-button" href="/espace-membre/publier">
-                Publier
+              <Link className="member-create-button" href={dashboardConfig.primaryAction.href}>
+                {dashboardConfig.primaryAction.label}
                 <ArrowRight aria-hidden="true" strokeWidth={1.8} />
               </Link>
-              <Link className="member-secondary-button" href="/espace-membre/creative-id">Voir mon Creative ID</Link>
+              <Link className="member-secondary-button" href={dashboardConfig.secondaryAction.href}>{dashboardConfig.secondaryAction.label}</Link>
             </div>
           </div>
           <section className="member-identity-card member-home-identity-card" aria-label="Résumé du profil">
@@ -423,6 +592,28 @@ export function MemberDashboard() {
               <b>{memberNumber}</b>
             </div>
           </section>
+        </section>
+
+        <section className="member-card member-home-role-card">
+          <div className="member-card-title">
+            <div>
+              <h2>{dashboardConfig.prioritiesTitle}</h2>
+              <p>{dashboardConfig.prioritiesDescription}</p>
+            </div>
+          </div>
+          <div className="member-home-priority-grid">
+            {dashboardConfig.priorities.map((priority) => {
+              const Icon = priority.icon;
+
+              return (
+                <Link key={priority.title} href={priority.href}>
+                  <span><Icon aria-hidden="true" strokeWidth={1.8} /></span>
+                  <strong>{priority.title}</strong>
+                  <p>{priority.description}</p>
+                </Link>
+              );
+            })}
+          </div>
         </section>
 
         <div className="member-dashboard-grid member-dashboard-grid--feed">
@@ -517,6 +708,7 @@ export function MemberDashboard() {
                     onSubmitComment={(event) => submitComment(event, post)}
                     onReply={(comment) => selectReplyTarget(post.id, comment)}
                     onCancelReply={() => clearReplyTarget(post.id)}
+                    onDeleteComment={(comment) => removeComment(post, comment)}
                   />
                 ))}
                 {hasMoreFeed ? (
@@ -534,10 +726,10 @@ export function MemberDashboard() {
               <div className="member-feed-empty member-feed-empty--guided">
                 <Sparkles aria-hidden="true" strokeWidth={1.8} />
                 <strong>Aucune publication pour le moment</strong>
-                <p>Le fil se remplira avec les projets, créations, opportunités, ressources et annonces visibles par votre compte.</p>
+                <p>Le fil se remplira avec les contenus utiles à votre type de compte et aux droits associés à votre profil.</p>
                 <div>
-                  <Link className="member-create-button" href="/espace-membre/publier">Publier maintenant</Link>
-                  <Link className="member-secondary-button" href="/espace-membre/creative-id">Compléter mon Creative ID</Link>
+                  <Link className="member-create-button" href={dashboardConfig.primaryAction.href}>{dashboardConfig.primaryAction.label}</Link>
+                  <Link className="member-secondary-button" href={dashboardConfig.secondaryAction.href}>{dashboardConfig.secondaryAction.label}</Link>
                   <Link className="member-secondary-button" href="/espace-membre/reseau">Explorer le réseau</Link>
                 </div>
               </div>
@@ -549,8 +741,8 @@ export function MemberDashboard() {
           <section className="member-card member-home-insights-card">
             <div className="member-card-title">
               <div>
-                <h2>Vue d'ensemble</h2>
-                <p>Repères calculés à partir des publications visibles.</p>
+                <h2>{dashboardConfig.insightTitle}</h2>
+                <p>{dashboardConfig.insightDescription}</p>
               </div>
             </div>
             <div className="member-home-insights-grid">
@@ -598,7 +790,7 @@ export function MemberDashboard() {
             </div>
             <div>
               <h2>Notifications</h2>
-              <p>Messages, invitations, commentaires et rappels importants arrivent ici.</p>
+              <p>{dashboardConfig.notificationsText}</p>
             </div>
             <Link className="member-secondary-button" href="/espace-membre/notifications">Ouvrir</Link>
           </section>
@@ -607,6 +799,84 @@ export function MemberDashboard() {
       </div>
     </MemberShell>
   );
+}
+
+function getDashboardRoleConfig(accountType?: string): DashboardRoleConfig {
+  if (accountType === "PUBLIC") {
+    return publicDashboardConfig;
+  }
+
+  if (accountType === "LEARNER") {
+    return learnerDashboardConfig;
+  }
+
+  if (accountType === "ORGANIZATION" || accountType === "PARTNER") {
+    return structureDashboardConfig;
+  }
+
+  if (accountType === "ADMIN") {
+    return adminDashboardConfig;
+  }
+
+  return creatorDashboardConfig;
+}
+
+function buildProfileTasks({
+  userType,
+  profile,
+  organizationProfile,
+  partnerProfile,
+}: {
+  userType?: string;
+  profile: MemberProfile | null;
+  organizationProfile: OrganizationProfile | null;
+  partnerProfile: PartnerProfile | null;
+}) {
+  if (userType === "ADMIN") {
+    return [
+      { label: "Back-office", state: "Actif", done: true },
+      { label: "Modération", state: "À surveiller", done: true },
+      { label: "Vitrine publique", state: "À alimenter", done: true },
+    ];
+  }
+
+  if (userType === "ORGANIZATION") {
+    return [
+      { label: "Profil organisation", state: organizationProfile?.name ? "Actif" : "À compléter", done: !!organizationProfile?.name },
+      { label: "Coordonnées", state: organizationProfile?.websiteUrl ? "Ajoutées" : "À compléter", done: !!organizationProfile?.websiteUrl },
+      { label: "Vérification", state: organizationProfile?.verifiedAt ? "Vérifiée" : "En attente", done: !!organizationProfile?.verifiedAt },
+    ];
+  }
+
+  if (userType === "PARTNER") {
+    return [
+      { label: "Profil partenaire", state: partnerProfile?.name ? "Actif" : "À compléter", done: !!partnerProfile?.name },
+      { label: "Type de soutien", state: partnerProfile?.partnerType ? "Renseigné" : "À compléter", done: !!partnerProfile?.partnerType },
+      { label: "Vérification", state: partnerProfile?.verifiedAt ? "Vérifiée" : "En attente", done: !!partnerProfile?.verifiedAt },
+    ];
+  }
+
+  if (userType === "PUBLIC") {
+    return [
+      { label: "Compte public", state: "Actif", done: true },
+      { label: "Parcours", state: "À choisir", done: false },
+      { label: "Accès membre", state: "Limité", done: false },
+    ];
+  }
+
+  if (userType === "LEARNER") {
+    return [
+      { label: "Creative ID", state: profile?.memberNumber ? "Actif" : "En cours", done: !!profile?.memberNumber },
+      { label: "Discipline", state: profile?.discipline ? "Renseignée" : "À choisir", done: !!profile?.discipline },
+      { label: "Certificats", state: "À construire", done: false },
+    ];
+  }
+
+  return [
+    { label: "Creative ID", state: profile?.memberNumber ? "Actif" : "En cours", done: !!profile?.memberNumber },
+    { label: "Portfolio", state: profile?.portfolioUrl || profile?.websiteUrl ? "Ajouté" : "À compléter", done: !!(profile?.portfolioUrl || profile?.websiteUrl) },
+    { label: "Langues", state: profile?.languages?.length ? `${profile.languages.length} renseignée${profile.languages.length > 1 ? "s" : ""}` : "À compléter", done: !!profile?.languages?.length },
+  ];
 }
 
 function RecommendedAuthor({
@@ -666,6 +936,7 @@ function FeedPost({
   onSubmitComment,
   onReply,
   onCancelReply,
+  onDeleteComment,
 }: {
   post: Publication;
   currentUserId?: string;
@@ -692,8 +963,10 @@ function FeedPost({
   onSubmitComment: (event: FormEvent<HTMLFormElement>) => void;
   onReply: (comment: PublicationComment) => void;
   onCancelReply: () => void;
+  onDeleteComment: (comment: PublicationComment) => void;
 }) {
   const isOwnPost = post.author.id === currentUserId;
+  const isOfficialPost = isOfficialAccount(post.author.accountType);
   const action = getRelationAction(post.author, relationStatus);
   const authorLocation = [post.author.city, post.author.country].filter(Boolean).join(", ");
   const shareCount = post.counts.shares ?? 0;
@@ -722,7 +995,7 @@ function FeedPost({
           </strong>
           <span>{[accountTypeLabel(post.author.accountType), post.author.discipline, authorLocation].filter(Boolean).join(" · ")}</span>
         </div>
-        {!isOwnPost ? (
+        {!isOwnPost && !isOfficialPost ? (
           <button className="feed-follow-button" type="button" disabled={action.disabled || isConnecting} onClick={onConnect}>
             {isStructureAccount(post.author.accountType) ? <Bell aria-hidden="true" strokeWidth={1.8} /> : <UserPlus aria-hidden="true" strokeWidth={1.8} />}
             {isConnecting ? "..." : action.label}
@@ -799,6 +1072,7 @@ function FeedPost({
                   comment={comment}
                   replies={repliesByParentId.get(comment.id) ?? []}
                   onReply={onReply}
+                  onDelete={onDeleteComment}
                 />
               ))}
             </div>
@@ -837,10 +1111,12 @@ function CommentItem({
   comment,
   replies,
   onReply,
+  onDelete,
 }: {
   comment: PublicationComment;
   replies: PublicationComment[];
   onReply: (comment: PublicationComment) => void;
+  onDelete: (comment: PublicationComment) => void;
 }) {
   return (
     <article className="feed-comment">
@@ -859,11 +1135,14 @@ function CommentItem({
         <div className="feed-comment-actions">
           <time>{formatFeedDate(comment.createdAt)}</time>
           <button type="button" onClick={() => onReply(comment)}>Répondre</button>
+          {comment.permissions.canDelete ? (
+            <button type="button" onClick={() => onDelete(comment)}>Supprimer</button>
+          ) : null}
         </div>
         {replies.length ? (
           <div className="feed-comment-replies">
             {replies.map((reply) => (
-              <CommentItem key={reply.id} comment={reply} replies={[]} onReply={onReply} />
+              <CommentItem key={reply.id} comment={reply} replies={[]} onReply={onReply} onDelete={onDelete} />
             ))}
           </div>
         ) : null}
@@ -873,6 +1152,10 @@ function CommentItem({
 }
 
 function getRelationAction(author: FeedAuthor, relationStatus: RelationStatus | null) {
+  if (isOfficialAccount(author.accountType)) {
+    return { label: "Officiel", disabled: true };
+  }
+
   if (relationStatus === "ACCEPTED") {
     return { label: isStructureAccount(author.accountType) ? "Suivi" : "Connecté", disabled: true };
   }
@@ -885,7 +1168,11 @@ function getRelationAction(author: FeedAuthor, relationStatus: RelationStatus | 
 }
 
 function isStructureAccount(accountType: string) {
-  return accountType === "ORGANIZATION" || accountType === "PARTNER" || accountType === "ADMIN";
+  return accountType === "ORGANIZATION" || accountType === "PARTNER";
+}
+
+function isOfficialAccount(accountType: string) {
+  return accountType === "ADMIN";
 }
 
 function getFallbackAllowedQuickTypes(accountType?: string) {

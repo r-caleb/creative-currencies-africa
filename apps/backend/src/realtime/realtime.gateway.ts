@@ -35,6 +35,7 @@ type RealtimePayload = Record<string, unknown>;
 })
 export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(RealtimeGateway.name);
+  private readonly connectedUsers = new Map<string, Set<string>>();
 
   @WebSocketServer()
   server!: Server;
@@ -65,6 +66,9 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       client.data.connectedAt = new Date().toISOString();
 
       await client.join(this.userRoom(authUser.userId));
+      this.registerPresence(authUser.userId, client.id);
+      client.emit("presence.snapshot", { onlineUserIds: this.onlineUserIds() });
+      this.server?.emit("presence.updated", { userId: authUser.userId, online: true });
       this.logger.log(`Socket connecté: ${client.id} user=${authUser.userId}`);
     } catch (error) {
       this.logger.warn(`Socket refusé: ${error instanceof Error ? error.message : "erreur inconnue"}`);
@@ -73,7 +77,67 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
   }
 
   handleDisconnect(@ConnectedSocket() client: AuthenticatedSocket) {
+    const userId = client.data?.userId;
+
+    if (userId && this.unregisterPresence(userId, client.id)) {
+      this.server?.emit("presence.updated", { userId, online: false });
+    }
+
     this.logger.log(`Socket déconnecté: ${client.id} user=${client.data?.userId ?? "unknown"}`);
+  }
+
+  @SubscribeMessage("direct.typing")
+  async directTyping(@ConnectedSocket() client: AuthenticatedSocket, @MessageBody() body: { conversationId?: string; isTyping?: boolean }) {
+    const userId = client.data?.userId;
+    const conversationId = body?.conversationId?.trim();
+
+    if (!userId || !conversationId) {
+      return { ok: false };
+    }
+
+    const participant = await this.prisma.directConversationParticipant.findUnique({
+      where: { conversationId_userId: { conversationId, userId } },
+      select: { id: true },
+    });
+
+    if (!participant) {
+      return { ok: false };
+    }
+
+    client.to(this.directConversationRoom(conversationId)).emit("direct.typing", {
+      conversationId,
+      userId,
+      isTyping: Boolean(body?.isTyping),
+    });
+
+    return { ok: true, conversationId };
+  }
+
+  @SubscribeMessage("group.typing")
+  async groupTyping(@ConnectedSocket() client: AuthenticatedSocket, @MessageBody() body: { groupId?: string; isTyping?: boolean }) {
+    const userId = client.data?.userId;
+    const groupId = body?.groupId?.trim();
+
+    if (!userId || !groupId) {
+      return { ok: false };
+    }
+
+    const membership = await this.prisma.communityGroupMembership.findUnique({
+      where: { groupId_userId: { groupId, userId } },
+      select: { id: true },
+    });
+
+    if (!membership) {
+      return { ok: false };
+    }
+
+    client.to(this.groupRoom(groupId)).emit("group.typing", {
+      groupId,
+      userId,
+      isTyping: Boolean(body?.isTyping),
+    });
+
+    return { ok: true, groupId };
   }
 
   @SubscribeMessage("group.join")
@@ -162,6 +226,14 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     this.server?.to(this.directConversationRoom(conversationId)).emit(event, payload);
   }
 
+  emitDirectConversationRead(conversationId: string, userId: string, readAt: Date) {
+    this.emitToDirectConversation(conversationId, "direct.conversation.read", {
+      conversationId,
+      userId,
+      readAt,
+    });
+  }
+
   private userRoom(userId: string) {
     return `user:${userId}`;
   }
@@ -188,5 +260,32 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     }
 
     return null;
+  }
+
+  private registerPresence(userId: string, socketId: string) {
+    const sockets = this.connectedUsers.get(userId) ?? new Set<string>();
+    sockets.add(socketId);
+    this.connectedUsers.set(userId, sockets);
+  }
+
+  private unregisterPresence(userId: string, socketId: string) {
+    const sockets = this.connectedUsers.get(userId);
+
+    if (!sockets) {
+      return false;
+    }
+
+    sockets.delete(socketId);
+
+    if (sockets.size) {
+      return false;
+    }
+
+    this.connectedUsers.delete(userId);
+    return true;
+  }
+
+  private onlineUserIds() {
+    return Array.from(this.connectedUsers.keys());
   }
 }

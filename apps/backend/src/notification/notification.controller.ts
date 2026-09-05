@@ -1,8 +1,9 @@
-import { Controller, Get, Param, Patch, Query, Req, UseGuards } from "@nestjs/common";
-import { ApiBearerAuth, ApiOkResponse, ApiOperation } from "@nestjs/swagger";
+import { Body, Controller, Get, Param, Patch, Query, Req, UseGuards } from "@nestjs/common";
+import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiOperation } from "@nestjs/swagger";
 import type { AuthUser } from "../auth/auth.types";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { NotificationQueryDto } from "./dto/notification-query.dto";
+import { UpdateNotificationPreferencesDto } from "./dto/update-notification-preferences.dto";
 import { NotificationService } from "./notification.service";
 
 type AuthedRequest = Request & {
@@ -27,6 +28,28 @@ export class NotificationController {
   @ApiOkResponse({ description: "Nombre de notifications non lues" })
   unreadCount(@Req() req: AuthedRequest) {
     return this.notifications.getUnreadSummary(req.user);
+  }
+
+  @Get("summary")
+  @ApiOperation({ summary: "Résumer mon historique de notifications" })
+  @ApiOkResponse({ description: "Résumé par type, état de lecture et dernières alertes" })
+  summary(@Req() req: AuthedRequest) {
+    return this.notifications.getSmartSummary(req.user);
+  }
+
+  @Get("preferences")
+  @ApiOperation({ summary: "Lister mes préférences de notifications" })
+  @ApiOkResponse({ description: "Préférences de notifications du membre connecté" })
+  preferences(@Req() req: AuthedRequest) {
+    return this.notifications.listPreferences(req.user);
+  }
+
+  @Patch("preferences")
+  @ApiOperation({ summary: "Mettre à jour mes préférences de notifications" })
+  @ApiBody({ type: UpdateNotificationPreferencesDto })
+  @ApiOkResponse({ description: "Préférences de notifications mises à jour" })
+  updatePreferences(@Req() req: AuthedRequest, @Body() body: UpdateNotificationPreferencesDto) {
+    return this.notifications.updatePreferences(req.user, body);
   }
 
   @Patch("read-all")

@@ -14,6 +14,7 @@ import {
   CommunityGroupRole,
   CommunityGroupStatus,
   CommunityGroupVisibility,
+  DirectMessageReportStatus,
   NotificationType,
   Prisma,
 } from "@prisma/client";
@@ -30,6 +31,8 @@ import type { CreateGroupMessageDto } from "./dto/create-group-message.dto";
 import type { CreateGroupDto } from "./dto/create-group.dto";
 import type { GroupMemberCandidateQueryDto } from "./dto/group-member-candidate-query.dto";
 import type { GroupQueryDto } from "./dto/group-query.dto";
+import type { ReportGroupMessageDto } from "./dto/report-group-message.dto";
+import type { ReviewGroupJoinRequestDto } from "./dto/review-group-join-request.dto";
 import type { UpdateGroupMemberRoleDto } from "./dto/update-group-member-role.dto";
 import type { UpdateGroupMessageDto } from "./dto/update-group-message.dto";
 import type { UpdateGroupDto } from "./dto/update-group.dto";
@@ -63,6 +66,10 @@ const messageAuthorSelect = {
 const groupInclude = {
   owner: { select: groupOwnerSelect },
   memberships: { select: { userId: true, role: true, joinedAt: true } },
+  joinRequests: {
+    where: { status: CommunityGroupInvitationStatus.PENDING },
+    select: { id: true, requesterId: true, status: true, createdAt: true },
+  },
   messages: {
     orderBy: { createdAt: "desc" },
     take: 1,
@@ -87,6 +94,13 @@ type GroupInvitationWithRelations = Prisma.CommunityGroupInvitationGetPayload<{
     group: { include: typeof groupInclude };
     inviter: { include: typeof activeUserInclude };
     invitee: { include: typeof activeUserInclude };
+  };
+}>;
+type GroupJoinRequestWithRelations = Prisma.CommunityGroupJoinRequestGetPayload<{
+  include: {
+    group: { include: typeof groupInclude };
+    requester: { include: typeof activeUserInclude };
+    reviewedBy: { include: typeof activeUserInclude };
   };
 }>;
 
@@ -127,7 +141,7 @@ export class GroupService {
           city: this.optionalText(input.city),
           country: this.optionalText(input.country),
           tags: this.normalizeTags(input.tags),
-          visibility: input.visibility ?? CommunityGroupVisibility.MEMBERS,
+          visibility: input.visibility ?? CommunityGroupVisibility.PUBLIC,
           memberships: {
             create: {
               userId: user.id,
@@ -210,17 +224,126 @@ export class GroupService {
     const group = await this.findGroupOrThrow(id);
     this.ensureCanReadGroup(user, group);
 
-    await this.prisma.communityGroupMembership.upsert({
-      where: { groupId_userId: { groupId: id, userId: user.id } },
-      update: {},
-      create: {
+    if (this.currentMembership(group, user.id)) {
+      return this.getGroup(authUser, id);
+    }
+
+    const pendingRequest = await this.prisma.communityGroupJoinRequest.findFirst({
+      where: {
         groupId: id,
-        userId: user.id,
-        role: CommunityGroupRole.MEMBER,
+        requesterId: user.id,
+        status: CommunityGroupInvitationStatus.PENDING,
       },
+      select: { id: true },
     });
 
+    if (!pendingRequest) {
+      await this.prisma.communityGroupJoinRequest.create({
+        data: {
+          groupId: id,
+          requesterId: user.id,
+          message: `${this.displayName(user)} souhaite rejoindre le groupe.`,
+        },
+      });
+
+      await this.notifyGroupManagers(group, {
+        title: "Nouvelle demande de groupe",
+        message: `${this.displayName(user)} demande à rejoindre ${group.name}.`,
+        href: `/espace-membre/groupes?groupId=${group.id}`,
+      });
+    }
+
     return this.getGroup(authUser, id);
+  }
+
+  async listJoinRequests(authUser: AuthUser, id: string) {
+    const user = await this.getActiveUser(authUser);
+    const group = await this.findGroupOrThrow(id);
+    this.ensureCanManageMembers(user, group);
+
+    const requests = await this.prisma.communityGroupJoinRequest.findMany({
+      where: {
+        groupId: id,
+        status: CommunityGroupInvitationStatus.PENDING,
+      },
+      include: this.groupJoinRequestInclude(),
+      orderBy: [{ createdAt: "asc" }],
+    });
+
+    return requests.map((request) => this.serializeJoinRequest(request, user));
+  }
+
+  async reviewJoinRequest(authUser: AuthUser, id: string, requestId: string, input: ReviewGroupJoinRequestDto) {
+    const user = await this.getActiveUser(authUser);
+    const group = await this.findGroupOrThrow(id);
+    this.ensureCanManageMembers(user, group);
+
+    const status = input.status;
+    if (status !== CommunityGroupInvitationStatus.ACCEPTED && status !== CommunityGroupInvitationStatus.DECLINED) {
+      throw new BadRequestException("Choisissez d'accepter ou de refuser la demande.");
+    }
+
+    const request = await this.prisma.communityGroupJoinRequest.findUnique({
+      where: { id: requestId },
+      include: this.groupJoinRequestInclude(),
+    });
+
+    if (!request || request.groupId !== id) {
+      throw new NotFoundException("Cette demande d'accès est introuvable.");
+    }
+
+    if (request.status !== CommunityGroupInvitationStatus.PENDING) {
+      throw new BadRequestException("Cette demande a déjà été traitée.");
+    }
+
+    const updatedRequest = await this.prisma.$transaction(async (tx) => {
+      if (status === CommunityGroupInvitationStatus.ACCEPTED) {
+        await tx.communityGroupMembership.upsert({
+          where: { groupId_userId: { groupId: id, userId: request.requesterId } },
+          update: {},
+          create: {
+            groupId: id,
+            userId: request.requesterId,
+            role: CommunityGroupRole.MEMBER,
+          },
+        });
+
+        await tx.communityGroupMessage.create({
+          data: {
+            groupId: id,
+            authorId: user.id,
+            type: CommunityGroupMessageType.SYSTEM,
+            content: `${this.displayName(request.requester)} a rejoint le groupe après validation.`,
+          },
+        });
+      }
+
+      return tx.communityGroupJoinRequest.update({
+        where: { id: requestId },
+        data: {
+          status,
+          message: this.optionalText(input.note) ?? request.message,
+          reviewedById: user.id,
+          respondedAt: new Date(),
+        },
+        include: this.groupJoinRequestInclude(),
+      });
+    });
+
+    await this.notifications.createForUser({
+      userId: request.requesterId,
+      type: NotificationType.MESSAGE,
+      title: status === CommunityGroupInvitationStatus.ACCEPTED ? "Demande de groupe acceptée" : "Demande de groupe refusée",
+      message: status === CommunityGroupInvitationStatus.ACCEPTED
+        ? `Votre demande pour rejoindre ${group.name} a été acceptée.`
+        : `Votre demande pour rejoindre ${group.name} a été refusée.`,
+      href: `/espace-membre/groupes?groupId=${group.id}`,
+    }).catch(() => undefined);
+
+    return {
+      request: this.serializeJoinRequest(updatedRequest, user),
+      group: await this.getGroup(authUser, id),
+    };
   }
 
   async leaveGroup(authUser: AuthUser, id: string) {
@@ -930,6 +1053,80 @@ export class GroupService {
     return serialized;
   }
 
+  async reportMessage(authUser: AuthUser, groupId: string, messageId: string, input: ReportGroupMessageDto) {
+    const user = await this.getActiveUser(authUser);
+    const group = await this.findGroupOrThrow(groupId);
+    this.ensureGroupMember(user, group);
+
+    const message = await this.prisma.communityGroupMessage.findFirst({
+      where: {
+        id: messageId,
+        groupId,
+      },
+      include: messageInclude,
+    });
+
+    if (!message || message.deletedAt) {
+      throw new NotFoundException("Ce message est introuvable.");
+    }
+
+    if (message.authorId === user.id) {
+      throw new BadRequestException("Vous ne pouvez pas signaler votre propre message.");
+    }
+
+    const report = await this.prisma.communityGroupMessageReport.upsert({
+      where: {
+        messageId_reporterId: {
+          messageId,
+          reporterId: user.id,
+        },
+      },
+      create: {
+        messageId,
+        reporterId: user.id,
+        reason: input.reason,
+        message: this.optionalText(input.message),
+      },
+      update: {
+        reason: input.reason,
+        message: this.optionalText(input.message),
+        status: DirectMessageReportStatus.PENDING,
+        reviewedAt: null,
+      },
+    });
+
+    const moderators = group.memberships
+      .filter((membership) => membership.role === CommunityGroupRole.OWNER || membership.role === CommunityGroupRole.MODERATOR)
+      .map((membership) => membership.userId);
+    const admins = await this.prisma.user.findMany({
+      where: {
+        type: AccountType.ADMIN,
+        status: AccountStatus.ACTIVE,
+      },
+      select: { id: true },
+      take: 20,
+    });
+    const recipients = [...new Set([...moderators, ...admins.map((admin) => admin.id)].filter((id) => id !== user.id))];
+
+    await Promise.all(
+      recipients.map((userId) =>
+        this.notifications.createForUser({
+          userId,
+          type: NotificationType.SYSTEM,
+          title: "Message de groupe signalé",
+          message: `${this.displayName(user)} a signalé un message dans ${group.name}.`,
+          href: "/espace-membre/admin",
+        }).catch(() => undefined),
+      ),
+    );
+
+    return {
+      success: true,
+      reportId: report.id,
+      status: report.status,
+    };
+  }
+
   private async getActiveUser(authUser: AuthUser): Promise<ActiveUser> {
     const user = await this.prisma.user.findUnique({
       where: { id: authUser.userId },
@@ -941,6 +1138,22 @@ export class GroupService {
     }
 
     return user;
+  }
+
+  private async notifyGroupManagers(group: GroupWithRelations, input: { title: string; message: string; href: string }) {
+    const managerIds = group.memberships
+      .filter((membership) => membership.role === CommunityGroupRole.OWNER || membership.role === CommunityGroupRole.MODERATOR)
+      .map((membership) => membership.userId);
+
+    const recipients = [...new Set([group.ownerId, ...managerIds])];
+
+    await Promise.all(recipients.map((userId) => this.notifications.createForUser({
+      userId,
+      type: NotificationType.MESSAGE,
+      title: input.title,
+      message: input.message,
+      href: input.href,
+    }).catch(() => undefined)));
   }
 
   private buildGroupWhere(user: ActiveUser, query: GroupQueryDto): Prisma.CommunityGroupWhereInput {
@@ -1019,6 +1232,14 @@ export class GroupService {
     } satisfies Prisma.CommunityGroupInvitationInclude;
   }
 
+  private groupJoinRequestInclude() {
+    return {
+      group: { include: groupInclude },
+      requester: { include: activeUserInclude },
+      reviewedBy: { include: activeUserInclude },
+    } satisfies Prisma.CommunityGroupJoinRequestInclude;
+  }
+
   private ensureCanReadGroup(user: ActiveUser, group: GroupWithRelations) {
     if (group.status !== CommunityGroupStatus.ACTIVE && !this.canManageGroup(user, group)) {
       throw new NotFoundException("Ce groupe est introuvable.");
@@ -1084,6 +1305,7 @@ export class GroupService {
 
   private serializeGroup(group: GroupWithRelations, user: ActiveUser) {
     const membership = this.currentMembership(group, user.id);
+    const pendingJoinRequest = group.joinRequests.find((request) => request.requesterId === user.id) ?? null;
 
     return {
       id: group.id,
@@ -1101,6 +1323,8 @@ export class GroupService {
       members: group._count.memberships,
       posts: group._count.messages,
       isJoined: Boolean(membership),
+      pendingJoinRequestId: pendingJoinRequest?.id ?? null,
+      pendingJoinRequestStatus: pendingJoinRequest?.status ?? null,
       currentUserRole: membership?.role ?? null,
       canManage: this.canManageGroup(user, group),
       lastActivity: group.messages[0]?.createdAt ?? group.updatedAt,
@@ -1205,6 +1429,28 @@ export class GroupService {
       country: user.profile?.country ?? user.organizationProfile?.country ?? user.partnerProfile?.country ?? null,
       pendingInvitationId: null,
       pendingInvitationStatus: null,
+    };
+  }
+
+  private serializeJoinRequest(request: GroupJoinRequestWithRelations, currentUser: ActiveUser) {
+    const isPending = request.status === CommunityGroupInvitationStatus.PENDING;
+
+    return {
+      id: request.id,
+      groupId: request.groupId,
+      requesterId: request.requesterId,
+      status: request.status,
+      message: request.message,
+      respondedAt: request.respondedAt,
+      createdAt: request.createdAt,
+      updatedAt: request.updatedAt,
+      group: this.serializeGroup(request.group, currentUser),
+      requester: this.serializeInvitationUser(request.requester),
+      reviewedBy: request.reviewedBy ? this.serializeInvitationUser(request.reviewedBy) : null,
+      permissions: {
+        canAccept: isPending && this.canManageMembers(currentUser, request.group),
+        canDecline: isPending && this.canManageMembers(currentUser, request.group),
+      },
     };
   }
 

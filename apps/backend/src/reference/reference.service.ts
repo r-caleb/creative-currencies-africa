@@ -82,6 +82,22 @@ export class ReferenceService {
     }
   }
 
+  async getPartners() {
+    return this.prisma.partner.findMany({
+      where: { published: true },
+      orderBy: [{ order: "asc" }, { name: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        description: true,
+        logoUrl: true,
+        website: true,
+        order: true,
+      },
+    });
+  }
+
   async createDiscipline(authUser: AuthUser, input: CreateDisciplineDto) {
     this.ensureAdmin(authUser);
 

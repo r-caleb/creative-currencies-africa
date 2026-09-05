@@ -3,7 +3,13 @@ import { FileInterceptor } from "@nestjs/platform-express";
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiOperation } from "@nestjs/swagger";
 import type { AuthUser } from "../auth/auth.types";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { ApplyOpportunityDto } from "./dto/apply-opportunity.dto";
+import { CreatePortfolioItemDto } from "./dto/create-portfolio-item.dto";
+import { EnrollTrainingDto } from "./dto/enroll-training.dto";
+import { MemberSearchQueryDto } from "./dto/member-search-query.dto";
+import { RequestAccountEvolutionDto } from "./dto/request-account-evolution.dto";
 import { UpdateMemberProfileDto } from "./dto/update-member-profile.dto";
+import { UpdatePortfolioItemDto } from "./dto/update-portfolio-item.dto";
 import { MemberService } from "./member.service";
 
 type AuthedRequest = Request & {
@@ -48,9 +54,51 @@ export class MemberController {
     return this.memberService.getDashboard();
   }
 
+  @Get("search")
+  @ApiBearerAuth("access-token")
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: "Rechercher globalement dans l'espace membre" })
+  @ApiOkResponse({ description: "Résultats classés par créateurs, publications, formations, opportunités, ressources et partenaires" })
+  search(@Req() req: AuthedRequest, @Query() query: MemberSearchQueryDto) {
+    return this.memberService.search(req.user, query);
+  }
+
   @Get("creative-id")
-  creativeId() {
-    return this.memberService.getCreativeId();
+  @ApiBearerAuth("access-token")
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: "Consulter le Creative ID complet du membre connecté" })
+  @ApiOkResponse({ description: "Profil, portfolio, historique officiel et badges du membre" })
+  creativeId(@Req() req: AuthedRequest) {
+    return this.memberService.getCreativeId(req.user);
+  }
+
+  @Post("creative-id/portfolio")
+  @ApiBearerAuth("access-token")
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: "Ajouter une œuvre ou un projet au portfolio Creative ID" })
+  @ApiBody({ type: CreatePortfolioItemDto })
+  @ApiOkResponse({ description: "Élément portfolio ajouté" })
+  createPortfolioItem(@Req() req: AuthedRequest, @Body() body: CreatePortfolioItemDto) {
+    return this.memberService.createPortfolioItem(req.user, body);
+  }
+
+  @Patch("creative-id/portfolio/:id")
+  @ApiBearerAuth("access-token")
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: "Modifier une œuvre ou un projet du portfolio Creative ID" })
+  @ApiBody({ type: UpdatePortfolioItemDto })
+  @ApiOkResponse({ description: "Élément portfolio mis à jour" })
+  updatePortfolioItem(@Req() req: AuthedRequest, @Param("id") id: string, @Body() body: UpdatePortfolioItemDto) {
+    return this.memberService.updatePortfolioItem(req.user, id, body);
+  }
+
+  @Delete("creative-id/portfolio/:id")
+  @ApiBearerAuth("access-token")
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: "Supprimer une œuvre ou un projet du portfolio Creative ID" })
+  @ApiOkResponse({ description: "Élément portfolio supprimé" })
+  deletePortfolioItem(@Req() req: AuthedRequest, @Param("id") id: string) {
+    return this.memberService.deletePortfolioItem(req.user, id);
   }
 
   @Get("creative-id/:memberNumber")
@@ -96,6 +144,25 @@ export class MemberController {
     return this.memberService.removeNetworkMember(req.user, userId);
   }
 
+  @Get("account-evolution")
+  @ApiBearerAuth("access-token")
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: "Consulter les possibilités d'évolution du parcours membre" })
+  @ApiOkResponse({ description: "Type de compte actuel, actions disponibles et demandes existantes" })
+  accountEvolution(@Req() req: AuthedRequest) {
+    return this.memberService.getAccountEvolution(req.user);
+  }
+
+  @Post("account-evolution")
+  @ApiBearerAuth("access-token")
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: "Demander une évolution de parcours, par exemple apprenant vers créateur" })
+  @ApiBody({ type: RequestAccountEvolutionDto })
+  @ApiOkResponse({ description: "Demande envoyée à l'équipe CCA" })
+  requestAccountEvolution(@Req() req: AuthedRequest, @Body() body: RequestAccountEvolutionDto) {
+    return this.memberService.requestAccountEvolution(req.user, body);
+  }
+
   @Get("trainings")
   @ApiBearerAuth("access-token")
   @UseGuards(JwtAuthGuard)
@@ -109,9 +176,10 @@ export class MemberController {
   @ApiBearerAuth("access-token")
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: "S'inscrire à une formation publiée" })
+  @ApiBody({ type: EnrollTrainingDto })
   @ApiOkResponse({ description: "Inscription formation confirmée" })
-  enrollTraining(@Req() req: AuthedRequest, @Param("id") id: string) {
-    return this.memberService.enrollTraining(req.user, id);
+  enrollTraining(@Req() req: AuthedRequest, @Param("id") id: string, @Body() body: EnrollTrainingDto) {
+    return this.memberService.enrollTraining(req.user, id, body);
   }
 
   @Get("opportunities")
@@ -127,8 +195,9 @@ export class MemberController {
   @ApiBearerAuth("access-token")
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: "Préparer ou soumettre une candidature à une opportunité" })
+  @ApiBody({ type: ApplyOpportunityDto })
   @ApiOkResponse({ description: "Candidature opportunité enregistrée" })
-  applyOpportunity(@Req() req: AuthedRequest, @Param("id") id: string, @Body() body: Record<string, unknown>) {
+  applyOpportunity(@Req() req: AuthedRequest, @Param("id") id: string, @Body() body: ApplyOpportunityDto) {
     return this.memberService.applyOpportunity(req.user, id, body);
   }
 
@@ -139,6 +208,33 @@ export class MemberController {
   @ApiOkResponse({ description: "Bibliothèque, ressources de formations et ressources publiées" })
   resources(@Req() req: AuthedRequest) {
     return this.memberService.getResources(req.user);
+  }
+
+  @Post("resources/:id/view")
+  @ApiBearerAuth("access-token")
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: "Enregistrer une consultation de ressource accessible" })
+  @ApiOkResponse({ description: "Consultation enregistrée après vérification des droits" })
+  viewResource(@Req() req: AuthedRequest, @Param("id") id: string) {
+    return this.memberService.viewResource(req.user, id);
+  }
+
+  @Get("resources/:id/download")
+  @ApiBearerAuth("access-token")
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: "Obtenir le lien de téléchargement sécurisé d'une ressource" })
+  @ApiOkResponse({ description: "Lien autorisé et téléchargement journalisé" })
+  downloadResource(@Req() req: AuthedRequest, @Param("id") id: string) {
+    return this.memberService.downloadResource(req.user, id);
+  }
+
+  @Post("resources/:id/useful")
+  @ApiBearerAuth("access-token")
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: "Marquer ou retirer une ressource comme utile" })
+  @ApiOkResponse({ description: "Préférence utile mise à jour" })
+  toggleUsefulResource(@Req() req: AuthedRequest, @Param("id") id: string) {
+    return this.memberService.toggleUsefulResource(req.user, id);
   }
 
   @Get("agenda")

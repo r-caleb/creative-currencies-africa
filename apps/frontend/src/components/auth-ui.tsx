@@ -15,6 +15,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { FaApple, FaFacebookF, FaGoogle } from "react-icons/fa6";
+import { PasswordVisibilityButton } from "@/components/password-visibility-button";
 
 type AuthShellProps = {
   eyebrow: string;
@@ -115,14 +116,20 @@ export function AuthFieldLabel({ label, required }: { label: string; required?: 
   );
 }
 
-export function AuthInput({ label, icon: Icon = Mail, actionIcon, ...props }: AuthInputProps) {
+export function AuthInput({ label, icon: Icon = Mail, actionIcon, type, ...props }: AuthInputProps) {
+  const isPasswordInput = type === "password";
+
   return (
     <label className="auth-field">
       <AuthFieldLabel label={label} required={props.required} />
       <span className="auth-input-wrap">
         <Icon className="auth-input-icon" aria-hidden={true} strokeWidth={1.7} />
-        <input {...props} />
-        {actionIcon ? <span className="auth-input-action">{actionIcon}</span> : null}
+        <input {...props} type={type} />
+        {isPasswordInput ? (
+          <PasswordVisibilityButton />
+        ) : actionIcon ? (
+          <span className="auth-input-action">{actionIcon}</span>
+        ) : null}
       </span>
     </label>
   );

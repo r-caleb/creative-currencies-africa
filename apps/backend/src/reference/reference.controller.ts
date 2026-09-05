@@ -26,6 +26,13 @@ export class ReferenceController {
     return this.referenceService.getDisciplines();
   }
 
+  @Get("partners")
+  @ApiOperation({ summary: "Lister les partenaires publiés pour le site public" })
+  @ApiOkResponse({ description: "Partenaires actifs affichables sur la landing page" })
+  partners() {
+    return this.referenceService.getPartners();
+  }
+
   @Post("disciplines")
   @ApiBearerAuth("access-token")
   @UseGuards(JwtAuthGuard)

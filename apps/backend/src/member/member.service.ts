@@ -1,13 +1,19 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { AccountStatus, AccountType, ApplicationStatus, CertificateStatus, EnrollmentStatus, EventRegistrationStatus, EventType, NetworkConnectionKind, NetworkConnectionStatus, NotificationType, OpportunityStatus, OpportunityType, ProfileVisibility, PublicationAudience, PublicationStatus, PublicationType, ResourceAccessLevel, TrainingStatus } from "@prisma/client";
+import { AccountEvolutionRequestStatus, AccountStatus, AccountType, ApplicationStatus, CertificateStatus, EnrollmentStatus, EventRegistrationStatus, EventType, NetworkConnectionKind, NetworkConnectionStatus, NotificationType, OpportunityStatus, OpportunityType, Prisma, ProfileVisibility, PublicationAudience, PublicationStatus, PublicationType, ResourceAccessLevel, TrainingStatus } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import { extname, join, resolve, sep } from "node:path";
 import { PrismaService } from "../prisma/prisma.service";
 import type { AuthUser } from "../auth/auth.types";
 import { NotificationService } from "../notification/notification.service";
+import { ApplyOpportunityDto } from "./dto/apply-opportunity.dto";
+import { CreatePortfolioItemDto } from "./dto/create-portfolio-item.dto";
+import { EnrollTrainingDto } from "./dto/enroll-training.dto";
+import { MemberSearchQueryDto } from "./dto/member-search-query.dto";
+import { RequestAccountEvolutionDto } from "./dto/request-account-evolution.dto";
 import { UpdateMemberProfileDto } from "./dto/update-member-profile.dto";
+import { UpdatePortfolioItemDto } from "./dto/update-portfolio-item.dto";
 
 type ProfileUploadKind = "AVATAR" | "LOGO" | "CV";
 
@@ -58,36 +64,344 @@ export class MemberService {
     };
   }
 
-  getCreativeId() {
-    return {
-      member: sampleMember,
-      profile: {
-        country: "République démocratique du Congo",
-        city: "Kinshasa",
-        profession: "Directeur artistique",
-        bio: "Créatif congolais spécialisé dans l'identité visuelle, la direction artistique et les projets culturels.",
-        skills: ["Identité visuelle", "Direction artistique", "Photographie", "Branding"],
-        visibility: "MEMBERS",
+  async search(authUser: AuthUser, query: MemberSearchQueryDto = {}) {
+    const user = await this.getActiveUser(authUser);
+    const q = this.optionalText(query.q);
+    const limit = this.resolveGlobalSearchLimit(query.limit);
+
+    if (!q || q.length < 2) {
+      return this.emptyGlobalSearch(q ?? "");
+    }
+
+    const contains = { contains: q, mode: "insensitive" as const };
+    const enrolledTrainingIds = await this.prisma.trainingEnrollment.findMany({
+      where: {
+        userId: user.id,
+        status: { in: [EnrollmentStatus.ENROLLED, EnrollmentStatus.IN_PROGRESS, EnrollmentStatus.COMPLETED] },
       },
-      portfolio: [
-        {
-          title: "Identité visuelle culturelle",
-          category: "Design graphique",
-          year: 2026,
+      select: { trainingId: true },
+    });
+    const trainingIds = enrolledTrainingIds.map((enrollment) => enrollment.trainingId);
+    const resourceAccess: ResourceAccessLevel[] = [ResourceAccessLevel.PUBLIC, ResourceAccessLevel.MEMBERS];
+
+    if (user.type === AccountType.ADMIN) {
+      resourceAccess.push(ResourceAccessLevel.ADMIN_ONLY);
+    }
+
+    const [creators, publications, trainings, opportunities, resources, partners] = await Promise.all([
+      this.prisma.creativeProfile.findMany({
+        where: {
+          user: { status: AccountStatus.ACTIVE, type: { not: AccountType.ADMIN } },
+          OR: [
+            { userId: user.id },
+            { visibility: { in: [ProfileVisibility.MEMBERS, ProfileVisibility.PUBLIC] } },
+          ],
+          AND: [
+            {
+              OR: [
+                { publicName: contains },
+                { memberNumber: contains },
+                { profession: contains },
+                { discipline: contains },
+                { otherDiscipline: contains },
+                { city: contains },
+                { country: contains },
+                { bio: contains },
+                { skills: { has: q } },
+                { user: { firstName: contains } },
+                { user: { lastName: contains } },
+              ],
+            },
+          ],
         },
-        {
-          title: "Série photographique backstage",
-          category: "Photographie",
-          year: 2026,
+        include: {
+          user: { select: { firstName: true, lastName: true, type: true, emailVerifiedAt: true } },
         },
-      ],
+        orderBy: [{ profileCompletion: "desc" }, { updatedAt: "desc" }],
+        take: limit,
+      }),
+      this.prisma.publication.findMany({
+        where: {
+          status: PublicationStatus.PUBLISHED,
+          OR: [
+            { authorId: user.id },
+            { audience: { in: [PublicationAudience.PUBLIC, PublicationAudience.MEMBERS] } },
+          ],
+          AND: [
+            {
+              OR: [
+                { title: contains },
+                { content: contains },
+                { excerpt: contains },
+                { category: contains },
+                { discipline: contains },
+                { city: contains },
+                { country: contains },
+                { tags: { has: q } },
+              ],
+            },
+          ],
+        },
+        orderBy: [{ publishedAt: "desc" }, { updatedAt: "desc" }],
+        take: limit,
+      }),
+      this.prisma.training.findMany({
+        where: {
+          status: TrainingStatus.PUBLISHED,
+          OR: [{ title: contains }, { description: contains }, { location: contains }],
+        },
+        orderBy: [{ startsAt: "asc" }, { updatedAt: "desc" }],
+        take: limit,
+      }),
+      this.prisma.opportunity.findMany({
+        where: {
+          published: true,
+          status: OpportunityStatus.OPEN,
+          OR: [{ title: contains }, { description: contains }, { location: contains }, { eligibilityUrl: contains }],
+        },
+        orderBy: [{ deadline: "asc" }, { updatedAt: "desc" }],
+        take: limit,
+      }),
+      this.prisma.resource.findMany({
+        where: {
+          published: true,
+          OR: [
+            { accessLevel: { in: resourceAccess } },
+            trainingIds.length ? { accessLevel: ResourceAccessLevel.ENROLLED, trainingId: { in: trainingIds } } : undefined,
+          ].filter((item): item is Exclude<typeof item, undefined> => !!item),
+          AND: [
+            {
+              OR: [{ title: contains }, { description: contains }, { url: contains }],
+            },
+          ],
+        },
+        include: { training: { select: { title: true } } },
+        orderBy: [{ updatedAt: "desc" }],
+        take: limit,
+      }),
+      this.prisma.partner.findMany({
+        where: {
+          published: true,
+          OR: [{ name: contains }, { type: contains }, { description: contains }, { website: contains }],
+        },
+        orderBy: [{ order: "asc" }, { name: "asc" }],
+        take: limit,
+      }),
+    ]);
+
+    const sections = {
+      creators: creators.map((profile) => ({
+        id: profile.id,
+        type: "creator",
+        label: "Créateur",
+        title: profile.publicName ?? `${profile.user.firstName} ${profile.user.lastName}`.trim(),
+        description: this.compactSearchText(profile.bio ?? profile.profession ?? profile.discipline),
+        meta: [profile.memberNumber, profile.otherDiscipline ?? profile.discipline, profile.city].filter(Boolean).join(" · "),
+        href: `/espace-membre/reseau/membre/${encodeURIComponent(profile.memberNumber)}`,
+        imageUrl: profile.avatarUrl,
+      })),
+      publications: publications.map((publication) => ({
+        id: publication.id,
+        type: "publication",
+        label: this.memberPublicationTypeLabel(publication.type),
+        title: publication.title,
+        description: this.compactSearchText(publication.excerpt ?? publication.content),
+        meta: [publication.category, publication.city, publication.publishedAt ? this.formatShortDate(publication.publishedAt) : null]
+          .filter(Boolean)
+          .join(" · "),
+        href: "/espace-membre",
+        imageUrl: publication.coverImageUrl,
+      })),
+      trainings: trainings.map((training) => ({
+        id: training.id,
+        type: "training",
+        label: "Formation",
+        title: training.title,
+        description: this.compactSearchText(training.description),
+        meta: [training.location, training.startsAt ? this.formatShortDate(training.startsAt) : "Date à confirmer"].filter(Boolean).join(" · "),
+        href: `/espace-membre/formations?trainingId=${encodeURIComponent(training.id)}`,
+        imageUrl: training.coverImageUrl,
+      })),
+      opportunities: opportunities.map((opportunity) => ({
+        id: opportunity.id,
+        type: "opportunity",
+        label: this.opportunityTypeLabel(opportunity.type),
+        title: opportunity.title,
+        description: this.compactSearchText(opportunity.description),
+        meta: [opportunity.location, opportunity.deadline ? `Limite ${this.formatShortDate(opportunity.deadline)}` : "Date à confirmer"].filter(Boolean).join(" · "),
+        href: `/espace-membre/opportunites?opportunityId=${encodeURIComponent(opportunity.id)}`,
+        imageUrl: null,
+      })),
+      resources: resources.map((resource) => ({
+        id: resource.id,
+        type: "resource",
+        label: this.resourceTypeLabel(resource.type),
+        title: resource.title,
+        description: this.compactSearchText(resource.description ?? resource.training?.title ?? "Ressource CCA"),
+        meta: [this.resourceAccessLabel(resource.accessLevel), resource.training?.title].filter(Boolean).join(" · "),
+        href: `/espace-membre/ressources?resourceId=${encodeURIComponent(resource.id)}`,
+        imageUrl: null,
+      })),
+      partners: partners.map((partner) => ({
+        id: partner.id,
+        type: "partner",
+        label: partner.type ?? "Partenaire",
+        title: partner.name,
+        description: this.compactSearchText(partner.description ?? partner.website ?? "Partenaire Creative Currencies Africa"),
+        meta: "Partenaire publié",
+        href: partner.website || "/#partenaires",
+        imageUrl: partner.logoUrl,
+      })),
     };
+    const results = [
+      ...sections.creators,
+      ...sections.publications,
+      ...sections.trainings,
+      ...sections.opportunities,
+      ...sections.resources,
+      ...sections.partners,
+    ];
+
+    return {
+      query: q,
+      total: results.length,
+      results,
+      sections,
+    };
+  }
+
+  async getCreativeId(authUser: AuthUser) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: authUser.userId },
+      include: {
+        profile: { include: { socialLinks: { orderBy: { network: "asc" } } } },
+        portfolioItems: { orderBy: [{ featured: "desc" }, { order: "asc" }, { updatedAt: "desc" }] },
+        enrollments: {
+          orderBy: [{ enrolledAt: "desc" }],
+          include: { training: { select: { id: true, title: true, slug: true, startsAt: true, endsAt: true } } },
+        },
+        eventRegistrations: {
+          orderBy: [{ registeredAt: "desc" }],
+          include: { event: { select: { id: true, title: true, slug: true, startsAt: true, endsAt: true } } },
+        },
+        opportunityApplications: {
+          orderBy: [{ updatedAt: "desc" }],
+          include: { opportunity: { select: { id: true, title: true, slug: true, deadline: true } } },
+        },
+        certificates: {
+          orderBy: [{ issuedAt: "desc" }, { createdAt: "desc" }],
+          include: {
+            training: { select: { id: true, title: true, slug: true, startsAt: true, certificateEnabled: true } },
+          },
+        },
+      },
+    });
+
+    if (!user || user.status !== AccountStatus.ACTIVE) {
+      throw new UnauthorizedException("Votre connexion n'est plus valide. Connectez-vous à nouveau.");
+    }
+
+    if (!user.profile) {
+      throw new BadRequestException("Aucun profil Creative ID n'est associé à ce compte.");
+    }
+
+    const issuedCertificates = user.certificates.filter((certificate) => certificate.status === CertificateStatus.ISSUED).length;
+
+    return {
+      profile: {
+        ...user.profile,
+        discipline: user.profile.otherDiscipline ?? user.profile.discipline,
+      },
+      socialLinks: user.profile.socialLinks.map((link) => ({
+        id: link.id,
+        network: link.network,
+        url: link.url,
+      })),
+      portfolioItems: user.portfolioItems.map((item) => this.serializePortfolioItem(item)),
+      history: this.buildCreativeIdHistory(user),
+      badges: this.memberBadges({
+        emailVerifiedAt: user.emailVerifiedAt,
+        profileVerifiedAt: user.profile.verifiedAt,
+        profileCompletion: user.profile.profileCompletion,
+        issuedCertificates,
+      }),
+      stats: {
+        portfolioItems: user.portfolioItems.length,
+        trainings: user.enrollments.length,
+        certificates: issuedCertificates,
+        opportunities: user.opportunityApplications.length,
+        events: user.eventRegistrations.length,
+      },
+    };
+  }
+
+  async createPortfolioItem(authUser: AuthUser, input: CreatePortfolioItemDto) {
+    await this.ensurePortfolioOwner(authUser);
+    const item = await this.prisma.portfolioItem.create({
+      data: {
+        userId: authUser.userId,
+        title: this.requiredText(input.title, "Le titre du projet est requis."),
+        category: this.requiredText(input.category, "La discipline du projet est requise."),
+        description: this.optionalText(input.description),
+        mediaUrl: this.optionalText(input.mediaUrl),
+        externalUrl: this.optionalText(input.externalUrl),
+        year: input.year ?? null,
+        featured: input.featured ?? false,
+        order: input.order ?? 0,
+      },
+    });
+
+    return this.serializePortfolioItem(item);
+  }
+
+  async updatePortfolioItem(authUser: AuthUser, id: string, input: UpdatePortfolioItemDto) {
+    await this.ensurePortfolioOwner(authUser);
+    const existing = await this.prisma.portfolioItem.findFirst({
+      where: { id, userId: authUser.userId },
+    });
+
+    if (!existing) {
+      throw new NotFoundException("Cet élément de portfolio est introuvable.");
+    }
+
+    const item = await this.prisma.portfolioItem.update({
+      where: { id },
+      data: {
+        title: input.title === undefined ? existing.title : this.requiredText(input.title, "Le titre du projet est requis."),
+        category: input.category === undefined ? existing.category : this.requiredText(input.category, "La discipline du projet est requise."),
+        description: this.nextOptionalText(input.description, existing.description),
+        mediaUrl: this.nextOptionalText(input.mediaUrl, existing.mediaUrl),
+        externalUrl: this.nextOptionalText(input.externalUrl, existing.externalUrl),
+        year: input.year === undefined ? existing.year : input.year,
+        featured: input.featured === undefined ? existing.featured : input.featured,
+        order: input.order === undefined ? existing.order : input.order,
+      },
+    });
+
+    return this.serializePortfolioItem(item);
+  }
+
+  async deletePortfolioItem(authUser: AuthUser, id: string) {
+    await this.ensurePortfolioOwner(authUser);
+    const existing = await this.prisma.portfolioItem.findFirst({
+      where: { id, userId: authUser.userId },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      throw new NotFoundException("Cet élément de portfolio est introuvable.");
+    }
+
+    await this.prisma.portfolioItem.delete({ where: { id } });
+
+    return { success: true };
   }
 
   async getPublicCreativeId(memberNumber: string) {
     const profile = await this.prisma.creativeProfile.findUnique({
       where: { memberNumber },
       include: {
+        socialLinks: { orderBy: { network: "asc" } },
         user: {
           select: {
             firstName: true,
@@ -95,6 +409,34 @@ export class MemberService {
             type: true,
             emailVerifiedAt: true,
             status: true,
+            portfolioItems: {
+              orderBy: [{ featured: "desc" }, { order: "asc" }, { updatedAt: "desc" }],
+              take: 8,
+            },
+            certificates: {
+              where: { status: CertificateStatus.ISSUED },
+              orderBy: [{ issuedAt: "desc" }, { createdAt: "desc" }],
+              take: 6,
+              include: {
+                training: { select: { title: true } },
+              },
+            },
+            enrollments: {
+              where: { status: EnrollmentStatus.COMPLETED },
+              orderBy: [{ completedAt: "desc" }, { enrolledAt: "desc" }],
+              take: 6,
+              include: {
+                training: { select: { title: true } },
+              },
+            },
+            eventRegistrations: {
+              where: { status: EventRegistrationStatus.ATTENDED },
+              orderBy: [{ attendedAt: "desc" }, { registeredAt: "desc" }],
+              take: 6,
+              include: {
+                event: { select: { title: true } },
+              },
+            },
           },
         },
       },
@@ -116,6 +458,11 @@ export class MemberService {
       portfolioUrl: profile.portfolioUrl,
       websiteUrl: profile.websiteUrl,
       avatarUrl: profile.avatarUrl,
+      socialLinks: profile.socialLinks.map((link) => ({
+        id: link.id,
+        network: link.network,
+        url: link.url,
+      })),
       skills: profile.skills,
       languages: profile.languages,
       availability: profile.availability,
@@ -123,6 +470,32 @@ export class MemberService {
       emailVerified: !!profile.user.emailVerifiedAt,
       profileVerified: !!profile.verifiedAt,
       verifiedAt: profile.verifiedAt,
+      portfolioItems: profile.user.portfolioItems.map((item) => this.serializePortfolioItem(item)),
+      certificates: profile.user.certificates.map((certificate) => ({
+        title: certificate.training?.title ?? certificate.title,
+        number: certificate.number,
+        issuedAt: certificate.issuedAt,
+      })),
+      officialHistory: [
+        ...profile.user.certificates.map((certificate) => ({
+          kind: "certificate",
+          label: "Certificat",
+          title: certificate.training?.title ?? certificate.title,
+          date: certificate.issuedAt ?? certificate.createdAt,
+        })),
+        ...profile.user.enrollments.map((enrollment) => ({
+          kind: "training",
+          label: "Formation",
+          title: enrollment.training.title,
+          date: enrollment.completedAt ?? enrollment.enrolledAt,
+        })),
+        ...profile.user.eventRegistrations.map((registration) => ({
+          kind: "event",
+          label: "Événement",
+          title: registration.event.title,
+          date: registration.attendedAt ?? registration.registeredAt,
+        })),
+      ].sort((first, second) => second.date.getTime() - first.date.getTime()).slice(0, 10),
       updatedAt: profile.updatedAt,
     };
   }
@@ -148,6 +521,7 @@ export class MemberService {
       where: {
         user: {
           status: AccountStatus.ACTIVE,
+          type: { not: AccountType.ADMIN },
         },
         OR: [
           { userId: currentUser.id },
@@ -521,7 +895,11 @@ export class MemberService {
       throw new NotFoundException("Ce membre est introuvable.");
     }
 
-    const isFollowTarget = targetUser.type === AccountType.ORGANIZATION || targetUser.type === AccountType.PARTNER || targetUser.type === AccountType.ADMIN;
+    if (targetUser.type === AccountType.ADMIN) {
+      throw new NotFoundException("Ce membre est introuvable.");
+    }
+
+    const isFollowTarget = targetUser.type === AccountType.ORGANIZATION || targetUser.type === AccountType.PARTNER;
     const hasVisibleTarget = isFollowTarget ? true : !!targetUser.profile;
 
     if (!hasVisibleTarget) {
@@ -732,7 +1110,7 @@ export class MemberService {
     };
   }
 
-  async enrollTraining(authUser: AuthUser, id: string) {
+  async enrollTraining(authUser: AuthUser, id: string, input: EnrollTrainingDto = {}) {
     const user = await this.getActiveUser(authUser);
     const training = await this.prisma.training.findUnique({
       where: { id },
@@ -754,16 +1132,103 @@ export class MemberService {
 
     const enrollment = await this.prisma.trainingEnrollment.upsert({
       where: { trainingId_userId: { trainingId: training.id, userId: user.id } },
-      create: { trainingId: training.id, userId: user.id, status: EnrollmentStatus.ENROLLED },
+      create: {
+        trainingId: training.id,
+        userId: user.id,
+        status: EnrollmentStatus.ENROLLED,
+        motivation: this.optionalText(input.motivation),
+        phone: this.optionalText(input.phone) ?? user.phone,
+      },
       update: {
         status: existing?.status === EnrollmentStatus.CANCELLED ? EnrollmentStatus.ENROLLED : existing?.status,
+        motivation: input.motivation !== undefined ? this.optionalText(input.motivation) : undefined,
+        phone: input.phone !== undefined ? this.optionalText(input.phone) : undefined,
       },
     });
+
+    if (user.type === AccountType.PUBLIC) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { type: AccountType.LEARNER },
+      });
+
+      await this.notifications.createForUser({
+        userId: user.id,
+        type: NotificationType.TRAINING,
+        title: "Parcours apprenant activé",
+        message: "Votre inscription à une formation CCA active votre statut apprenant.",
+        href: "/espace-membre/formations",
+      }).catch(() => undefined);
+    }
 
     return {
       success: true,
       enrollment,
       trainings: await this.getTrainings(authUser),
+    };
+  }
+
+  async getAccountEvolution(authUser: AuthUser) {
+    const user = await this.getActiveUser(authUser);
+    const requests = await this.prisma.accountEvolutionRequest.findMany({
+      where: { userId: user.id },
+      orderBy: [{ createdAt: "desc" }],
+      take: 10,
+    });
+
+    return {
+      accountType: user.type,
+      availableTargets: this.accountEvolutionTargets(user.type),
+      requests: requests.map((request) => this.serializeAccountEvolutionRequest(request)),
+    };
+  }
+
+  async requestAccountEvolution(authUser: AuthUser, input: RequestAccountEvolutionDto) {
+    const user = await this.getActiveUser(authUser);
+    const requestedType = input.requestedType;
+
+    if (requestedType !== AccountType.CREATOR) {
+      throw new BadRequestException("Pour cette version, seule la demande de profil créateur est ouverte.");
+    }
+
+    if (user.type !== AccountType.PUBLIC && user.type !== AccountType.LEARNER) {
+      throw new BadRequestException("Votre type de compte ne peut pas demander ce changement de parcours.");
+    }
+
+    const pending = await this.prisma.accountEvolutionRequest.findFirst({
+      where: {
+        userId: user.id,
+        requestedType,
+        status: AccountEvolutionRequestStatus.PENDING,
+      },
+      select: { id: true },
+    });
+
+    if (pending) {
+      throw new BadRequestException("Une demande de passage créateur est déjà en cours de traitement.");
+    }
+
+    const request = await this.prisma.accountEvolutionRequest.create({
+      data: {
+        userId: user.id,
+        fromType: user.type,
+        requestedType,
+        motivation: this.optionalText(input.motivation),
+        portfolioUrl: this.optionalText(input.portfolioUrl) ?? user.profile?.portfolioUrl,
+        cvUrl: this.optionalText(input.cvUrl) ?? user.profile?.cvUrl,
+      },
+    });
+
+    await this.notifyAdmins({
+      title: "Nouvelle demande créateur",
+      message: `${user.firstName} ${user.lastName} demande la validation de son profil créateur.`,
+      href: "/espace-membre/admin?tab=members",
+    });
+
+    return {
+      success: true,
+      message: "Votre demande créateur a été envoyée à l'équipe CCA.",
+      request: this.serializeAccountEvolutionRequest(request),
     };
   }
 
@@ -855,7 +1320,7 @@ export class MemberService {
     };
   }
 
-  async applyOpportunity(authUser: AuthUser, id: string, input: Record<string, unknown>) {
+  async applyOpportunity(authUser: AuthUser, id: string, input: ApplyOpportunityDto) {
     const user = await this.getActiveUser(authUser);
     const opportunity = await this.prisma.opportunity.findUnique({
       where: { id },
@@ -872,7 +1337,14 @@ export class MemberService {
 
     const status = this.resolveApplicationStatus(input.status);
     const motivation = this.optionalText(input.motivation);
-    const portfolioUrl = this.optionalText(input.portfolioUrl);
+    const discipline = this.optionalText(input.discipline) ?? user.profile?.discipline ?? null;
+    const city = this.optionalText(input.city) ?? user.profile?.city ?? null;
+    const phone = this.optionalText(input.phone) ?? user.phone;
+    const portfolioUrl = this.optionalText(input.portfolioUrl) ?? user.profile?.portfolioUrl ?? null;
+    const cvUrl = this.optionalText(input.cvUrl) ?? user.profile?.cvUrl ?? null;
+    const fileUrl = this.optionalText(input.fileUrl);
+    const links = this.optionalTextList(input.links);
+    const socialLinks = this.optionalTextList(input.socialLinks);
 
     const application = await this.prisma.opportunityApplication.upsert({
       where: { opportunityId_userId: { opportunityId: opportunity.id, userId: user.id } },
@@ -881,13 +1353,27 @@ export class MemberService {
         userId: user.id,
         status,
         motivation,
+        discipline,
+        city,
+        phone,
         portfolioUrl,
+        cvUrl,
+        fileUrl,
+        links: links.length ? links : undefined,
+        socialLinks: socialLinks.length ? socialLinks : undefined,
         submittedAt: status === ApplicationStatus.SUBMITTED ? new Date() : null,
       },
       update: {
         status,
         motivation,
+        discipline,
+        city,
+        phone,
         portfolioUrl,
+        cvUrl,
+        fileUrl,
+        links: links.length ? links : input.links !== undefined ? Prisma.DbNull : undefined,
+        socialLinks: socialLinks.length ? socialLinks : input.socialLinks !== undefined ? Prisma.DbNull : undefined,
         submittedAt: status === ApplicationStatus.SUBMITTED ? new Date() : undefined,
       },
     });
@@ -938,6 +1424,8 @@ export class MemberService {
               partnerProfile: { select: { name: true } },
             },
           },
+          usefulMarks: { where: { userId: user.id }, select: { id: true }, take: 1 },
+          _count: { select: { views: true, downloads: true, usefulMarks: true } },
         },
         orderBy: [{ createdAt: "desc" }],
         take: 80,
@@ -1013,6 +1501,85 @@ export class MemberService {
       library,
       trainingResources: library.filter((resource) => resource.training || resource.accessLevel === ResourceAccessLevel.ENROLLED),
       myPublished,
+    };
+  }
+
+  async viewResource(authUser: AuthUser, id: string) {
+    const { user, resource } = await this.getAccessibleResource(authUser, id);
+
+    await this.prisma.resourceView.create({
+      data: {
+        resourceId: resource.id,
+        userId: user.id,
+      },
+    });
+
+    const updatedResource = await this.prisma.resource.findUniqueOrThrow({
+      where: { id: resource.id },
+      include: this.resourceDetailInclude(user.id),
+    });
+
+    return {
+      success: true,
+      resource: this.serializeResource(updatedResource, user),
+    };
+  }
+
+  async downloadResource(authUser: AuthUser, id: string) {
+    const { user, resource } = await this.getAccessibleResource(authUser, id);
+
+    await this.prisma.resourceDownload.create({
+      data: {
+        resourceId: resource.id,
+        userId: user.id,
+      },
+    });
+
+    const updatedResource = await this.prisma.resource.findUniqueOrThrow({
+      where: { id: resource.id },
+      include: this.resourceDetailInclude(user.id),
+    });
+
+    return {
+      success: true,
+      url: resource.url,
+      filename: resource.title,
+      resource: this.serializeResource(updatedResource, user),
+    };
+  }
+
+  async toggleUsefulResource(authUser: AuthUser, id: string) {
+    const { user, resource } = await this.getAccessibleResource(authUser, id);
+    const existing = await this.prisma.resourceUsefulMark.findUnique({
+      where: {
+        resourceId_userId: {
+          resourceId: resource.id,
+          userId: user.id,
+        },
+      },
+      select: { id: true },
+    });
+
+    if (existing) {
+      await this.prisma.resourceUsefulMark.delete({ where: { id: existing.id } });
+    } else {
+      await this.prisma.resourceUsefulMark.create({
+        data: {
+          resourceId: resource.id,
+          userId: user.id,
+        },
+      });
+    }
+
+    const updatedResource = await this.prisma.resource.findUniqueOrThrow({
+      where: { id: resource.id },
+      include: this.resourceDetailInclude(user.id),
+    });
+
+    return {
+      success: true,
+      useful: !existing,
+      resource: this.serializeResource(updatedResource, user),
     };
   }
 
@@ -1636,6 +2203,10 @@ export class MemberService {
     return Array.isArray(value) ? value.map((item) => this.optionalText(item)).filter((item): item is string => !!item) : [];
   }
 
+  private serializeJsonStringList(value: unknown) {
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && !!item.trim()) : [];
+  }
+
   private nextOptionalTextList(value: unknown, current: string[]) {
     return value === undefined ? current : this.optionalTextList(value);
   }
@@ -1860,11 +2431,152 @@ export class MemberService {
     };
   }
 
+  private serializePortfolioItem(item: {
+    id: string;
+    title: string;
+    description: string | null;
+    category: string;
+    mediaUrl: string | null;
+    externalUrl: string | null;
+    year: number | null;
+    featured: boolean;
+    order: number;
+    createdAt: Date;
+    updatedAt: Date;
+  }) {
+    return {
+      id: item.id,
+      title: item.title,
+      description: item.description,
+      category: item.category,
+      mediaUrl: item.mediaUrl,
+      externalUrl: item.externalUrl,
+      year: item.year,
+      featured: item.featured,
+      order: item.order,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    };
+  }
+
+  private buildCreativeIdHistory(user: {
+    enrollments: {
+      status: EnrollmentStatus;
+      progress: number;
+      enrolledAt: Date;
+      completedAt: Date | null;
+      training: { id: string; title: string; slug: string; startsAt: Date | null; endsAt: Date | null };
+    }[];
+    eventRegistrations: {
+      status: EventRegistrationStatus;
+      registeredAt: Date;
+      attendedAt: Date | null;
+      event: { id: string; title: string; slug: string; startsAt: Date; endsAt: Date };
+    }[];
+    opportunityApplications: {
+      status: ApplicationStatus;
+      submittedAt: Date | null;
+      reviewedAt: Date | null;
+      updatedAt: Date;
+      opportunity: { id: string; title: string; slug: string; deadline: Date | null };
+    }[];
+    certificates: {
+      status: CertificateStatus;
+      title: string;
+      number: string;
+      issuedAt: Date | null;
+      createdAt: Date;
+      training: { title: string } | null;
+    }[];
+  }) {
+    const items = [
+      ...user.enrollments.map((enrollment) => ({
+        kind: "training",
+        label: "Formation",
+        title: enrollment.training.title,
+        status: enrollment.status,
+        statusLabel: this.enrollmentStatusLabel(enrollment.status),
+        date: enrollment.completedAt ?? enrollment.enrolledAt,
+        meta: `${enrollment.progress}% de progression`,
+        href: "/espace-membre/formations#mes-inscriptions",
+      })),
+      ...user.eventRegistrations.map((registration) => ({
+        kind: "event",
+        label: "Événement",
+        title: registration.event.title,
+        status: registration.status,
+        statusLabel: this.eventRegistrationStatusLabel(registration.status),
+        date: registration.attendedAt ?? registration.registeredAt,
+        meta: registration.status === EventRegistrationStatus.ATTENDED ? "Participation confirmée" : "Inscription enregistrée",
+        href: "/espace-membre/agenda",
+      })),
+      ...user.opportunityApplications.map((application) => ({
+        kind: "opportunity",
+        label: "Candidature",
+        title: application.opportunity.title,
+        status: application.status,
+        statusLabel: this.applicationStatusLabel(application.status),
+        date: application.reviewedAt ?? application.submittedAt ?? application.updatedAt,
+        meta: application.submittedAt ? "Dossier transmis à CCA" : "Dossier en préparation",
+        href: "/espace-membre/opportunites#mes-candidatures",
+      })),
+      ...user.certificates.map((certificate) => ({
+        kind: "certificate",
+        label: "Certificat",
+        title: certificate.training?.title ?? certificate.title,
+        status: certificate.status,
+        statusLabel: this.certificateStatusLabel(certificate.status),
+        date: certificate.issuedAt ?? certificate.createdAt,
+        meta: certificate.number,
+        href: "/espace-membre/certificats",
+      })),
+    ];
+
+    return items
+      .sort((first, second) => second.date.getTime() - first.date.getTime())
+      .slice(0, 20);
+  }
+
   private certificateStatusLabel(status: CertificateStatus) {
     const labels: Record<CertificateStatus, string> = {
       [CertificateStatus.PENDING]: "En préparation",
       [CertificateStatus.ISSUED]: "Délivré",
       [CertificateStatus.REVOKED]: "Révoqué",
+    };
+
+    return labels[status];
+  }
+
+  private enrollmentStatusLabel(status: EnrollmentStatus) {
+    const labels: Record<EnrollmentStatus, string> = {
+      [EnrollmentStatus.ENROLLED]: "Inscrit",
+      [EnrollmentStatus.IN_PROGRESS]: "En cours",
+      [EnrollmentStatus.COMPLETED]: "Terminée",
+      [EnrollmentStatus.CANCELLED]: "Annulée",
+    };
+
+    return labels[status];
+  }
+
+  private applicationStatusLabel(status: ApplicationStatus) {
+    const labels: Record<ApplicationStatus, string> = {
+      [ApplicationStatus.DRAFT]: "Brouillon",
+      [ApplicationStatus.SUBMITTED]: "Soumis",
+      [ApplicationStatus.UNDER_REVIEW]: "En étude",
+      [ApplicationStatus.SELECTED]: "Présélectionné",
+      [ApplicationStatus.ACCEPTED]: "Accepté",
+      [ApplicationStatus.REJECTED]: "Refusé",
+      [ApplicationStatus.WITHDRAWN]: "Retiré",
+    };
+
+    return labels[status];
+  }
+
+  private eventRegistrationStatusLabel(status: EventRegistrationStatus) {
+    const labels: Record<EventRegistrationStatus, string> = {
+      [EventRegistrationStatus.REGISTERED]: "Inscrit",
+      [EventRegistrationStatus.ATTENDED]: "Présent",
+      [EventRegistrationStatus.CANCELLED]: "Annulé",
     };
 
     return labels[status];
@@ -1908,6 +2620,81 @@ export class MemberService {
     ].filter(Boolean);
   }
 
+  private accountEvolutionTargets(type: AccountType) {
+    if (type === AccountType.PUBLIC) {
+      return [
+        {
+          type: AccountType.LEARNER,
+          mode: "automatic_training",
+          title: "Devenir apprenant",
+          text: "Le statut apprenant s'active automatiquement dès votre première inscription à une formation CCA.",
+        },
+        {
+          type: AccountType.CREATOR,
+          mode: "request",
+          title: "Demander le profil créateur",
+          text: "CCA vérifie votre démarche, votre portfolio et votre profil avant d'activer le statut créateur.",
+        },
+      ];
+    }
+
+    if (type === AccountType.LEARNER) {
+      return [
+        {
+          type: AccountType.CREATOR,
+          mode: "request",
+          title: "Passer créateur",
+          text: "Demandez la validation CCA lorsque votre profil, vos créations et votre portfolio sont prêts.",
+        },
+      ];
+    }
+
+    return [];
+  }
+
+  private serializeAccountEvolutionRequest(request: {
+    id: string;
+    fromType: AccountType;
+    requestedType: AccountType;
+    status: AccountEvolutionRequestStatus;
+    motivation: string | null;
+    portfolioUrl: string | null;
+    cvUrl: string | null;
+    note: string | null;
+    reviewedAt: Date | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }) {
+    return {
+      id: request.id,
+      fromType: request.fromType,
+      requestedType: request.requestedType,
+      status: request.status,
+      motivation: request.motivation,
+      portfolioUrl: request.portfolioUrl,
+      cvUrl: request.cvUrl,
+      note: request.note,
+      reviewedAt: request.reviewedAt,
+      createdAt: request.createdAt,
+      updatedAt: request.updatedAt,
+    };
+  }
+
+  private async notifyAdmins(input: { title: string; message: string; href: string }) {
+    const admins = await this.prisma.user.findMany({
+      where: { type: AccountType.ADMIN, status: AccountStatus.ACTIVE },
+      select: { id: true },
+    });
+
+    await Promise.all(admins.map((admin) => this.notifications.createForUser({
+      userId: admin.id,
+      type: NotificationType.SYSTEM,
+      title: input.title,
+      message: input.message,
+      href: input.href,
+    }).catch(() => undefined)));
+  }
+
   private async getActiveUser(authUser: AuthUser) {
     const user = await this.prisma.user.findUnique({
       where: { id: authUser.userId },
@@ -1917,7 +2704,8 @@ export class MemberService {
         status: true,
         firstName: true,
         lastName: true,
-        profile: { select: { discipline: true, country: true, city: true } },
+        phone: true,
+        profile: { select: { discipline: true, country: true, city: true, portfolioUrl: true, cvUrl: true } },
         organizationProfile: { select: { sector: true, country: true, city: true } },
         partnerProfile: { select: { partnerType: true, country: true, city: true } },
       },
@@ -1925,6 +2713,27 @@ export class MemberService {
 
     if (!user || user.status !== AccountStatus.ACTIVE) {
       throw new UnauthorizedException("Votre connexion n'est plus valide. Connectez-vous à nouveau.");
+    }
+
+    return user;
+  }
+
+  private async ensurePortfolioOwner(authUser: AuthUser) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: authUser.userId },
+      select: { id: true, type: true, status: true, profile: { select: { id: true } } },
+    });
+
+    if (!user || user.status !== AccountStatus.ACTIVE) {
+      throw new UnauthorizedException("Votre connexion n'est plus valide. Connectez-vous à nouveau.");
+    }
+
+    if (user.type !== AccountType.CREATOR && user.type !== AccountType.LEARNER) {
+      throw new ForbiddenException("Le portfolio Creative ID est réservé aux créateurs et apprenants.");
+    }
+
+    if (!user.profile) {
+      throw new BadRequestException("Aucun profil Creative ID n'est associé à ce compte.");
     }
 
     return user;
@@ -1970,6 +2779,42 @@ export class MemberService {
     return cleanContent.length > 170 ? `${cleanContent.slice(0, 167)}...` : cleanContent;
   }
 
+  private compactSearchText(content: string | null | undefined) {
+    const cleanContent = (content ?? "").replace(/\s+/g, " ").trim();
+
+    if (!cleanContent) {
+      return "";
+    }
+
+    return cleanContent.length > 115 ? `${cleanContent.slice(0, 112)}...` : cleanContent;
+  }
+
+  private resolveGlobalSearchLimit(value: unknown) {
+    if (typeof value !== "number" || Number.isNaN(value)) {
+      return 5;
+    }
+
+    return Math.min(8, Math.max(1, Math.trunc(value)));
+  }
+
+  private emptyGlobalSearch(query: string) {
+    const sections = {
+      creators: [],
+      publications: [],
+      trainings: [],
+      opportunities: [],
+      resources: [],
+      partners: [],
+    };
+
+    return {
+      query,
+      total: 0,
+      results: [],
+      sections,
+    };
+  }
+
   private resourceAccessRules(accountType: AccountType) {
     const canPublishResource = this.canPublishResource(accountType);
 
@@ -2007,6 +2852,75 @@ export class MemberService {
     ];
   }
 
+  private resourceDetailInclude(userId: string) {
+    return {
+      training: { select: { id: true, title: true, slug: true } },
+      uploadedBy: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          type: true,
+          profile: { select: { publicName: true } },
+          organizationProfile: { select: { name: true } },
+          partnerProfile: { select: { name: true } },
+        },
+      },
+      usefulMarks: { where: { userId }, select: { id: true }, take: 1 },
+      _count: { select: { views: true, downloads: true, usefulMarks: true } },
+    } satisfies Prisma.ResourceInclude;
+  }
+
+  private async getAccessibleResource(authUser: AuthUser, id: string) {
+    const user = await this.getActiveUser(authUser);
+    const resource = await this.prisma.resource.findUnique({
+      where: { id },
+      include: this.resourceDetailInclude(user.id),
+    });
+
+    if (!resource || !resource.published) {
+      throw new NotFoundException("Cette ressource est introuvable.");
+    }
+
+    if (!(await this.canAccessResource(user, resource))) {
+      throw new ForbiddenException("Votre compte n'a pas accès à cette ressource.");
+    }
+
+    return { user, resource };
+  }
+
+  private async canAccessResource(
+    user: Awaited<ReturnType<MemberService["getActiveUser"]>>,
+    resource: { accessLevel: ResourceAccessLevel; trainingId: string | null },
+  ) {
+    if (user.type === AccountType.ADMIN) {
+      return true;
+    }
+
+    if (resource.accessLevel === ResourceAccessLevel.PUBLIC || resource.accessLevel === ResourceAccessLevel.MEMBERS) {
+      return true;
+    }
+
+    if (resource.accessLevel === ResourceAccessLevel.ADMIN_ONLY) {
+      return false;
+    }
+
+    if (resource.accessLevel === ResourceAccessLevel.ENROLLED && resource.trainingId) {
+      const enrollment = await this.prisma.trainingEnrollment.findFirst({
+        where: {
+          userId: user.id,
+          trainingId: resource.trainingId,
+          status: { in: [EnrollmentStatus.ENROLLED, EnrollmentStatus.IN_PROGRESS, EnrollmentStatus.COMPLETED] },
+        },
+        select: { id: true },
+      });
+
+      return !!enrollment;
+    }
+
+    return false;
+  }
+
   private resolveApplicationStatus(value: unknown) {
     if (value === ApplicationStatus.SUBMITTED || value === "submitted") {
       return ApplicationStatus.SUBMITTED;
@@ -2030,7 +2944,14 @@ export class MemberService {
       id: string;
       status: ApplicationStatus;
       motivation: string | null;
+      discipline: string | null;
+      city: string | null;
+      phone: string | null;
       portfolioUrl: string | null;
+      cvUrl: string | null;
+      fileUrl: string | null;
+      links: unknown;
+      socialLinks: unknown;
       submittedAt: Date | null;
       reviewedAt: Date | null;
       adminNote: string | null;
@@ -2066,7 +2987,14 @@ export class MemberService {
             id: application.id,
             status: application.status,
             motivation: application.motivation,
+            discipline: application.discipline,
+            city: application.city,
+            phone: application.phone,
             portfolioUrl: application.portfolioUrl,
+            cvUrl: application.cvUrl,
+            fileUrl: application.fileUrl,
+            links: this.serializeJsonStringList(application.links),
+            socialLinks: this.serializeJsonStringList(application.socialLinks),
             submittedAt: application.submittedAt,
             reviewedAt: application.reviewedAt,
             adminNote: application.adminNote,
@@ -2538,6 +3466,8 @@ export class MemberService {
       organizationProfile: { name: string } | null;
       partnerProfile: { name: string } | null;
     } | null;
+    usefulMarks?: Array<{ id: string }>;
+    _count?: { views: number; downloads: number; usefulMarks: number };
   }, user: Awaited<ReturnType<MemberService["getActiveUser"]>>) {
     const authorName = resource.uploadedBy ? this.resourceAuthorName(resource.uploadedBy) : "Creative Currencies Africa";
     const official = !resource.uploadedBy || resource.uploadedBy.type === AccountType.ADMIN;
@@ -2571,6 +3501,13 @@ export class MemberService {
           url: resource.url,
         },
       ],
+      isUseful: (resource.usefulMarks?.length ?? 0) > 0,
+      secureDownload: true,
+      counts: {
+        views: resource._count?.views ?? 0,
+        downloads: resource._count?.downloads ?? 0,
+        usefulMarks: resource._count?.usefulMarks ?? 0,
+      },
       canManage: user.type === AccountType.ADMIN || resource.uploadedById === user.id,
       createdAt: resource.createdAt,
       updatedAt: resource.updatedAt,
@@ -2629,6 +3566,13 @@ export class MemberService {
         type: attachment.type,
         url: attachment.url,
       })),
+      isUseful: false,
+      secureDownload: false,
+      counts: {
+        views: 0,
+        downloads: 0,
+        usefulMarks: publication._count.reactions,
+      },
       canManage: user.type === AccountType.ADMIN || publication.authorId === user.id,
       createdAt: publication.createdAt,
       updatedAt: publication.updatedAt,
@@ -2748,7 +3692,17 @@ export class MemberService {
     certificateEnabled: boolean;
     modules: Array<{ title: string; startsAt: Date | null; endsAt: Date | null }>;
     resources: Array<{ title: string; type: string; url: string; accessLevel: ResourceAccessLevel }>;
-    enrollments: Array<{ id: string; status: EnrollmentStatus; progress: number; enrolledAt: Date; completedAt: Date | null }>;
+    enrollments: Array<{
+      id: string;
+      status: EnrollmentStatus;
+      progress: number;
+      motivation: string | null;
+      phone: string | null;
+      adminNote: string | null;
+      enrolledAt: Date;
+      reviewedAt: Date | null;
+      completedAt: Date | null;
+    }>;
     _count: { enrollments: number };
   }) {
     const enrollment = training.enrollments[0] ?? null;
@@ -2800,7 +3754,11 @@ export class MemberService {
             id: enrollment.id,
             status: enrollment.status,
             progress: enrollment.progress,
+            motivation: enrollment.motivation,
+            phone: enrollment.phone,
+            adminNote: enrollment.adminNote,
             enrolledAt: enrollment.enrolledAt,
+            reviewedAt: enrollment.reviewedAt,
             completedAt: enrollment.completedAt,
           }
         : null,

@@ -28,6 +28,7 @@ export function TrainingsPage() {
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("Toutes");
   const [selectedId, setSelectedId] = useState("");
+  const [enrollmentForm, setEnrollmentForm] = useState({ motivation: "", phone: "" });
   const [status, setStatus] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isEnrolling, setIsEnrolling] = useState(false);
@@ -115,6 +116,13 @@ export function TrainingsPage() {
   ];
   const visibleFilters = filters.filter((filter) => filter !== "Mes publications" || data?.canPublishTraining || myPublishedCount > 0);
 
+  useEffect(() => {
+    setEnrollmentForm({
+      motivation: selectedTraining?.enrollment?.motivation ?? "",
+      phone: selectedTraining?.enrollment?.phone ?? user?.phone ?? "",
+    });
+  }, [selectedTraining?.enrollment, selectedTraining?.id, user?.phone]);
+
   const handleTrainingAction = async (training: MemberTraining) => {
     setSelectedId(training.id);
 
@@ -133,7 +141,10 @@ export function TrainingsPage() {
       setStatus("");
 
       try {
-        const response = await enrollInTraining(accessToken, training.id);
+        const response = await enrollInTraining(accessToken, training.id, {
+          motivation: enrollmentForm.motivation.trim() || undefined,
+          phone: enrollmentForm.phone.trim() || undefined,
+        });
         setData(response.trainings);
         setSelectedId(training.id);
         setStatus("Inscription confirmée. La formation apparaît maintenant dans Mes inscriptions.");
@@ -280,6 +291,56 @@ export function TrainingsPage() {
               </div>
             </section>
 
+            <section id="mes-inscriptions" className="member-card">
+              <div className="member-card-title">
+                <div>
+                  <h2>Mes inscriptions</h2>
+                  <p>Suivez vos formations, votre progression et les certificats à préparer.</p>
+                </div>
+              </div>
+              <div className="application-list">
+                {data?.myEnrollments.length ? (
+                  data.myEnrollments.map((training) => {
+                    const enrollment = training.enrollment;
+                    const progress = enrollment?.progress ?? 0;
+
+                    return (
+                      <article key={training.id} className="application-tracking-card">
+                        <div>
+                          <strong>{training.title}</strong>
+                          <span>{enrollmentStatusLabel(enrollment?.status)} · {training.category}</span>
+                          <small>
+                            {enrollment?.enrolledAt
+                              ? `Inscrit le ${formatTrackingDate(enrollment.enrolledAt)}`
+                              : "Inscription en cours"}
+                          </small>
+                        </div>
+                        <div className="application-progress" aria-label={`Progression ${progress}%`}>
+                          <span style={{ width: `${progress}%` }} />
+                        </div>
+                        <div className="application-tracking-actions">
+                          <small>{progress}%</small>
+                          {enrollment?.adminNote ? <em>{enrollment.adminNote}</em> : null}
+                          <button type="button" onClick={() => setSelectedId(training.id)}>Ouvrir</button>
+                        </div>
+                      </article>
+                    );
+                  })
+                ) : (
+                  <article>
+                    <div>
+                      <strong>Aucune inscription active</strong>
+                      <span>Choisissez une formation disponible pour commencer votre parcours.</span>
+                    </div>
+                    <div className="application-progress" aria-label="Progression 0%">
+                      <span style={{ width: "0%" }} />
+                    </div>
+                    <small>0%</small>
+                  </article>
+                )}
+              </div>
+            </section>
+
             {selectedTraining ? (
               <>
                 <section id="formation-detail" className="member-card training-current-card">
@@ -303,6 +364,32 @@ export function TrainingsPage() {
                       </div>
                     </div>
                   </div>
+                  {selectedTraining.source === "training" && selectedTraining.canEnroll ? (
+                    <div className="training-enrollment-box">
+                      <div>
+                        <strong>{selectedTraining.enrollment ? "Votre inscription" : "Préparer l'inscription"}</strong>
+                        <p>Ajoutez un contact et une courte motivation pour aider l'équipe CCA à mieux suivre les participants.</p>
+                      </div>
+                      <div className="opportunity-application-grid">
+                        <label>
+                          <span>Téléphone</span>
+                          <input value={enrollmentForm.phone} onChange={(event) => setEnrollmentForm((current) => ({ ...current, phone: event.target.value }))} placeholder="+243..." />
+                        </label>
+                        <label>
+                          <span>Motivation courte</span>
+                          <input value={enrollmentForm.motivation} onChange={(event) => setEnrollmentForm((current) => ({ ...current, motivation: event.target.value }))} placeholder="Pourquoi cette formation vous intéresse ?" />
+                        </label>
+                      </div>
+                      {!selectedTraining.enrollment ? (
+                        <button className="member-create-button" type="button" disabled={isEnrolling} onClick={() => void handleTrainingAction(selectedTraining)}>
+                          {isEnrolling ? <Loader2 aria-hidden="true" strokeWidth={1.8} /> : null}
+                          Confirmer l'inscription
+                        </button>
+                      ) : (
+                        <span className="training-status">Inscription {selectedTraining.enrollment.status.toLowerCase()}</span>
+                      )}
+                    </div>
+                  ) : null}
                 </section>
 
                 <section className="member-card">
@@ -454,4 +541,29 @@ function normalizeSearch(value: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
+}
+
+function enrollmentStatusLabel(status?: string | null) {
+  const labels: Record<string, string> = {
+    ENROLLED: "Inscription confirmée",
+    IN_PROGRESS: "Formation en cours",
+    COMPLETED: "Terminée",
+    CANCELLED: "Annulée",
+  };
+
+  return status ? labels[String(status)] ?? "Inscription active" : "Non inscrit";
+}
+
+function formatTrackingDate(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "date à confirmer";
+  }
+
+  return date.toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 }

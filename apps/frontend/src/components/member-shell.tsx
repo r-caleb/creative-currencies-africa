@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -26,7 +26,12 @@ import {
   Sun,
   UsersRound,
 } from "lucide-react";
-import { getCurrentMember, getUnreadMessageCount, getUnreadNotificationCount, logoutSession } from "@/lib/api";
+import {
+  getCurrentMember,
+  getUnreadMessageCount,
+  getUnreadNotificationCount,
+  logoutSession,
+} from "@/lib/api";
 import type { AuthMeResponse } from "@/lib/api";
 import { connectRealtimeSocket } from "@/lib/realtime";
 import { buildInitials, getMemberDisplayName, getMemberProfileTitle } from "@/lib/member-display";
@@ -77,6 +82,7 @@ export function MemberShell({
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
   const [messageUnreadCount, setMessageUnreadCount] = useState(0);
+  const [globalSearchQuery, setGlobalSearchQuery] = useState("");
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -253,6 +259,12 @@ export function MemberShell({
     };
   }, [accessToken, user]);
 
+  useEffect(() => {
+    if (pathname === "/espace-membre/recherche") {
+      setGlobalSearchQuery(searchParams.get("q") ?? "");
+    }
+  }, [pathname, searchParams]);
+
   const toggleTheme = () => {
     const nextTheme = theme === "dark" ? "light" : "dark";
     setTheme(nextTheme);
@@ -274,6 +286,18 @@ export function MemberShell({
       dispatch(clearAuth());
       router.replace("/connexion");
     }
+  };
+
+  const handleGlobalSearchSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const term = globalSearchQuery.trim();
+
+    if (!term) {
+      router.push("/espace-membre/recherche");
+      return;
+    }
+
+    router.push(`/espace-membre/recherche?q=${encodeURIComponent(term)}`);
   };
 
   if (!isClientReady) {
@@ -325,10 +349,21 @@ export function MemberShell({
             <span>Connecter · Collaborer · Créer · Impacter</span>
           </div>
 
-          <label className="member-search">
-            <Search aria-hidden="true" strokeWidth={1.8} />
-            <input placeholder="Rechercher des créateurs, ressources, opportunités..." />
-          </label>
+          <form
+            className="member-search member-global-search"
+            role="search"
+            aria-label="Recherche globale"
+            onSubmit={handleGlobalSearchSubmit}
+          >
+            <button className="member-search-button" type="submit" aria-label="Lancer la recherche">
+              <Search aria-hidden="true" strokeWidth={1.8} />
+            </button>
+            <input
+              value={globalSearchQuery}
+              onChange={(event) => setGlobalSearchQuery(event.target.value)}
+              placeholder="Rechercher des créateurs, ressources, opportunités..."
+            />
+          </form>
 
           <div className="member-actions">
             <Link className="member-create-button" href="/espace-membre/publier">
