@@ -1646,6 +1646,11 @@ html[data-theme="light"] .about-card-grid p,
   margin: 40px auto 0;
 }
 
+.partner-logo-link,
+.partner-wall > div {
+  display: contents;
+}
+
 .partner-logo-card {
   grid-column: span 2;
   height: 112px;
@@ -15904,6 +15909,9 @@ img.member-profile-avatar {
   font: inherit;
   font-size: 0.9rem;
   outline: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .admin-upload-action {

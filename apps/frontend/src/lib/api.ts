@@ -699,6 +699,8 @@ export type AdminPartner = {
   updatedAt: string;
 };
 
+export type PublicPartner = Pick<AdminPartner, "id" | "name" | "type" | "description" | "logoUrl" | "website" | "order">;
+
 export type AdminPartnersResponse = {
   partners: AdminPartner[];
   total: number;
@@ -2838,6 +2840,12 @@ export function getAdminPartners(
   return authenticatedApiRequest<AdminPartnersResponse>(`/admin/partners${buildQueryString(query)}`, {
     method: "GET",
   }, accessToken);
+}
+
+export function getPublicPartners() {
+  return apiRequest<PublicPartner[]>("/reference/partners", {
+    method: "GET",
+  });
 }
 
 export function createAdminPartner(accessToken: string | null | undefined, body: PartnerPayload) {
