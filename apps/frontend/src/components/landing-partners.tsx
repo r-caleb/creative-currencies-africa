@@ -50,7 +50,7 @@ export function LandingPartners({ fallbackPartners }: LandingPartnersProps) {
       {visiblePartners.map((partner) => {
         const content = (
           <article className={partnerLogoClassName(partner)}>
-            <img src={partner.logo} alt={partner.name} loading="lazy" decoding="async" />
+            <img src={partner.logo} alt={partner.name} loading="eager" decoding="async" />
           </article>
         );
 
