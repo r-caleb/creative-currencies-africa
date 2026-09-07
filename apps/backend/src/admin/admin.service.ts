@@ -2243,6 +2243,18 @@ export class AdminService {
       data.sortOrder = input.sortOrder;
     }
 
+    if (input.photos !== undefined) {
+      const photos = input.photos.map((photo, index) => this.normalizeGalleryPhotoCreate(photo, index));
+      data.photos = {
+        deleteMany: {},
+        ...(photos.length ? { create: photos } : {}),
+      };
+
+      if (input.coverImageUrl === undefined) {
+        data.coverImageUrl = photos[0]?.imageUrl ?? null;
+      }
+    }
+
     const album = await this.prisma.galleryAlbum.update({
       where: { id },
       data,

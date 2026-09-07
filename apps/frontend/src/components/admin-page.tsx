@@ -3332,6 +3332,14 @@ function GalleryAlbumRow({
             <span>Description</span>
             <textarea value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} />
           </label>
+          <label className="admin-reference-textarea">
+            <span>Photos</span>
+            <textarea
+              value={form.photosText}
+              onChange={(event) => setForm((current) => ({ ...current, photosText: event.target.value }))}
+              placeholder={"/assets/gallery/photo-01.jpg\n/assets/gallery/photo-02.jpg"}
+            />
+          </label>
         </div>
         <div className="admin-reference-row-actions">
           <button type="button" onClick={() => onUpdate(album, form)} disabled={!form.title.trim() || busyKey === `gallery-${album.id}`}>
@@ -5182,11 +5190,25 @@ function normalizeGalleryAlbumPayload(input: Partial<GalleryAlbumFormState>) {
   const payload = normalizeContentPayload(input) as Partial<GalleryAlbumPayload>;
   delete (payload as Partial<GalleryAlbumFormState>).photosText;
 
+  if (input.photosText !== undefined) {
+    payload.photos = galleryPhotosFromText(input.photosText);
+  }
+
   return payload;
 }
 
 function normalizeGalleryAlbumCreatePayload(input: GalleryAlbumFormState) {
-  const photos = (input.photosText ?? "")
+  const photos = galleryPhotosFromText(input.photosText ?? "");
+
+  return {
+    ...normalizeGalleryAlbumPayload(input),
+    title: input.title.trim(),
+    photos,
+  } as GalleryAlbumPayload;
+}
+
+function galleryPhotosFromText(value: string) {
+  return value
     .split("\n")
     .map((item) => item.trim())
     .filter(Boolean)
@@ -5195,12 +5217,6 @@ function normalizeGalleryAlbumCreatePayload(input: GalleryAlbumFormState) {
       sortOrder: index + 1,
       published: true,
     }));
-
-  return {
-    ...normalizeGalleryAlbumPayload(input),
-    title: input.title.trim(),
-    photos,
-  } as GalleryAlbumPayload;
 }
 
 function normalizeContentPayload(input: Record<string, unknown>) {
