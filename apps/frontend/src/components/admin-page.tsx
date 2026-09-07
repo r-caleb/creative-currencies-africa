@@ -2904,7 +2904,7 @@ function TrainingContentRow({
   return (
     <article className="admin-reference-row admin-content-row">
       <div className="admin-reference-logo">
-        {training.coverImageUrl ? <img src={training.coverImageUrl} alt="" /> : <GraduationCap aria-hidden="true" />}
+        {training.coverImageUrl ? <img src={training.coverImageUrl} alt="" loading="lazy" decoding="async" /> : <GraduationCap aria-hidden="true" />}
       </div>
       <div className="admin-reference-row-main">
         <strong>{training.title}</strong>
@@ -3055,7 +3055,7 @@ function EventContentRow({
   return (
     <article className="admin-reference-row admin-content-row">
       <div className="admin-reference-logo">
-        {event.coverImageUrl ? <img src={event.coverImageUrl} alt="" /> : <CalendarDays aria-hidden="true" />}
+        {event.coverImageUrl ? <img src={event.coverImageUrl} alt="" loading="lazy" decoding="async" /> : <CalendarDays aria-hidden="true" />}
       </div>
       <div className="admin-reference-row-main">
         <strong>{event.title}</strong>
@@ -3316,7 +3316,7 @@ function GalleryAlbumRow({
   return (
     <article className="admin-reference-row admin-content-row">
       <div className="admin-reference-logo">
-        {album.coverImageUrl ? <img src={album.coverImageUrl} alt="" /> : <ImageIcon aria-hidden="true" />}
+        {album.coverImageUrl ? <img src={album.coverImageUrl} alt="" loading="lazy" decoding="async" /> : <ImageIcon aria-hidden="true" />}
       </div>
       <div className="admin-reference-row-main">
         <strong>{album.title}</strong>
@@ -4729,7 +4729,7 @@ function PartnerReferenceRow({
   return (
     <article className="admin-reference-row">
       <div className="admin-reference-logo">
-        {partner.logoUrl ? <img src={partner.logoUrl} alt="" /> : <Handshake aria-hidden="true" />}
+        {partner.logoUrl ? <img src={partner.logoUrl} alt="" loading="lazy" decoding="async" /> : <Handshake aria-hidden="true" />}
       </div>
       <div className="admin-reference-row-main">
         <strong>{partner.name}</strong>
@@ -4857,7 +4857,7 @@ function ReferencePagination({
 
 function Avatar({ member }: { member: AdminMember }) {
   return member.avatarUrl ? (
-    <img src={member.avatarUrl} alt="" />
+    <img src={member.avatarUrl} alt="" loading="lazy" decoding="async" />
   ) : (
     <span>{buildInitials(member.displayName)}</span>
   );

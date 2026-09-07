@@ -456,10 +456,12 @@ test("keeps the member dashboard preview coherent", async () => {
   assert.match(groups, /getCommunityGroupMessages/);
   assert.match(groups, /createCommunityGroupMessage/);
   assert.match(groups, /deleteCommunityGroupMessage/);
-  assert.match(groups, /getPublications\(accessToken, \{ destination: "groups"/);
+  assert.doesNotMatch(groups, /getPublications\(accessToken, \{ destination: "groups"/);
   assert.match(groups, /useVisibleItems\(filteredGroups, 12\)/);
-  assert.match(groups, /Discussions publiées/);
-  assert.match(groups, /Business créatif/);
+  assert.doesNotMatch(groups, /Discussions publiées/);
+  assert.doesNotMatch(groups, /Business créatif/);
+  assert.doesNotMatch(groups, /Arts visuels Kinshasa/);
+  assert.doesNotMatch(groups, /ownerId: "demo"/);
   assert.match(groups, /Créer un groupe/);
   assert.match(groups, /Discussion du groupe/);
   assert.match(groups, /Messagerie à plusieurs/);
@@ -578,6 +580,10 @@ test("keeps the member dashboard preview coherent", async () => {
   assert.match(settings, /Activité du compte/);
   assert.match(settings, /SettingsProfileEditor/);
   assert.match(settings, /updateMemberProfile/);
+  assert.match(settings, /changePassword/);
+  assert.match(settings, /Mot de passe actuel/);
+  assert.match(settings, /Nouveau mot de passe/);
+  assert.match(settings, /La confirmation ne correspond pas/);
   assert.match(settings, /setCurrentMember/);
   assert.match(settings, /Profil mis à jour avec succès/);
   assert.match(settings, /Creative ID/);

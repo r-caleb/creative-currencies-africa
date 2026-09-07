@@ -15,6 +15,7 @@ import {
   CommunityGroupStatus,
   CommunityGroupVisibility,
   DirectMessageReportStatus,
+  NetworkConnectionStatus,
   NotificationType,
   Prisma,
 } from "@prisma/client";
@@ -373,40 +374,54 @@ export class GroupService {
 
     const existingUserIds = group.memberships.map((membership) => membership.userId);
     const q = this.optionalText(query.q);
-
-    const users = await this.prisma.user.findMany({
+    const limit = Math.min(Math.max(query.limit ?? 8, 1), 20);
+    const searchWhere = this.groupMemberCandidateSearchWhere(q);
+    const relations = await this.prisma.networkConnection.findMany({
       where: {
-        status: AccountStatus.ACTIVE,
-        id: { notIn: existingUserIds },
-        ...(q
-          ? {
-              OR: [
-                { firstName: { contains: q, mode: "insensitive" } },
-                { lastName: { contains: q, mode: "insensitive" } },
-                { email: { contains: q, mode: "insensitive" } },
-                { phone: { contains: q, mode: "insensitive" } },
-                { profile: { publicName: { contains: q, mode: "insensitive" } } },
-                { profile: { memberNumber: { contains: q, mode: "insensitive" } } },
-                { profile: { profession: { contains: q, mode: "insensitive" } } },
-                { profile: { discipline: { contains: q, mode: "insensitive" } } },
-                { profile: { city: { contains: q, mode: "insensitive" } } },
-                { profile: { country: { contains: q, mode: "insensitive" } } },
-                { organizationProfile: { name: { contains: q, mode: "insensitive" } } },
-                { organizationProfile: { sector: { contains: q, mode: "insensitive" } } },
-                { organizationProfile: { city: { contains: q, mode: "insensitive" } } },
-                { organizationProfile: { country: { contains: q, mode: "insensitive" } } },
-                { partnerProfile: { name: { contains: q, mode: "insensitive" } } },
-                { partnerProfile: { partnerType: { contains: q, mode: "insensitive" } } },
-                { partnerProfile: { city: { contains: q, mode: "insensitive" } } },
-                { partnerProfile: { country: { contains: q, mode: "insensitive" } } },
-              ],
-            }
-          : {}),
+        status: NetworkConnectionStatus.ACCEPTED,
+        OR: [{ ownerId: user.id }, { memberId: user.id }],
       },
-      include: activeUserInclude,
-      orderBy: [{ createdAt: "desc" }],
-      take: Math.min(Math.max(query.limit ?? 8, 1), 20),
+      select: { ownerId: true, memberId: true },
     });
+    const relatedUserIds = [
+      ...new Set(
+        relations
+          .map((relation) => (relation.ownerId === user.id ? relation.memberId : relation.ownerId))
+          .filter((userId) => userId !== user.id && !existingUserIds.includes(userId)),
+      ),
+    ];
+    const candidateBaseWhere: Prisma.UserWhereInput = {
+      status: AccountStatus.ACTIVE,
+      type: { not: AccountType.ADMIN },
+      ...searchWhere,
+    };
+    const relatedUsers = relatedUserIds.length
+      ? await this.prisma.user.findMany({
+          where: {
+            ...candidateBaseWhere,
+            id: { in: relatedUserIds },
+          },
+          include: activeUserInclude,
+          orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+          take: limit,
+        })
+      : [];
+    const remainingLimit = limit - relatedUsers.length;
+    const users = remainingLimit > 0
+      ? [
+          ...relatedUsers,
+          ...(await this.prisma.user.findMany({
+            where: {
+              ...candidateBaseWhere,
+              id: { notIn: [...existingUserIds, ...relatedUsers.map((candidate) => candidate.id)] },
+            },
+            include: activeUserInclude,
+            orderBy: [{ createdAt: "desc" }],
+            take: remainingLimit,
+          })),
+        ]
+      : relatedUsers;
+    const relatedUserIdSet = new Set(relatedUserIds);
 
     const pendingInvitations = users.length
       ? await this.prisma.communityGroupInvitation.findMany({
@@ -426,15 +441,16 @@ export class GroupService {
       const pendingInvitation = pendingInvitationByUserId.get(candidate.id);
 
       return {
-      userId: candidate.id,
-      accountType: candidate.type,
-      displayName: this.displayName(candidate),
-      avatarUrl: this.avatarUrl(candidate),
-      headline: this.memberHeadline(candidate),
-      city: candidate.profile?.city ?? candidate.organizationProfile?.city ?? candidate.partnerProfile?.city ?? null,
-      country: candidate.profile?.country ?? candidate.organizationProfile?.country ?? candidate.partnerProfile?.country ?? null,
-      pendingInvitationId: pendingInvitation?.id ?? null,
-      pendingInvitationStatus: pendingInvitation?.status ?? null,
+        userId: candidate.id,
+        accountType: candidate.type,
+        displayName: this.displayName(candidate),
+        avatarUrl: this.avatarUrl(candidate),
+        headline: this.memberHeadline(candidate),
+        city: candidate.profile?.city ?? candidate.organizationProfile?.city ?? candidate.partnerProfile?.city ?? null,
+        country: candidate.profile?.country ?? candidate.organizationProfile?.country ?? candidate.partnerProfile?.country ?? null,
+        isConnected: relatedUserIdSet.has(candidate.id),
+        pendingInvitationId: pendingInvitation?.id ?? null,
+        pendingInvitationStatus: pendingInvitation?.status ?? null,
       };
     });
   }
@@ -535,6 +551,8 @@ export class GroupService {
       throw new NotFoundException("Ce membre est introuvable ou son compte n'est pas actif.");
     }
 
+    this.ensureGroupInvitableUser(targetUser);
+
     const updatedGroup = await this.prisma.$transaction(async (tx) => {
       await tx.communityGroupMembership.create({
         data: {
@@ -614,6 +632,8 @@ export class GroupService {
     if (!targetUser || targetUser.status !== AccountStatus.ACTIVE) {
       throw new NotFoundException("Ce membre est introuvable ou son compte n'est pas actif.");
     }
+
+    this.ensureGroupInvitableUser(targetUser);
 
     const existingInvitation = await this.prisma.communityGroupInvitation.findFirst({
       where: {
@@ -1491,6 +1511,41 @@ export class GroupService {
   private optionalText(value?: string | null) {
     const normalized = value?.trim();
     return normalized || null;
+  }
+
+  private groupMemberCandidateSearchWhere(q: string | null): Prisma.UserWhereInput {
+    if (!q) {
+      return {};
+    }
+
+    return {
+      OR: [
+        { firstName: { contains: q, mode: "insensitive" } },
+        { lastName: { contains: q, mode: "insensitive" } },
+        { email: { contains: q, mode: "insensitive" } },
+        { phone: { contains: q, mode: "insensitive" } },
+        { profile: { publicName: { contains: q, mode: "insensitive" } } },
+        { profile: { memberNumber: { contains: q, mode: "insensitive" } } },
+        { profile: { profession: { contains: q, mode: "insensitive" } } },
+        { profile: { discipline: { contains: q, mode: "insensitive" } } },
+        { profile: { city: { contains: q, mode: "insensitive" } } },
+        { profile: { country: { contains: q, mode: "insensitive" } } },
+        { organizationProfile: { name: { contains: q, mode: "insensitive" } } },
+        { organizationProfile: { sector: { contains: q, mode: "insensitive" } } },
+        { organizationProfile: { city: { contains: q, mode: "insensitive" } } },
+        { organizationProfile: { country: { contains: q, mode: "insensitive" } } },
+        { partnerProfile: { name: { contains: q, mode: "insensitive" } } },
+        { partnerProfile: { partnerType: { contains: q, mode: "insensitive" } } },
+        { partnerProfile: { city: { contains: q, mode: "insensitive" } } },
+        { partnerProfile: { country: { contains: q, mode: "insensitive" } } },
+      ],
+    };
+  }
+
+  private ensureGroupInvitableUser(targetUser: { type: AccountType }) {
+    if (targetUser.type === AccountType.ADMIN) {
+      throw new BadRequestException("Un compte administrateur CCA n'est pas ajoutable à un groupe membre.");
+    }
   }
 
   private normalizeTags(tags?: string[]) {

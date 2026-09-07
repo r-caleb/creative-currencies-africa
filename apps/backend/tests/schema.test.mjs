@@ -105,12 +105,19 @@ test("keeps backend bootstrap aligned with the frontend and API contract", async
     appModule,
     controller,
     envExample,
+    authRateLimitService,
     authController,
     authService,
     verificationService,
+    changePasswordDto,
     forgotPasswordDto,
     loginDto,
+    logoutDto,
+    registerDto,
+    refreshDto,
+    resendVerificationDto,
     resetPasswordDto,
+    verifyEmailDto,
     verifyPasswordResetCodeDto,
     emailService,
     memberController,
@@ -161,12 +168,19 @@ test("keeps backend bootstrap aligned with the frontend and API contract", async
     readFile(new URL("../src/app.module.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/app.controller.ts", import.meta.url), "utf8"),
     readFile(new URL("../.env.example", import.meta.url), "utf8"),
+    readFile(new URL("../src/auth/auth-rate-limit.service.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/auth/auth.controller.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/auth/auth.service.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/auth/verification.service.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/auth/dto/change-password.dto.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/auth/dto/forgot-password.dto.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/auth/dto/login.dto.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/auth/dto/logout.dto.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/auth/dto/register.dto.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/auth/dto/refresh.dto.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/auth/dto/resend-verification.dto.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/auth/dto/reset-password.dto.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/auth/dto/verify-email.dto.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/auth/dto/verify-password-reset-code.dto.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/email/email.service.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/member/member.controller.ts", import.meta.url), "utf8"),
@@ -235,18 +249,36 @@ test("keeps backend bootstrap aligned with the frontend and API contract", async
   assert.match(controller, /back-office/);
   assert.match(authController, /@Controller\("auth"\)/);
   assert.match(authController, /@Post\("register"\)/);
+  assert.match(authController, /register\(@Req\(\) req: AuthedRequest, @Body\(\) body: RegisterDto\)/);
   assert.match(authController, /@Post\("verify-email"\)/);
   assert.match(authController, /@Post\("resend-verification"\)/);
   assert.match(authController, /@Post\("forgot-password"\)/);
   assert.match(authController, /@Post\("verify-password-reset-code"\)/);
   assert.match(authController, /@Post\("reset-password"\)/);
+  assert.match(authController, /@Post\("change-password"\)/);
+  assert.match(authController, /@UseGuards\(JwtAuthGuard\)[\s\S]*?changePassword/);
   assert.match(authController, /@Post\("login"\)/);
   assert.match(authController, /Email ou mot de passe incorrect/);
   assert.match(authController, /@Post\("refresh"\)/);
   assert.match(authController, /@Post\("logout"\)/);
   assert.match(authController, /@Get\("me"\)/);
+  assert.match(authRateLimitService, /AuthRateLimitService/);
+  assert.match(authRateLimitService, /HttpStatus\.TOO_MANY_REQUESTS/);
+  assert.match(authRateLimitService, /AUTH_RATE_LIMIT_WINDOW_SECONDS/);
+  assert.match(authRateLimitService, /AUTH_RATE_LIMIT_REGISTER_PER_IP/);
+  assert.match(authRateLimitService, /AUTH_RATE_LIMIT_LOGIN_PER_IP/);
+  assert.match(authRateLimitService, /AUTH_RATE_LIMIT_LOGIN_PER_EMAIL/);
+  assert.match(authRateLimitService, /AUTH_RATE_LIMIT_OTP_PER_IP/);
+  assert.match(authRateLimitService, /AUTH_RATE_LIMIT_VERIFY_PER_EMAIL/);
+  assert.match(authRateLimitService, /Trop de tentatives/);
   assert.match(authService, /argon2\.hash/);
   assert.match(authService, /argon2\.verify/);
+  assert.match(authService, /rateLimit\.consume\("register"/);
+  assert.match(authService, /rateLimit\.consume\("login"/);
+  assert.match(authService, /rateLimit\.consume\("forgot-password"/);
+  assert.match(authService, /rateLimit\.consume\("resend-verification"/);
+  assert.match(authService, /rateLimit\.consume\("verify-email"/);
+  assert.match(authService, /rateLimit\.consume\("reset-password"/);
   assert.match(authService, /issueTokens/);
   assert.match(authService, /refreshTokenHash/);
   assert.match(authService, /AccountStatus\.PENDING/);
@@ -281,20 +313,55 @@ test("keeps backend bootstrap aligned with the frontend and API contract", async
   assert.match(verificationService, /Ce code a expiré/);
   assert.match(verificationService, /Trop de codes demandés/);
   assert.match(verificationService, /Trop de tentatives/);
+  assert.match(authService, /Password reset request handled neutrally/);
+  assert.match(authService, /Si un compte existe, un code de réinitialisation a été envoyé par e-mail/);
+  assert.match(authService, /Email verification resend handled neutrally/);
+  assert.match(authService, /changePassword\(authUser: AuthUser, input: ChangePasswordDto\)/);
+  assert.match(authService, /argon2\.verify\(user\.passwordHash, currentPassword\)/);
+  assert.match(authService, /Le mot de passe actuel est incorrect/);
+  assert.match(authService, /Le nouveau mot de passe doit être différent/);
+  assert.ok(
+    authService.indexOf("const passwordOk = await argon2.verify(user.passwordHash, password);") <
+      authService.indexOf("Veuillez vérifier votre adresse e-mail avant de vous connecter"),
+  );
+  assert.match(changePasswordDto, /ChangePasswordDto/);
+  assert.match(changePasswordDto, /currentPassword/);
+  assert.match(changePasswordDto, /newPassword/);
+  assert.match(changePasswordDto, /MaxLength\(128/);
   assert.match(forgotPasswordDto, /ForgotPasswordDto/);
+  assert.match(forgotPasswordDto, /MaxLength\(254/);
   assert.match(loginDto, /LoginDto/);
+  assert.match(loginDto, /MaxLength\(254/);
+  assert.match(loginDto, /MaxLength\(128/);
   assert.doesNotMatch(loginDto, /MinLength/);
   assert.doesNotMatch(loginDto, /mot de passe doit contenir/);
+  assert.match(logoutDto, /MaxLength\(3000/);
+  assert.match(registerDto, /RegisterDto/);
+  assert.match(registerDto, /MaxLength\(254/);
+  assert.match(registerDto, /MaxLength\(128/);
+  assert.match(registerDto, /MaxLength\(900/);
+  assert.match(refreshDto, /MaxLength\(3000/);
+  assert.match(resendVerificationDto, /ResendVerificationDto/);
+  assert.match(resendVerificationDto, /MaxLength\(254/);
   assert.match(resetPasswordDto, /ResetPasswordDto/);
+  assert.match(resetPasswordDto, /MaxLength\(254/);
+  assert.match(resetPasswordDto, /MaxLength\(128/);
   assert.doesNotMatch(resetPasswordDto, /MinLength/);
   assert.doesNotMatch(resetPasswordDto, /Adresse e-mail est invalide/);
+  assert.match(verifyEmailDto, /VerifyEmailDto/);
+  assert.match(verifyEmailDto, /MaxLength\(254/);
   assert.match(verifyPasswordResetCodeDto, /VerifyPasswordResetCodeDto/);
+  assert.match(verifyPasswordResetCodeDto, /MaxLength\(254/);
   assert.match(verifyPasswordResetCodeDto, /Le code de vérification doit contenir 6 chiffres/);
   assert.match(emailService, /EMAIL_PROVIDER/);
   assert.match(emailService, /console/);
-  assert.match(emailService, /sendgrid/);
-  assert.match(emailService, /SENDGRID_TEMPLATE_ID_OTP/);
-  assert.match(emailService, /SENDGRID_TEMPLATE_ID_RESET_PASSWORD/);
+  assert.match(emailService, /resend/);
+  assert.match(emailService, /RESEND_API_KEY/);
+  assert.match(emailService, /EMAIL_FROM/);
+  assert.match(emailService, /EMAIL_DEV_REDIRECT_TO/);
+  assert.match(emailService, /EMAIL_LOGO_URL/);
+  assert.match(emailService, /alt="Creative Currencies Africa"/);
+  assert.match(emailService, /https:\/\/api\.resend\.com\/emails/);
   assert.match(emailService, /sendPasswordResetCode/);
   assert.match(memberController, /@Controller\("member"\)/);
   assert.match(memberController, /@Patch\("profile"\)/);
@@ -302,7 +369,9 @@ test("keeps backend bootstrap aligned with the frontend and API contract", async
   assert.match(memberController, /FileInterceptor\("file"/);
   assert.match(memberController, /JwtAuthGuard/);
   assert.match(memberController, /updateProfile/);
-  assert.match(memberController, /@Get\("dashboard"\)/);
+  assert.doesNotMatch(memberController, /@Get\("dashboard"\)/);
+  assert.doesNotMatch(memberService, /sampleMember/);
+  assert.doesNotMatch(memberService, /demo-member/);
   assert.match(memberController, /@Get\("opportunities"\)/);
   assert.match(memberController, /@Post\("network\/:userId\/save"\)/);
   assert.match(memberController, /@Delete\("network\/:userId\/save"\)/);
@@ -564,11 +633,19 @@ test("keeps backend bootstrap aligned with the frontend and API contract", async
   assert.match(envExample, /JWT_ACCESS_SECRET/);
   assert.match(envExample, /JWT_REFRESH_SECRET/);
   assert.match(envExample, /EMAIL_PROVIDER/);
-  assert.match(envExample, /SENDGRID_API_KEY/);
-  assert.match(envExample, /SENDGRID_TEMPLATE_ID_OTP/);
-  assert.match(envExample, /SENDGRID_TEMPLATE_ID_RESET_PASSWORD/);
+  assert.match(envExample, /EMAIL_FROM/);
+  assert.match(envExample, /EMAIL_REPLY_TO/);
+  assert.match(envExample, /EMAIL_DEV_REDIRECT_TO/);
+  assert.match(envExample, /EMAIL_LOGO_URL/);
+  assert.match(envExample, /RESEND_API_KEY/);
+  assert.match(envExample, /RESEND_API_URL/);
   assert.match(envExample, /PUBLIC_BACKEND_URL/);
   assert.match(envExample, /UPLOADS_DIR/);
   assert.match(envExample, /EMAIL_VERIFICATION_OTP_TTL_MINUTES/);
   assert.match(envExample, /PASSWORD_RESET_OTP_TTL_MINUTES/);
+  assert.match(envExample, /AUTH_RATE_LIMIT_WINDOW_SECONDS/);
+  assert.match(envExample, /AUTH_RATE_LIMIT_REGISTER_PER_IP/);
+  assert.match(envExample, /AUTH_RATE_LIMIT_LOGIN_PER_IP/);
+  assert.match(envExample, /AUTH_RATE_LIMIT_OTP_PER_EMAIL/);
+  assert.match(envExample, /AUTH_RATE_LIMIT_VERIFY_PER_EMAIL/);
 });

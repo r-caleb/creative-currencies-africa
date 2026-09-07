@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
@@ -11,7 +12,9 @@ import { AccountStatus, AccountType, Gender, Prisma } from "@prisma/client";
 import * as argon2 from "argon2";
 import type { StringValue } from "ms";
 import { PrismaService } from "../prisma/prisma.service";
+import { AuthRateLimitService } from "./auth-rate-limit.service";
 import type { AuthUser, TokenMeta } from "./auth.types";
+import { ChangePasswordDto } from "./dto/change-password.dto";
 import { ForgotPasswordDto } from "./dto/forgot-password.dto";
 import { LoginDto } from "./dto/login.dto";
 import { ResendVerificationDto } from "./dto/resend-verification.dto";
@@ -23,15 +26,19 @@ import { VerificationService } from "./verification.service";
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly verification: VerificationService,
+    private readonly rateLimit: AuthRateLimitService,
   ) {}
 
-  async register(input: RegisterDto) {
+  async register(input: RegisterDto, meta?: TokenMeta) {
     const email = this.normalizeEmail(input.email);
+    this.rateLimit.consume("register", { email, ip: meta?.ip });
     const password = this.assertPassword(input.password);
     const firstName = this.requiredText(input.firstName, "Le prénom est requis");
     const lastName = this.requiredText(input.lastName, "Le nom est requis");
@@ -69,6 +76,7 @@ export class AuthService {
 
   async verifyEmail(input: VerifyEmailDto, meta?: TokenMeta) {
     const email = this.normalizeEmail(input.email);
+    this.rateLimit.consume("verify-email", { email, ip: meta?.ip });
     const code = this.requiredText(input.code, "Le code de vérification est requis");
     const user = await this.verification.verifyEmailCode(email, code);
     const tokens = await this.issueTokens(user.id, meta);
@@ -79,9 +87,16 @@ export class AuthService {
     };
   }
 
-  async resendVerification(input: ResendVerificationDto) {
+  async resendVerification(input: ResendVerificationDto, meta?: TokenMeta) {
     const email = this.normalizeEmail(input.email);
-    const verification = await this.verification.resendEmailVerificationCode(email);
+    this.rateLimit.consume("resend-verification", { email, ip: meta?.ip });
+    let verification = { expiresAt: this.verification.emailVerificationFallbackExpiresAt() };
+
+    try {
+      verification = await this.verification.resendEmailVerificationCode(email);
+    } catch (error) {
+      this.logger.warn(`Email verification resend handled neutrally for ${email}: ${this.formatAuthError(error)}`);
+    }
 
     return {
       success: true,
@@ -89,8 +104,9 @@ export class AuthService {
     };
   }
 
-  async forgotPassword(input: ForgotPasswordDto) {
+  async forgotPassword(input: ForgotPasswordDto, meta?: TokenMeta) {
     const email = this.normalizeEmail(input.email);
+    this.rateLimit.consume("forgot-password", { email, ip: meta?.ip });
     const user = await this.prisma.user.findUnique({
       where: { email },
       select: {
@@ -100,10 +116,15 @@ export class AuthService {
         status: true,
       },
     });
-    const reset =
-      user?.status === AccountStatus.ACTIVE
-        ? await this.verification.sendPasswordResetCode(user)
-        : { expiresAt: this.verification.passwordResetFallbackExpiresAt() };
+    let reset = { expiresAt: this.verification.passwordResetFallbackExpiresAt() };
+
+    if (user?.status === AccountStatus.ACTIVE) {
+      try {
+        reset = await this.verification.sendPasswordResetCode(user);
+      } catch (error) {
+        this.logger.warn(`Password reset request handled neutrally for ${email}: ${this.formatAuthError(error)}`);
+      }
+    }
 
     return {
       success: true,
@@ -112,8 +133,9 @@ export class AuthService {
     };
   }
 
-  async resetPassword(input: ResetPasswordDto) {
+  async resetPassword(input: ResetPasswordDto, meta?: TokenMeta) {
     const email = this.normalizeEmail(input.email);
+    this.rateLimit.consume("reset-password", { email, ip: meta?.ip });
     const code = this.requiredText(input.code, "Le code de réinitialisation est requis");
     const password = this.assertPassword(input.password);
     const user = await this.verification.verifyPasswordResetCode(email, code);
@@ -140,8 +162,9 @@ export class AuthService {
     };
   }
 
-  async verifyPasswordResetCode(input: VerifyPasswordResetCodeDto) {
+  async verifyPasswordResetCode(input: VerifyPasswordResetCodeDto, meta?: TokenMeta) {
     const email = this.normalizeEmail(input.email);
+    this.rateLimit.consume("reset-password", { email, ip: meta?.ip });
     const code = this.requiredText(input.code, "Le code de réinitialisation est requis");
     await this.verification.checkPasswordResetCode(email, code);
 
@@ -151,12 +174,57 @@ export class AuthService {
     };
   }
 
+  async changePassword(authUser: AuthUser, input: ChangePasswordDto) {
+    const currentPassword = this.requiredText(input.currentPassword, "Le mot de passe actuel est requis");
+    const newPassword = this.assertPassword(input.newPassword);
+    const user = await this.prisma.user.findUnique({
+      where: { id: authUser.userId },
+      select: {
+        id: true,
+        passwordHash: true,
+        status: true,
+      },
+    });
+
+    if (!user || user.status !== AccountStatus.ACTIVE || !user.passwordHash) {
+      throw new UnauthorizedException("Votre connexion n'est plus valide. Connectez-vous à nouveau.");
+    }
+
+    const currentPasswordOk = await argon2.verify(user.passwordHash, currentPassword);
+    if (!currentPasswordOk) {
+      throw new UnauthorizedException("Le mot de passe actuel est incorrect.");
+    }
+
+    const samePassword = await argon2.verify(user.passwordHash, newPassword);
+    if (samePassword) {
+      throw new BadRequestException("Le nouveau mot de passe doit être différent de l'ancien.");
+    }
+
+    const passwordHash = await argon2.hash(newPassword, { type: argon2.argon2id });
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash },
+    });
+
+    return {
+      success: true,
+      message: "Votre mot de passe a été mis à jour.",
+    };
+  }
+
   async login(input: LoginDto, meta?: TokenMeta) {
     const email = this.normalizeEmail(input.email);
+    this.rateLimit.consume("login", { email, ip: meta?.ip });
     const password = this.requiredText(input.password, "Le mot de passe est requis");
 
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user || !user.passwordHash) {
+      throw new UnauthorizedException("Email ou mot de passe incorrect.");
+    }
+
+    const passwordOk = await argon2.verify(user.passwordHash, password);
+    if (!passwordOk) {
       throw new UnauthorizedException("Email ou mot de passe incorrect.");
     }
 
@@ -166,11 +234,6 @@ export class AuthService {
 
     if (user.status !== AccountStatus.ACTIVE) {
       throw new UnauthorizedException("Ce compte n'est pas accessible pour le moment.");
-    }
-
-    const passwordOk = await argon2.verify(user.passwordHash, password);
-    if (!passwordOk) {
-      throw new UnauthorizedException("Email ou mot de passe incorrect.");
     }
 
     const tokens = await this.issueTokens(user.id, {
@@ -317,10 +380,22 @@ export class AuthService {
     );
   }
 
-  private verifyRefreshToken(refreshToken: string): Promise<{ sub: string; sid: string }> {
-    return this.jwt.verifyAsync(refreshToken, {
-      secret: this.config.getOrThrow<string>("JWT_REFRESH_SECRET"),
-    });
+  private async verifyRefreshToken(refreshToken: string): Promise<{ sub: string; sid: string }> {
+    try {
+      return await this.jwt.verifyAsync(refreshToken, {
+        secret: this.config.getOrThrow<string>("JWT_REFRESH_SECRET"),
+      });
+    } catch {
+      throw new UnauthorizedException("Votre connexion a expiré. Connectez-vous à nouveau.");
+    }
+  }
+
+  private formatAuthError(error: unknown) {
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    return String(error);
   }
 
   private refreshExpiresAt() {
@@ -476,6 +551,10 @@ export class AuthService {
 
   private normalizeEmail(value?: string) {
     const email = this.requiredText(value, "L'adresse e-mail est requise").toLowerCase();
+    if (email.length > 254) {
+      throw new BadRequestException("L'adresse e-mail est trop longue.");
+    }
+
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       throw new BadRequestException("Entrez une adresse e-mail valide.");
     }
@@ -485,6 +564,10 @@ export class AuthService {
 
   private assertPassword(value?: string) {
     const password = this.requiredText(value, "Le mot de passe est requis");
+    if (password.length > 128) {
+      throw new BadRequestException("Le mot de passe est trop long.");
+    }
+
     const missingRules = [
       password.length >= 8 ? "" : "- Au moins 8 caractères",
       /[A-Z]/.test(password) && /[a-z]/.test(password) ? "" : "- Une majuscule et une minuscule",

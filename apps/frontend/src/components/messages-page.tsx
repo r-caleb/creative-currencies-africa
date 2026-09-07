@@ -1303,7 +1303,7 @@ function MessageAvatar({
   return (
     <span className={avatarUrl ? "message-avatar has-image" : "message-avatar"}>
       {avatarUrl ? (
-        <img src={versionedImageUrl(avatarUrl, avatarVersion)} alt="" />
+        <img src={versionedImageUrl(avatarUrl, avatarVersion)} alt="" loading="lazy" decoding="async" />
       ) : isGroup ? (
         <Hash aria-hidden="true" />
       ) : (
@@ -1320,7 +1320,7 @@ function MessageAttachment({ attachment }: { attachment: NonNullable<Conversatio
   return (
     <a className={isImage ? "message-attachment is-image" : "message-attachment"} href={attachment.url} target="_blank" rel="noreferrer">
       {isImage ? (
-        <img src={attachment.url} alt="" />
+        <img src={attachment.url} alt="" loading="lazy" decoding="async" />
       ) : (
         <Paperclip aria-hidden="true" />
       )}

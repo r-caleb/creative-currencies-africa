@@ -583,7 +583,7 @@ export function MemberDashboard() {
           </div>
           <section className="member-identity-card member-home-identity-card" aria-label="Résumé du profil">
             <span className="member-home-avatar">
-              {avatarUrl ? <img src={avatarUrl} alt="" /> : buildInitials(displayName)}
+              {avatarUrl ? <img src={avatarUrl} alt="" loading="lazy" decoding="async" /> : buildInitials(displayName)}
             </span>
             <strong>{displayName}</strong>
             <span>{[accountTypeLabel(user?.type), profileTitle, location].filter(Boolean).join(" · ")}</span>
@@ -621,7 +621,7 @@ export function MemberDashboard() {
           <section className="member-card member-feed-composer">
             <div className="member-feed-composer-row">
               <span className="member-feed-composer-avatar">
-                {avatarUrl ? <img src={avatarUrl} alt="" /> : buildInitials(displayName)}
+                {avatarUrl ? <img src={avatarUrl} alt="" loading="lazy" decoding="async" /> : buildInitials(displayName)}
               </span>
               <Link href="/espace-membre/publier">Commencer une publication</Link>
             </div>
@@ -896,7 +896,7 @@ function RecommendedAuthor({
   return (
     <article className="member-home-recommendation">
       <span className="feed-avatar">
-        {author.avatarUrl ? <img src={author.avatarUrl} alt="" /> : buildInitials(author.displayName)}
+        {author.avatarUrl ? <img src={author.avatarUrl} alt="" loading="lazy" decoding="async" /> : buildInitials(author.displayName)}
       </span>
       <div>
         <strong>{author.displayName}</strong>
@@ -986,7 +986,7 @@ function FeedPost({
     <article className="feed-post member-feed-post">
       <header>
         <span className="feed-avatar">
-          {post.author.avatarUrl ? <img src={post.author.avatarUrl} alt="" /> : buildInitials(post.author.displayName)}
+          {post.author.avatarUrl ? <img src={post.author.avatarUrl} alt="" loading="lazy" decoding="async" /> : buildInitials(post.author.displayName)}
         </span>
         <div>
           <strong>
@@ -1014,7 +1014,7 @@ function FeedPost({
         {post.mentions?.length ? <span className="feed-post-mentions">Avec {formatMentionedAuthors(post.mentions)}</span> : null}
       </div>
 
-      {post.coverImageUrl ? <img src={post.coverImageUrl} alt="" /> : null}
+      {post.coverImageUrl ? <img src={post.coverImageUrl} alt="" loading="lazy" decoding="async" /> : null}
 
       <footer className="feed-post-actions">
         <button type="button" disabled={isReacting} onClick={onReact}>
@@ -1121,7 +1121,7 @@ function CommentItem({
   return (
     <article className="feed-comment">
       <span className="feed-comment-avatar">
-        {comment.author.avatarUrl ? <img src={comment.author.avatarUrl} alt="" /> : buildInitials(comment.author.displayName)}
+        {comment.author.avatarUrl ? <img src={comment.author.avatarUrl} alt="" loading="lazy" decoding="async" /> : buildInitials(comment.author.displayName)}
       </span>
       <div className="feed-comment-content">
         <div className="feed-comment-bubble">

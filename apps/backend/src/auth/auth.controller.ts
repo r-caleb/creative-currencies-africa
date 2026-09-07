@@ -11,6 +11,7 @@ import {
 import { AuthService } from "./auth.service";
 import {
   AuthResponseDto,
+  ChangePasswordResponseDto,
   ForgotPasswordResponseDto,
   LogoutResponseDto,
   RefreshResponseDto,
@@ -19,6 +20,7 @@ import {
   ResetPasswordResponseDto,
   VerifyPasswordResetCodeResponseDto,
 } from "./dto/auth-response.dto";
+import { ChangePasswordDto } from "./dto/change-password.dto";
 import { ForgotPasswordDto } from "./dto/forgot-password.dto";
 import { LoginDto } from "./dto/login.dto";
 import { LogoutDto } from "./dto/logout.dto";
@@ -46,8 +48,8 @@ export class AuthController {
   @ApiOperation({ summary: "Créer un compte membre Creative Currencies Africa" })
   @ApiBody({ type: RegisterDto })
   @ApiCreatedResponse({ type: RegistrationPendingResponseDto })
-  register(@Body() body: RegisterDto) {
-    return this.auth.register(body);
+  register(@Req() req: AuthedRequest, @Body() body: RegisterDto) {
+    return this.auth.register(body, this.requestMeta(req));
   }
 
   @Post("verify-email")
@@ -64,8 +66,8 @@ export class AuthController {
   @ApiOperation({ summary: "Renvoyer le code de vérification e-mail" })
   @ApiBody({ type: ResendVerificationDto })
   @ApiOkResponse({ type: ResendVerificationResponseDto })
-  resendVerification(@Body() body: ResendVerificationDto) {
-    return this.auth.resendVerification(body);
+  resendVerification(@Req() req: AuthedRequest, @Body() body: ResendVerificationDto) {
+    return this.auth.resendVerification(body, this.requestMeta(req));
   }
 
   @Post("forgot-password")
@@ -73,8 +75,8 @@ export class AuthController {
   @ApiOperation({ summary: "Demander un code OTP de réinitialisation du mot de passe" })
   @ApiBody({ type: ForgotPasswordDto })
   @ApiOkResponse({ type: ForgotPasswordResponseDto })
-  forgotPassword(@Body() body: ForgotPasswordDto) {
-    return this.auth.forgotPassword(body);
+  forgotPassword(@Req() req: AuthedRequest, @Body() body: ForgotPasswordDto) {
+    return this.auth.forgotPassword(body, this.requestMeta(req));
   }
 
   @Post("reset-password")
@@ -82,8 +84,8 @@ export class AuthController {
   @ApiOperation({ summary: "Réinitialiser le mot de passe avec un code OTP" })
   @ApiBody({ type: ResetPasswordDto })
   @ApiOkResponse({ type: ResetPasswordResponseDto })
-  resetPassword(@Body() body: ResetPasswordDto) {
-    return this.auth.resetPassword(body);
+  resetPassword(@Req() req: AuthedRequest, @Body() body: ResetPasswordDto) {
+    return this.auth.resetPassword(body, this.requestMeta(req));
   }
 
   @Post("verify-password-reset-code")
@@ -91,8 +93,19 @@ export class AuthController {
   @ApiOperation({ summary: "Vérifier le code OTP avant de choisir un nouveau mot de passe" })
   @ApiBody({ type: VerifyPasswordResetCodeDto })
   @ApiOkResponse({ type: VerifyPasswordResetCodeResponseDto })
-  verifyPasswordResetCode(@Body() body: VerifyPasswordResetCodeDto) {
-    return this.auth.verifyPasswordResetCode(body);
+  verifyPasswordResetCode(@Req() req: AuthedRequest, @Body() body: VerifyPasswordResetCodeDto) {
+    return this.auth.verifyPasswordResetCode(body, this.requestMeta(req));
+  }
+
+  @Post("change-password")
+  @HttpCode(200)
+  @ApiBearerAuth("access-token")
+  @ApiOperation({ summary: "Changer le mot de passe de l'utilisateur connecté" })
+  @ApiBody({ type: ChangePasswordDto })
+  @ApiOkResponse({ type: ChangePasswordResponseDto })
+  @UseGuards(JwtAuthGuard)
+  changePassword(@Req() req: AuthedRequest, @Body() body: ChangePasswordDto) {
+    return this.auth.changePassword(req.user, body);
   }
 
   @Post("login")

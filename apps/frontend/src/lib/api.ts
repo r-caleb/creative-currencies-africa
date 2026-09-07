@@ -1568,6 +1568,7 @@ export type CommunityGroupMemberCandidate = {
   headline: string;
   city: string | null;
   country: string | null;
+  isConnected?: boolean;
   pendingInvitationId: string | null;
   pendingInvitationStatus: CommunityGroupInvitationStatus | null;
 };
@@ -2013,6 +2014,13 @@ export function resetPassword(body: { email: string; code: string; password: str
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+export function changePassword(accessToken: string | null | undefined, body: { currentPassword: string; newPassword: string }) {
+  return authenticatedApiRequest<{ success: boolean; message: string }>("/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify(body),
+  }, accessToken);
 }
 
 export function refreshSession(refreshToken: string) {

@@ -17,16 +17,6 @@ import { UpdatePortfolioItemDto } from "./dto/update-portfolio-item.dto";
 
 type ProfileUploadKind = "AVATAR" | "LOGO" | "CV";
 
-const sampleMember = {
-  id: "demo-member",
-  fullName: "Nathan LEKA",
-  handle: "@nathleka",
-  type: "CREATOR",
-  discipline: "Direction artistique",
-  memberNumber: "CCA-2026-0142",
-  profileCompletion: 68,
-};
-
 @Injectable()
 export class MemberService {
   constructor(
@@ -34,35 +24,6 @@ export class MemberService {
     private readonly config: ConfigService,
     private readonly notifications: NotificationService,
   ) {}
-
-  getDashboard() {
-    return {
-      member: sampleMember,
-      priorities: [
-        {
-          title: "Compléter le Creative ID",
-          description: "Ajoutez votre biographie, vos compétences, votre portfolio et vos réseaux.",
-          href: "/espace-membre/creative-id",
-        },
-        {
-          title: "Explorer les formations",
-          description: "Découvrez les workshops, masterclass et parcours disponibles selon votre discipline.",
-          href: "/espace-membre/formations",
-        },
-        {
-          title: "Préparer une candidature",
-          description: "Repérez les concours, résidences, missions et financements adaptés à votre profil.",
-          href: "/espace-membre/opportunites",
-        },
-      ],
-      stats: {
-        certificates: 4,
-        opportunities: 12,
-        networkContacts: 248,
-        resources: 18,
-      },
-    };
-  }
 
   async search(authUser: AuthUser, query: MemberSearchQueryDto = {}) {
     const user = await this.getActiveUser(authUser);

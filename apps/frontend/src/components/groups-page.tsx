@@ -44,7 +44,6 @@ import {
   getCommunityGroupMessages,
   getCommunityGroups,
   getMyCommunityGroupInvitations,
-  getPublications,
   inviteCommunityGroupMember,
   joinCommunityGroup,
   leaveCommunityGroup,
@@ -62,21 +61,12 @@ import type {
   CommunityGroupMemberCandidate,
   CommunityGroupMessage,
   CommunityGroupVisibility,
-  Publication,
 } from "@/lib/api";
 import { normalizeProfileOption } from "@/lib/profile-options";
 import { useAppSelector } from "@/store/hooks";
 
-type FallbackDiscussion = {
-  title: string;
-  author: string;
-  replies: number;
-  kind: "Projet" | "Question" | "Collaboration" | "Annonce";
-};
-
 type DisplayGroup = CommunityGroup & {
   isFallback?: boolean;
-  discussions?: FallbackDiscussion[];
 };
 
 type GroupFormState = {
@@ -101,131 +91,12 @@ const emptyGroupForm: GroupFormState = {
   visibility: "PUBLIC",
 };
 
-const fallbackGroups: DisplayGroup[] = [
-  {
-    id: "kin-art-visuel",
-    ownerId: "demo",
-    name: "Arts visuels Kinshasa",
-    slug: "arts-visuels-kinshasa",
-    category: "Disciplines",
-    description: "Peinture, illustration, photographie, scénographie et expositions locales.",
-    avatarUrl: null,
-    members: 142,
-    posts: 38,
-    city: "Kinshasa",
-    country: "Congo RDC",
-    isJoined: true,
-    currentUserRole: "MEMBER",
-    canManage: false,
-    tags: ["Arts visuels", "Exposition", "Portfolio"],
-    visibility: "MEMBERS",
-    status: "ACTIVE",
-    lastActivity: new Date("2026-08-20T19:48:00.000Z").toISOString(),
-    owner: { id: "demo", accountType: "ORGANIZATION", displayName: "CCA Studio", avatarUrl: null },
-    createdAt: new Date("2026-08-18T12:00:00.000Z").toISOString(),
-    updatedAt: new Date("2026-08-20T19:48:00.000Z").toISOString(),
-    isFallback: true,
-    discussions: [
-      { title: "Préparer un dossier pour une exposition collective", author: "Amina K.", replies: 12, kind: "Question" },
-      { title: "Recherche photographe pour résidence courte", author: "CCA Studio", replies: 7, kind: "Collaboration" },
-    ],
-  },
-  {
-    id: "mode-couture-rdc",
-    ownerId: "demo",
-    name: "Mode, couture & stylisme",
-    slug: "mode-couture-stylisme",
-    category: "Disciplines",
-    description: "Créateurs textile, stylistes, mannequins, ateliers et marques émergentes.",
-    avatarUrl: null,
-    members: 96,
-    posts: 27,
-    city: "Kinshasa",
-    country: "Congo RDC",
-    isJoined: false,
-    currentUserRole: null,
-    canManage: false,
-    tags: ["Mode", "Textile", "Défilé"],
-    visibility: "PUBLIC",
-    status: "ACTIVE",
-    lastActivity: new Date("2026-08-20T19:25:00.000Z").toISOString(),
-    owner: { id: "demo", accountType: "CREATOR", displayName: "Nadine M.", avatarUrl: null },
-    createdAt: new Date("2026-08-18T12:00:00.000Z").toISOString(),
-    updatedAt: new Date("2026-08-20T19:25:00.000Z").toISOString(),
-    isFallback: true,
-    discussions: [
-      { title: "Casting modèle pour lookbook capsule", author: "Nadine M.", replies: 18, kind: "Annonce" },
-      { title: "Partage fournisseurs tissus à Kinshasa", author: "Grace Atelier", replies: 9, kind: "Question" },
-    ],
-  },
-  {
-    id: "creative-business",
-    ownerId: "demo",
-    name: "Business créatif",
-    slug: "business-creatif",
-    category: "Collaborations",
-    description: "Prix, devis, contrats, ventes, partenariats et gestion des missions.",
-    avatarUrl: null,
-    members: 188,
-    posts: 44,
-    city: "Afrique francophone",
-    country: null,
-    isJoined: true,
-    currentUserRole: "MEMBER",
-    canManage: false,
-    tags: ["Contrat", "Devis", "Mission"],
-    visibility: "MEMBERS",
-    status: "ACTIVE",
-    lastActivity: new Date("2026-08-20T16:00:00.000Z").toISOString(),
-    owner: { id: "demo", accountType: "PARTNER", displayName: "Creative Hub", avatarUrl: null },
-    createdAt: new Date("2026-08-18T12:00:00.000Z").toISOString(),
-    updatedAt: new Date("2026-08-20T16:00:00.000Z").toISOString(),
-    isFallback: true,
-    discussions: [
-      { title: "Comment facturer une direction artistique ?", author: "Junior L.", replies: 21, kind: "Question" },
-      { title: "Besoin de profils pour campagne culturelle", author: "Creative Hub", replies: 14, kind: "Projet" },
-    ],
-  },
-  {
-    id: "lingala-content",
-    ownerId: "demo",
-    name: "Création de contenu & voix",
-    slug: "creation-contenu-voix",
-    category: "Questions",
-    description: "Vidéos, podcasts, narration, voix off, réseaux sociaux et storytelling.",
-    avatarUrl: null,
-    members: 74,
-    posts: 19,
-    city: "En ligne",
-    country: null,
-    isJoined: false,
-    currentUserRole: null,
-    canManage: false,
-    tags: ["Podcast", "Voix", "Contenu"],
-    visibility: "PUBLIC",
-    status: "ACTIVE",
-    lastActivity: new Date("2026-08-19T15:00:00.000Z").toISOString(),
-    owner: { id: "demo", accountType: "CREATOR", displayName: "Blaise N.", avatarUrl: null },
-    createdAt: new Date("2026-08-18T12:00:00.000Z").toISOString(),
-    updatedAt: new Date("2026-08-19T15:00:00.000Z").toISOString(),
-    isFallback: true,
-    discussions: [
-      { title: "Identifier un monteur vidéo disponible", author: "Merveille P.", replies: 5, kind: "Collaboration" },
-      { title: "Format court en Lingala : bonnes pratiques", author: "Blaise N.", replies: 11, kind: "Question" },
-    ],
-  },
-];
-
 export function GroupsPage() {
   const searchParams = useSearchParams();
   const requestedGroupId = searchParams.get("groupId");
   const { accessToken, user } = useAppSelector((state) => state.auth);
   const groupPhotoInputRef = useRef<HTMLInputElement | null>(null);
   const [apiGroups, setApiGroups] = useState<CommunityGroup[]>([]);
-  const [fallbackJoinedIds, setFallbackJoinedIds] = useState(
-    fallbackGroups.filter((group) => group.isJoined).map((group) => group.id),
-  );
-  const [publishedDiscussions, setPublishedDiscussions] = useState<Publication[]>([]);
   const [messages, setMessages] = useState<CommunityGroupMessage[]>([]);
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("Tous");
@@ -262,17 +133,8 @@ export function GroupsPage() {
   const [notice, setNotice] = useState("");
 
   const allGroups = useMemo<DisplayGroup[]>(() => {
-    if (apiGroups.length) {
-      return apiGroups.map((group) => ({ ...group, isFallback: false }));
-    }
-
-    if (accessToken) {
-      return [];
-    }
-
-    const liveGroups = buildGroupsWithPublications(publishedDiscussions);
-    return liveGroups.length ? liveGroups : withFallbackJoinState(fallbackGroups, fallbackJoinedIds);
-  }, [accessToken, apiGroups, fallbackJoinedIds, publishedDiscussions]);
+    return apiGroups.map((group) => ({ ...group, isFallback: false }));
+  }, [apiGroups]);
 
   useEffect(() => {
     if (!accessToken) {
@@ -287,19 +149,13 @@ export function GroupsPage() {
       setGroupError("");
 
       try {
-        const [groups, publications] = await Promise.all([
-          getCommunityGroups(accessToken, { limit: 60 }),
-          getPublications(accessToken, { destination: "groups", status: "PUBLISHED", limit: 20 }).catch(
-            () => [] as Publication[],
-          ),
-        ]);
+        const groups = await getCommunityGroups(accessToken, { limit: 60 });
 
         if (!isMounted) {
           return;
         }
 
         setApiGroups(groups);
-        setPublishedDiscussions(publications);
         setSelectedId((current) => {
           if (requestedGroupId && groups.some((group) => group.id === requestedGroupId)) {
             return requestedGroupId;
@@ -358,11 +214,7 @@ export function GroupsPage() {
   const selectedGroupIsFallback = Boolean(selectedGroup?.isFallback);
   const selectedGroupIsJoined = Boolean(selectedGroup?.isJoined);
   const selectedGroupCanManage = Boolean(selectedGroup?.canManage && !selectedGroup.isFallback);
-  const displayMessages = selectedGroup?.isFallback
-    ? fallbackMessages(selectedGroup)
-    : selectedGroup?.isJoined
-      ? messages
-      : [];
+  const displayMessages = selectedGroup?.isJoined ? messages : [];
   const currentGroupInvitations = selectedGroupId
     ? groupInvitations.filter((invitation) => invitation.groupId === selectedGroupId)
     : [];
@@ -552,7 +404,7 @@ export function GroupsPage() {
             return;
           }
 
-          setMemberOptions(members.filter((member) => member.userId !== user?.id));
+          setMemberOptions(members.filter((member) => member.userId !== user?.id && member.accountType !== "ADMIN"));
         })
         .catch((error) => {
           if (isMounted) {
@@ -670,9 +522,7 @@ export function GroupsPage() {
 
   const handleJoinToggle = async (group: DisplayGroup) => {
     if (group.isFallback) {
-      setFallbackJoinedIds((current) =>
-        current.includes(group.id) ? current.filter((id) => id !== group.id) : [...current, group.id],
-      );
+      setGroupError("Ce groupe est généré automatiquement et reste en lecture seule.");
       return;
     }
 
@@ -1288,7 +1138,7 @@ export function GroupsPage() {
                   >
                     <span className={group.avatarUrl ? "social-group-icon has-image" : "social-group-icon"}>
                       {group.avatarUrl ? (
-                        <img src={versionedImageUrl(group.avatarUrl, group.updatedAt)} alt="" />
+                        <img src={versionedImageUrl(group.avatarUrl, group.updatedAt)} alt="" loading="lazy" decoding="async" />
                       ) : (
                         <Hash aria-hidden="true" strokeWidth={1.8} />
                       )}
@@ -1352,7 +1202,7 @@ export function GroupsPage() {
                   <div className="social-detail-heading">
                     <span className={selectedGroup.avatarUrl ? "social-group-icon has-image" : "social-group-icon"}>
                       {selectedGroup.avatarUrl ? (
-                        <img src={versionedImageUrl(selectedGroup.avatarUrl, selectedGroup.updatedAt)} alt="" />
+                        <img src={versionedImageUrl(selectedGroup.avatarUrl, selectedGroup.updatedAt)} alt="" loading="lazy" decoding="async" />
                       ) : (
                         <Hash aria-hidden="true" strokeWidth={1.8} />
                       )}
@@ -1483,6 +1333,7 @@ export function GroupsPage() {
                                 <small>
                                   {[member.headline, member.city, member.country].filter(Boolean).join(" · ")}
                                 </small>
+                                {member.isConnected ? <span className="social-relationship-pill">En relation</span> : null}
                               </div>
                               <div className="social-member-inline-actions">
                                 <button
@@ -1751,91 +1602,6 @@ export function GroupsPage() {
       </div>
     </MemberShell>
   );
-}
-
-function buildGroupsWithPublications(publications: Publication[]): DisplayGroup[] {
-  if (!publications.length) {
-    return [];
-  }
-
-  return [
-    {
-      id: "published-discussions",
-      ownerId: "publications",
-      name: "Discussions publiées",
-      slug: "discussions-publiees",
-      category: "Questions",
-      description: "Sujets créés depuis le bouton Publier et visibles par la communauté CCA.",
-      avatarUrl: null,
-      members: Math.max(1, new Set(publications.map((publication) => publication.author.id)).size),
-      posts: publications.length,
-      city: "CCA",
-      country: null,
-      isJoined: true,
-      currentUserRole: "MEMBER",
-      canManage: false,
-      tags: ["Projet", "Question", "Collaboration", "Ressource"],
-      visibility: "MEMBERS",
-      status: "ACTIVE",
-      lastActivity: publications[0]?.publishedAt ?? publications[0]?.updatedAt ?? new Date().toISOString(),
-      owner: { id: "publications", accountType: "ORGANIZATION", displayName: "Communauté CCA", avatarUrl: null },
-      createdAt: publications[0]?.createdAt ?? new Date().toISOString(),
-      updatedAt: publications[0]?.updatedAt ?? new Date().toISOString(),
-      isFallback: true,
-      discussions: publications.slice(0, 8).map((publication) => ({
-        title: publication.title,
-        author: publication.author.displayName,
-        replies: publication.counts.comments,
-        kind: publicationKind(publication),
-      })),
-    },
-  ];
-}
-
-function withFallbackJoinState(groups: DisplayGroup[], joinedIds: string[]) {
-  return groups.map((group) => ({
-    ...group,
-    isJoined: joinedIds.includes(group.id),
-    currentUserRole: joinedIds.includes(group.id) ? group.currentUserRole ?? "MEMBER" : null,
-  }));
-}
-
-function fallbackMessages(group: DisplayGroup): CommunityGroupMessage[] {
-  return (group.discussions ?? []).map((discussion, index) => ({
-    id: `${group.id}-${index}`,
-    groupId: group.id,
-    type: "TEXT",
-    content: discussion.title,
-    attachmentUrl: null,
-    attachmentName: null,
-    attachmentMimeType: null,
-    editedAt: null,
-    deletedAt: null,
-    createdAt: group.updatedAt,
-    author: {
-      id: `${group.id}-${discussion.author}`,
-      accountType: "CREATOR",
-      displayName: discussion.author,
-      avatarUrl: null,
-    },
-    permissions: { canEdit: false, canDelete: false },
-  }));
-}
-
-function publicationKind(publication: Publication): FallbackDiscussion["kind"] {
-  if (publication.type === "PROJECT" || publication.type === "CREATION") {
-    return "Projet";
-  }
-
-  if (publication.type === "COLLABORATION" || publication.type === "JOB") {
-    return "Collaboration";
-  }
-
-  if (publication.type === "OPPORTUNITY" || publication.type === "ANNOUNCEMENT") {
-    return "Annonce";
-  }
-
-  return "Question";
 }
 
 function parseTags(value: string) {

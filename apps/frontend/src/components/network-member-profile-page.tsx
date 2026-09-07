@@ -309,7 +309,7 @@ export function NetworkMemberProfilePage({ memberNumber }: { memberNumber: strin
                       {profile.mutualConnections.map((connection) => (
                         <article key={connection.userId}>
                           <span>
-                            {connection.avatarUrl ? <img src={connection.avatarUrl} alt="" /> : buildInitials(connection.publicName)}
+                            {connection.avatarUrl ? <img src={connection.avatarUrl} alt="" loading="lazy" decoding="async" /> : buildInitials(connection.publicName)}
                           </span>
                           <strong>{connection.publicName}</strong>
                         </article>
@@ -371,7 +371,7 @@ export function NetworkMemberProfilePage({ memberNumber }: { memberNumber: strin
 function NetworkProfileAvatar({ profile }: { profile: NetworkMember }) {
   return (
     <span className="network-profile-avatar">
-      {profile.avatarUrl ? <img src={profile.avatarUrl} alt="" /> : buildInitials(profile.publicName)}
+      {profile.avatarUrl ? <img src={profile.avatarUrl} alt="" loading="lazy" decoding="async" /> : buildInitials(profile.publicName)}
     </span>
   );
 }
@@ -463,7 +463,7 @@ function PublicationMedia({ publication }: { publication: NetworkMemberProfile["
   const media = getPublicationMedia(publication);
 
   if (media?.type === "image") {
-    return <img src={media.url} alt="" />;
+    return <img src={media.url} alt="" loading="lazy" decoding="async" />;
   }
 
   if (media?.type === "video") {

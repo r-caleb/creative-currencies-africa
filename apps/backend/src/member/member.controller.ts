@@ -49,11 +49,6 @@ export class MemberController {
     return this.memberService.uploadProfileAsset(req.user, kind, file);
   }
 
-  @Get("dashboard")
-  dashboard() {
-    return this.memberService.getDashboard();
-  }
-
   @Get("search")
   @ApiBearerAuth("access-token")
   @UseGuards(JwtAuthGuard)

@@ -82,6 +82,14 @@ export class ResetPasswordResponseDto {
   message!: string;
 }
 
+export class ChangePasswordResponseDto {
+  @ApiProperty({ example: true })
+  success!: boolean;
+
+  @ApiProperty({ example: "Votre mot de passe a été mis à jour." })
+  message!: string;
+}
+
 export class VerifyPasswordResetCodeResponseDto {
   @ApiProperty({ example: true })
   success!: boolean;

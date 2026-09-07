@@ -235,7 +235,7 @@ function GlobalResultCard({ result }: { result: GlobalSearchItem }) {
   const content = (
     <>
       <span className="global-result-icon">
-        {result.imageUrl ? <img src={result.imageUrl} alt="" /> : <Icon aria-hidden="true" strokeWidth={1.8} />}
+        {result.imageUrl ? <img src={result.imageUrl} alt="" loading="lazy" decoding="async" /> : <Icon aria-hidden="true" strokeWidth={1.8} />}
       </span>
       <span className="global-result-copy">
         <small>{result.label}</small>

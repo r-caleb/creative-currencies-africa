@@ -161,6 +161,10 @@ export class VerificationService {
     return new Date(Date.now() + this.passwordResetExpiresInMinutes() * 60 * 1000);
   }
 
+  emailVerificationFallbackExpiresAt() {
+    return new Date(Date.now() + this.otpExpiresInMinutes() * 60 * 1000);
+  }
+
   async verifyEmailCode(email: string, code: string) {
     const token = await this.prisma.verificationToken.findFirst({
       where: {

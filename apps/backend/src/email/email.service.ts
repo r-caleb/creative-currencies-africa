@@ -1,6 +1,5 @@
-import { BadGatewayException, Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import sgMail, { type MailDataRequired } from "@sendgrid/mail";
 
 type VerificationCodeEmail = {
   to: string;
@@ -11,7 +10,7 @@ type VerificationCodeEmail = {
 
 type PasswordResetCodeEmail = VerificationCodeEmail;
 type EmailPurpose = "verification" | "password-reset";
-type EmailProvider = "console" | "sendgrid";
+type EmailProvider = "console" | "resend";
 
 @Injectable()
 export class EmailService {
@@ -34,11 +33,11 @@ export class EmailService {
       return this.sendConsoleCode(purpose, payload);
     }
 
-    if (provider === "sendgrid") {
-      return this.sendSendGridCode(purpose, payload);
+    if (provider === "resend") {
+      return this.sendResendCode(purpose, payload);
     }
 
-    throw new BadGatewayException(`Provider email non supporté: ${provider}`);
+    throw new Error(`Unsupported email provider: ${provider}`);
   }
 
   private async sendConsoleCode(purpose: EmailPurpose, payload: VerificationCodeEmail) {
@@ -55,134 +54,118 @@ export class EmailService {
     );
   }
 
-  private async sendSendGridCode(purpose: EmailPurpose, payload: VerificationCodeEmail) {
-    const apiKey = this.requiredConfig("SENDGRID_API_KEY");
-    const fromEmail = this.requiredConfig("SENDGRID_FROM_EMAIL");
-    const fromName = this.config.get<string>("SENDGRID_FROM_NAME")?.trim() || "Creative Currencies Africa";
-    const templateId = this.templateIdForPurpose(purpose);
+  private async sendResendCode(purpose: EmailPurpose, payload: VerificationCodeEmail) {
+    const apiKey = this.requiredConfig("RESEND_API_KEY");
+    const from = this.requiredConfig("EMAIL_FROM");
+    const apiUrl = this.config.get<string>("RESEND_API_URL")?.trim() || "https://api.resend.com/emails";
+    const replyTo = this.config.get<string>("EMAIL_REPLY_TO")?.trim();
+    const recipient = this.emailRecipient(payload.to);
+    const subject =
+      purpose === "verification"
+        ? "Votre code de vérification Creative Currencies Africa"
+        : "Votre code de réinitialisation Creative Currencies Africa";
+    const text = this.codeEmailText(purpose, payload);
 
-    sgMail.setApiKey(apiKey);
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from,
+        to: [recipient],
+        subject,
+        text,
+        html: this.codeEmailHtml(purpose, payload),
+        ...(replyTo ? { reply_to: replyTo } : {}),
+      }),
+    });
 
-    const message = templateId
-      ? this.sendGridTemplateMessage(purpose, payload, fromEmail, fromName, templateId)
-      : this.sendGridPlainMessage(purpose, payload, fromEmail, fromName);
-
-    try {
-      await sgMail.send(message);
-      this.logger.log(`Code ${purpose} envoyé par SendGrid à ${payload.to}`);
-    } catch (error) {
-      this.logger.error(`Erreur SendGrid ${purpose}: ${this.formatSendGridError(error)}`);
-      throw new BadGatewayException("Impossible d'envoyer le code par e-mail pour le moment.");
-    }
-  }
-
-  private sendGridTemplateMessage(
-    purpose: EmailPurpose,
-    payload: VerificationCodeEmail,
-    fromEmail: string,
-    fromName: string,
-    templateId: string,
-  ): MailDataRequired {
-    return {
-      to: this.normalizeEmail(payload.to),
-      from: { email: fromEmail, name: fromName },
-      templateId,
-      dynamicTemplateData: this.dynamicTemplateData(purpose, payload),
-    };
-  }
-
-  private sendGridPlainMessage(
-    purpose: EmailPurpose,
-    payload: VerificationCodeEmail,
-    fromEmail: string,
-    fromName: string,
-  ): MailDataRequired {
-    const subject = purpose === "verification" ? "Votre code de vérification Creative Currencies Africa" : "Réinitialisation de votre mot de passe";
-    const action = purpose === "verification" ? "vérifier votre adresse e-mail" : "réinitialiser votre mot de passe";
-    const firstName = this.escapeHtml(payload.firstName || "membre");
-    const code = this.escapeHtml(payload.code);
-    const expires = this.escapeHtml(String(payload.expiresInMinutes));
-
-    return {
-      to: this.normalizeEmail(payload.to),
-      from: { email: fromEmail, name: fromName },
-      subject,
-      text: [
-        `Bonjour ${payload.firstName || "membre"},`,
-        "",
-        `Votre code pour ${action} est : ${payload.code}`,
-        `Il est valable ${payload.expiresInMinutes} minutes.`,
-        "",
-        "Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.",
-        "Creative Currencies Africa",
-      ].join("\n"),
-      html: [
-        `<p>Bonjour ${firstName},</p>`,
-        `<p>Votre code pour ${this.escapeHtml(action)} est :</p>`,
-        `<p style="font-size:28px;letter-spacing:6px;font-weight:700;">${code}</p>`,
-        `<p>Il est valable ${expires} minutes.</p>`,
-        "<p>Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.</p>",
-        "<p>Creative Currencies Africa</p>",
-      ].join(""),
-    };
-  }
-
-  private dynamicTemplateData(purpose: EmailPurpose, payload: VerificationCodeEmail) {
-    return {
-      firstName: payload.firstName,
-      code: payload.code,
-      expiry_minutes: String(payload.expiresInMinutes),
-      expiresInMinutes: payload.expiresInMinutes,
-      projectName: "Creative Currencies Africa",
-      purpose: purpose === "verification" ? "verification" : "password_reset",
-      year: new Date().getFullYear().toString(),
-    };
-  }
-
-  private templateIdForPurpose(purpose: EmailPurpose) {
-    if (purpose === "verification") {
-      return (
-        this.config.get<string>("SENDGRID_TEMPLATE_ID_EMAIL_VERIFICATION")?.trim()
-        || this.config.get<string>("SENDGRID_TEMPLATE_ID_OTP")?.trim()
-        || ""
-      );
+    if (!response.ok) {
+      const details = await response.text().catch(() => "");
+      this.logger.error(`Erreur Resend ${purpose}: status=${response.status} ${details.slice(0, 400)}`);
+      throw new Error("Impossible d'envoyer l'e-mail pour le moment.");
     }
 
-    return this.config.get<string>("SENDGRID_TEMPLATE_ID_RESET_PASSWORD")?.trim() || "";
+    this.logger.log(`Resend email sent purpose=${purpose} to=${recipient}${recipient !== payload.to ? ` originalTo=${payload.to}` : ""}`);
   }
 
-  private emailProvider(): EmailProvider {
-    const configuredProvider = this.config.get<string>("EMAIL_PROVIDER")?.trim().toLowerCase();
-    if (configuredProvider) {
-      return configuredProvider as EmailProvider;
-    }
+  private codeEmailText(purpose: EmailPurpose, payload: VerificationCodeEmail) {
+    const intro =
+      purpose === "verification"
+        ? "Voici votre code de vérification Creative Currencies Africa."
+        : "Voici votre code pour réinitialiser votre mot de passe Creative Currencies Africa.";
 
-    return this.config.get<string>("SENDGRID_API_KEY") ? "sendgrid" : "console";
+    return [
+      `Bonjour ${payload.firstName},`,
+      "",
+      intro,
+      "",
+      `Code : ${payload.code}`,
+      `Ce code expire dans ${payload.expiresInMinutes} minutes.`,
+      "",
+      "Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail.",
+      "",
+      "Creative Currencies Africa",
+    ].join("\n");
+  }
+
+  private codeEmailHtml(purpose: EmailPurpose, payload: VerificationCodeEmail) {
+    const intro =
+      purpose === "verification"
+        ? "Voici votre code de vérification Creative Currencies Africa."
+        : "Voici votre code pour réinitialiser votre mot de passe Creative Currencies Africa.";
+    const logoUrl = this.config.get<string>("EMAIL_LOGO_URL")?.trim();
+    const header = logoUrl
+      ? `<img src="${this.escapeHtml(logoUrl)}" alt="Creative Currencies Africa" width="180" style="display:block;max-width:180px;height:auto;margin:0 auto 18px;" />`
+      : `<p style="margin:0 0 18px;text-align:center;font-size:18px;font-weight:700;color:#b7791f;">Creative Currencies Africa</p>`;
+
+    return `
+      <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; color: #111827;">
+        ${header}
+        <p>Bonjour ${this.escapeHtml(payload.firstName)},</p>
+        <p>${intro}</p>
+        <div style="font-size: 32px; font-weight: 700; letter-spacing: 8px; padding: 18px 22px; border-radius: 12px; background: #fff7df; color: #b7791f; text-align: center;">
+          ${this.escapeHtml(payload.code)}
+        </div>
+        <p>Ce code expire dans <strong>${payload.expiresInMinutes} minutes</strong>.</p>
+        <p style="color: #6b7280;">Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail.</p>
+        <p>Creative Currencies Africa</p>
+      </div>
+    `;
   }
 
   private requiredConfig(key: string) {
     const value = this.config.get<string>(key)?.trim();
+
     if (!value) {
-      throw new BadGatewayException(`${key} est requis pour l'envoi des e-mails.`);
+      throw new Error(`Missing email configuration: ${key}`);
     }
+
     return value;
   }
 
-  private normalizeEmail(email: string) {
-    return email.trim().toLowerCase();
+  private emailProvider(): EmailProvider {
+    const provider = this.config.get<string>("EMAIL_PROVIDER")?.trim().toLowerCase() || "console";
+
+    if (provider === "resend") {
+      return "resend";
+    }
+
+    return "console";
+  }
+
+  private emailRecipient(to: string) {
+    return this.config.get<string>("EMAIL_DEV_REDIRECT_TO")?.trim() || to;
   }
 
   private escapeHtml(value: string) {
-    return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
-  }
-
-  private formatSendGridError(error: unknown) {
-    if (typeof error !== "object" || error === null) {
-      return String(error);
-    }
-
-    const maybeSendGridError = error as { response?: { body?: { errors?: Array<{ message?: string }> } }; message?: string };
-    const messages = maybeSendGridError.response?.body?.errors?.map((item) => item.message).filter(Boolean);
-    return messages?.length ? messages.join(", ") : maybeSendGridError.message ?? String(error);
+    return value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
   }
 }

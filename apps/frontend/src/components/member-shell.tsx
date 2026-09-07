@@ -49,6 +49,8 @@ type SidebarItem = {
 };
 
 const dashboardThemeKey = "cca-dashboard-theme-v1";
+const currentMemberSyncedAtPrefix = "cca.currentMemberSyncedAt";
+const currentMemberSyncTtlMs = 5 * 60 * 1000;
 
 function isDashboardTheme(value: string | undefined | null): value is DashboardTheme {
   return value === "dark" || value === "light";
@@ -163,6 +165,14 @@ export function MemberShell({
       return;
     }
 
+    if (
+      user &&
+      hasExpectedCurrentMemberDetails({ user, profile, organizationProfile, partnerProfile }) &&
+      isCurrentMemberSyncFresh(user.id)
+    ) {
+      return;
+    }
+
     let isMounted = true;
 
     async function syncCurrentMember() {
@@ -173,6 +183,7 @@ export function MemberShell({
       }
 
       persistCurrentMember(response);
+      markCurrentMemberSynced(response.user.id);
       dispatch(setCurrentMember(response));
     }
 
@@ -189,7 +200,7 @@ export function MemberShell({
     return () => {
       isMounted = false;
     };
-  }, [accessToken, currentPath, dispatch, refreshToken, router, status]);
+  }, [accessToken, currentPath, dispatch, refreshToken, router, status, user, profile, organizationProfile, partnerProfile]);
 
   useEffect(() => {
     if (!accessToken || !user) {
@@ -312,7 +323,7 @@ export function MemberShell({
     <main className="member-shell" data-dashboard-theme={theme}>
       <aside className="member-sidebar" aria-label="Navigation espace membre">
         <Link className="member-brand" href="/espace-membre" aria-label="Accueil espace membre Creative Currencies Africa">
-          <img src="/assets/cca-logo-full-transparent-web.png" alt="Creative Currencies Africa" />
+          <img src="/assets/cca-logo-full-transparent-web.png" alt="Creative Currencies Africa" decoding="async" />
         </Link>
 
         <nav className="member-nav">
@@ -391,7 +402,7 @@ export function MemberShell({
                 onClick={() => setIsProfileMenuOpen((current) => !current)}
               >
                 {headerAvatarUrl ? (
-                  <img className="member-profile-avatar" src={headerAvatarUrl} alt="" />
+                  <img className="member-profile-avatar" src={headerAvatarUrl} alt="" loading="lazy" decoding="async" />
                 ) : (
                   <span className="member-profile-avatar">{initials}</span>
                 )}
@@ -433,6 +444,37 @@ function persistCurrentMember(response: AuthMeResponse) {
   storage?.setItem("cca.profile", JSON.stringify(response.profile));
   storage?.setItem("cca.organizationProfile", JSON.stringify(response.organizationProfile));
   storage?.setItem("cca.partnerProfile", JSON.stringify(response.partnerProfile));
+}
+
+function markCurrentMemberSynced(userId: string) {
+  getBrowserStorage()?.setItem(`${currentMemberSyncedAtPrefix}.${userId}`, String(Date.now()));
+}
+
+function isCurrentMemberSyncFresh(userId: string) {
+  const syncedAt = Number(getBrowserStorage()?.getItem(`${currentMemberSyncedAtPrefix}.${userId}`));
+
+  return Number.isFinite(syncedAt) && Date.now() - syncedAt < currentMemberSyncTtlMs;
+}
+
+function hasExpectedCurrentMemberDetails({
+  user,
+  profile,
+  organizationProfile,
+  partnerProfile,
+}: Pick<AuthMeResponse, "user" | "profile" | "organizationProfile" | "partnerProfile">) {
+  if (user.type === "CREATOR" || user.type === "LEARNER") {
+    return !!profile;
+  }
+
+  if (user.type === "ORGANIZATION") {
+    return !!organizationProfile;
+  }
+
+  if (user.type === "PARTNER") {
+    return !!partnerProfile;
+  }
+
+  return true;
 }
 
 function formatBadgeCount(count: number) {

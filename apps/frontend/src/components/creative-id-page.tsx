@@ -483,7 +483,7 @@ export function CreativeIdPage() {
           <div className="creative-id-identity">
             <div className="creative-id-profile">
               <div className="creative-id-avatar">
-                {avatarUrl ? <img src={avatarUrl} alt="" /> : <span className="member-initials-avatar">{buildInitials(displayName)}</span>}
+                {avatarUrl ? <img src={avatarUrl} alt="" loading="lazy" decoding="async" /> : <span className="member-initials-avatar">{buildInitials(displayName)}</span>}
                 <span><BadgeCheck aria-hidden="true" strokeWidth={1.8} /></span>
               </div>
               <div>
@@ -517,7 +517,7 @@ export function CreativeIdPage() {
 
           <div className="creative-id-share-card">
             <div className="creative-qr" aria-label="QR code Creative ID">
-              {qrDataUrl ? <img src={qrDataUrl} alt="" /> : <FileBadge aria-hidden="true" strokeWidth={1.8} />}
+              {qrDataUrl ? <img src={qrDataUrl} alt="" loading="lazy" decoding="async" /> : <FileBadge aria-hidden="true" strokeWidth={1.8} />}
             </div>
             <strong>{visibilityState.title}</strong>
             <p>{visibilityState.description}</p>
@@ -796,7 +796,7 @@ function StructuredPortfolioList({
       {items.map((item) => (
         <article key={item.id}>
           <div className="creative-portfolio-media">
-            {item.mediaUrl ? <img src={item.mediaUrl} alt="" /> : <ImageIcon aria-hidden="true" strokeWidth={1.8} />}
+            {item.mediaUrl ? <img src={item.mediaUrl} alt="" loading="lazy" decoding="async" /> : <ImageIcon aria-hidden="true" strokeWidth={1.8} />}
           </div>
           <div>
             <span>{[item.category, item.year].filter(Boolean).join(" · ")}</span>
@@ -907,7 +907,7 @@ function CreativeCreationMedia({ publication }: { publication: Publication }) {
   const media = getCreativePublicationMedia(publication);
 
   if (media?.type === "image") {
-    return <img src={media.url} alt="" />;
+    return <img src={media.url} alt="" loading="lazy" decoding="async" />;
   }
 
   if (media?.type === "video") {

@@ -28,6 +28,7 @@ import {
 import { MemberShell } from "@/components/member-shell";
 import { useReferenceDisciplines } from "@/hooks/use-reference-disciplines";
 import {
+  changePassword,
   getApiErrorMessage,
   getMemberAccountEvolution,
   getNotificationPreferences,
@@ -157,6 +158,13 @@ export function SettingsPage() {
   const initials = buildInitials(displayName);
   const profileCompletion = profile?.profileCompletion ?? 0;
 
+  const openPasswordSection = () => {
+    setActiveTab("security");
+    window.requestAnimationFrame(() => {
+      document.getElementById("changer-mot-de-passe")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
   return (
     <MemberShell activeItem="Paramètres">
       <div className="member-module-layout settings-module-layout">
@@ -210,7 +218,7 @@ export function SettingsPage() {
 
             {activeTab === "account" ? <SettingsAccountPanel user={user} displayName={displayName} /> : null}
             {activeTab === "journey" ? <SettingsJourneyPanel accessToken={accessToken} user={user} profile={profile} /> : null}
-            {activeTab === "security" ? <SettingsSecurityPanel user={user} /> : null}
+            {activeTab === "security" ? <SettingsSecurityPanel accessToken={accessToken} user={user} /> : null}
             {activeTab === "notifications" ? <SettingsNotificationPanel accessToken={accessToken} /> : null}
             {activeTab === "privacy" ? <SettingsTogglePanel title="Confidentialité" items={privacySettings} /> : null}
             {activeTab === "accessibility" ? <SettingsAccessibilityPanel /> : null}
@@ -245,8 +253,10 @@ export function SettingsPage() {
             <section className="member-card certificate-lock-card">
               <LockKeyhole aria-hidden="true" strokeWidth={1.8} />
               <strong>Sécurité</strong>
-              <p>Le changement de mot de passe est disponible via le parcours mot de passe oublié.</p>
-              <a className="member-secondary-button" href="/mot-de-passe-oublie">Changer le mot de passe</a>
+              <p>Changez votre mot de passe depuis votre session active, avec confirmation du mot de passe actuel.</p>
+              <button className="member-secondary-button" type="button" onClick={openPasswordSection}>
+                Changer le mot de passe
+              </button>
             </section>
           </aside>
         </div>
@@ -461,26 +471,100 @@ function AccountEvolutionHistory({ requests }: { requests: AccountEvolutionReque
   );
 }
 
-function SettingsSecurityPanel({ user }: { user: AuthUser | null }) {
+function SettingsSecurityPanel({ accessToken, user }: { accessToken: string | null; user: AuthUser | null }) {
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const updateCurrentPassword = (event: ChangeEvent<HTMLInputElement>) => {
+    setCurrentPassword(event.target.value);
+    setMessage("");
+    setError("");
+  };
+
+  const updateNewPassword = (event: ChangeEvent<HTMLInputElement>) => {
+    setNewPassword(event.target.value);
+    setMessage("");
+    setError("");
+  };
+
+  const updateConfirmPassword = (event: ChangeEvent<HTMLInputElement>) => {
+    setConfirmPassword(event.target.value);
+    setMessage("");
+    setError("");
+  };
+
+  const submitPassword = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setMessage("");
+    setError("");
+
+    if (!accessToken) {
+      setError("Votre connexion a expiré. Connectez-vous à nouveau.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setError("La confirmation ne correspond pas au nouveau mot de passe.");
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const response = await changePassword(accessToken, { currentPassword, newPassword });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setMessage(response.message);
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Impossible de changer le mot de passe pour le moment."));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
-    <section className="member-card settings-panel">
+    <form className="member-card settings-panel" onSubmit={submitPassword}>
       <div className="member-card-title">
         <div>
           <h2>Sécurité</h2>
           <p>Accès, mot de passe et protection du compte.</p>
         </div>
-        <a className="settings-save-button settings-password-button" href="/mot-de-passe-oublie">
-          <LockKeyhole aria-hidden="true" strokeWidth={1.8} />
-          Changer le mot de passe
-        </a>
       </div>
       <div className="settings-field-grid">
         <SettingsInfo icon={AtSign} label="E-mail du compte" value={user?.email ?? "Non renseignée"} />
         <SettingsInfo icon={ShieldCheck} label="État" value={user?.emailVerified ? "E-mail vérifié" : "E-mail à vérifier"} />
         <SettingsInfo icon={LockKeyhole} label="Connexion" value="Mot de passe actif" />
-        <SettingsInfo icon={FileText} label="Sessions" value="Gestion complète à venir" />
       </div>
-    </section>
+
+      <div className="settings-section-title settings-password-section-title" id="changer-mot-de-passe">
+        <LockKeyhole aria-hidden="true" strokeWidth={1.8} />
+        <span>Changer le mot de passe</span>
+        <strong>Session active</strong>
+      </div>
+
+      <div className="settings-form-grid">
+        <SettingsInput label="Mot de passe actuel" icon={LockKeyhole} type="password" value={currentPassword} onChange={updateCurrentPassword} autoComplete="current-password" placeholder="Entrez votre mot de passe actuel" required />
+        <SettingsInput label="Nouveau mot de passe" icon={LockKeyhole} type="password" value={newPassword} onChange={updateNewPassword} autoComplete="new-password" placeholder="Choisissez un nouveau mot de passe" required />
+        <SettingsInput label="Confirmer le nouveau mot de passe" icon={LockKeyhole} type="password" value={confirmPassword} onChange={updateConfirmPassword} autoComplete="new-password" placeholder="Répétez le nouveau mot de passe" required wide />
+      </div>
+      <div className="settings-form-actions">
+        <button className="settings-save-button" type="submit" disabled={isSaving}>
+          <LockKeyhole aria-hidden="true" strokeWidth={1.8} />
+          {isSaving ? "Mise à jour..." : "Enregistrer le nouveau mot de passe"}
+        </button>
+      </div>
+      <div className="settings-note-card">
+        <strong>Règle de sécurité</strong>
+        <p>Le mot de passe oublié reste volontairement neutre : il ne confirme jamais si une adresse e-mail existe. Ici, le changement se fait uniquement avec votre session active et votre mot de passe actuel.</p>
+      </div>
+      {message ? <p className="auth-form-success">{message}</p> : null}
+      {error ? <p className="auth-form-error" role="alert">{error}</p> : null}
+    </form>
   );
 }
 

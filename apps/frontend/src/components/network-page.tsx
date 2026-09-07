@@ -581,7 +581,7 @@ function NetworkSelect({
 function NetworkAvatar({ member, large = false }: { member: NetworkMember; large?: boolean }) {
   return (
     <span className={large ? "network-avatar network-avatar--large" : "network-avatar"}>
-      {member.avatarUrl ? <img src={member.avatarUrl} alt="" /> : <span>{buildInitials(member.publicName)}</span>}
+      {member.avatarUrl ? <img src={member.avatarUrl} alt="" loading="lazy" decoding="async" /> : <span>{buildInitials(member.publicName)}</span>}
     </span>
   );
 }
@@ -596,7 +596,7 @@ function NetworkMutualPreview({ member }: { member: NetworkMember }) {
       <span className="network-mutual-avatars" aria-hidden="true">
         {member.mutualConnections.slice(0, 2).map((connection) => (
           <span key={connection.userId}>
-            {connection.avatarUrl ? <img src={connection.avatarUrl} alt="" /> : buildInitials(connection.publicName)}
+            {connection.avatarUrl ? <img src={connection.avatarUrl} alt="" loading="lazy" decoding="async" /> : buildInitials(connection.publicName)}
           </span>
         ))}
       </span>

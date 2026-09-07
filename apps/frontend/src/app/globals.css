@@ -12011,6 +12011,27 @@ img.member-profile-avatar {
   font-size: 0.74rem;
 }
 
+.settings-password-section-title {
+  border-top: 0;
+  border-radius: 8px;
+  padding: 14px 16px;
+  background:
+    linear-gradient(135deg, rgba(216, 180, 254, 0.18), rgba(255, 247, 223, 0.52));
+}
+
+.settings-password-section-title span {
+  color: var(--member-text);
+  font-size: 1.02rem;
+  font-weight: 950;
+}
+
+.settings-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid var(--member-line);
+  padding-top: 4px;
+}
+
 .settings-form-grid > .settings-language-field,
 .settings-form-grid > .settings-field--wide {
   position: relative;
@@ -13095,6 +13116,21 @@ img.member-profile-avatar {
   border-color: color-mix(in srgb, var(--member-purple) 42%, var(--member-line));
   color: #fff;
   background: linear-gradient(135deg, #6d28d9, #a855f7);
+}
+
+.member-shell .social-relationship-pill {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  justify-content: center;
+  margin-top: 5px;
+  border: 1px solid color-mix(in srgb, var(--member-purple) 32%, var(--member-line));
+  border-radius: 999px;
+  padding: 3px 8px;
+  color: var(--member-purple);
+  background: color-mix(in srgb, var(--member-purple) 10%, var(--member-surface));
+  font-size: 0.66rem;
+  font-weight: 900;
 }
 
 .member-shell .social-member-actions {
