@@ -13,10 +13,10 @@ const metrics = [
 ];
 
 const partners: LandingPartner[] = [
-  { name: "Ministère de la Culture, Arts et Patrimoines", logo: "/assets/partners/transparent/min-culture.png", wide: true },
-  { name: "Ministère de la Communication et Médias", logo: "/assets/partners/transparent/min-communication.png", wide: true },
-  { name: "Ministère de l'Économie Numérique", logo: "/assets/partners/transparent/min-numerique.png", wide: true },
-  { name: "Ministère des Postes, Télécommunications et Numérique", logo: "/assets/partners/transparent/min-postes.png", wide: true },
+  { name: "Ministère de la Culture, Arts et Patrimoines", logo: "/assets/partners/transparent/min-culture.png", wide: true, institution: true },
+  { name: "Ministère de la Communication et Médias", logo: "/assets/partners/transparent/min-communication.png", wide: true, institution: true },
+  { name: "Ministère de l'Économie Numérique", logo: "/assets/partners/transparent/min-numerique.png", wide: true, institution: true },
+  { name: "Ministère des Postes, Télécommunications et Numérique", logo: "/assets/partners/transparent/min-postes.png", wide: true, institution: true },
   { name: "Congo Resilience", logo: "/assets/partners/transparent/congo-resilience.png" },
   { name: "JBN Power", logo: "/assets/partners/transparent/jbn-power.png" },
   { name: "243 Kulture", logo: "/assets/partners/transparent/partner-243-kulture.png" },

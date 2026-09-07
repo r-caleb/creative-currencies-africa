@@ -7,6 +7,7 @@ export type LandingPartner = {
   name: string;
   logo: string;
   wide?: boolean;
+  institution?: boolean;
   website?: string | null;
 };
 
@@ -25,11 +26,12 @@ export function LandingPartners({ fallbackPartners }: LandingPartnersProps) {
         const publishedPartners = partners
           .filter((partner) => partner.logoUrl?.trim())
           .sort((first, second) => first.order - second.order || first.name.localeCompare(second.name))
-          .map((partner) => ({
+          .map((partner, index) => ({
             name: partner.name,
             logo: partner.logoUrl as string,
             website: partner.website,
-            wide: partner.name.length > 34,
+            institution: index < 4,
+            wide: index < 4 || partner.name.length > 34,
           }));
 
         if (!cancelled && publishedPartners.length > 0) {
@@ -47,7 +49,7 @@ export function LandingPartners({ fallbackPartners }: LandingPartnersProps) {
     <div className="partner-wall">
       {visiblePartners.map((partner) => {
         const content = (
-          <article className={`partner-logo-card${partner.wide ? " partner-logo-card--wide" : ""}`}>
+          <article className={partnerLogoClassName(partner)}>
             <img src={partner.logo} alt={partner.name} loading="lazy" decoding="async" />
           </article>
         );
@@ -64,4 +66,12 @@ export function LandingPartners({ fallbackPartners }: LandingPartnersProps) {
       })}
     </div>
   );
+}
+
+function partnerLogoClassName(partner: LandingPartner) {
+  return [
+    "partner-logo-card",
+    partner.wide ? "partner-logo-card--wide" : "",
+    partner.institution ? "partner-logo-card--institution" : "",
+  ].filter(Boolean).join(" ");
 }
