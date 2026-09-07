@@ -1657,7 +1657,9 @@ html[data-theme="light"] .about-card-grid p,
   display: grid;
   place-items: center;
   padding: 18px 16px;
-  background: rgba(255, 255, 255, 0.94);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(250, 244, 232, 0.94)),
+    #fffaf0;
   transition:
     transform 180ms ease,
     border-color 180ms ease,
@@ -1666,6 +1668,10 @@ html[data-theme="light"] .about-card-grid p,
 
 .partner-logo-card--wide {
   grid-column: span 3;
+}
+
+.partner-logo-card--institution {
+  padding: 16px 20px;
 }
 
 :root[data-theme="dark"] .partner-logo-card,
@@ -1683,8 +1689,8 @@ html[data-theme="dark"] .partner-logo-card {
 
 .partner-logo-card img {
   width: auto;
-  max-width: min(100%, 166px);
-  max-height: 62px;
+  max-width: min(100%, 158px);
+  max-height: 58px;
   object-fit: contain;
 }
 
@@ -1693,15 +1699,9 @@ html[data-theme="dark"] .partner-logo-card {
   max-height: 68px;
 }
 
-.partner-logo-card:nth-child(7) img,
-.partner-logo-card:nth-child(8) img,
-.partner-logo-card:nth-child(11) img {
-  max-height: 68px;
-}
-
-.partner-logo-card:nth-child(12) img,
-.partner-logo-card:nth-child(13) img {
-  max-width: min(100%, 160px);
+.partner-logo-card--institution img {
+  max-width: min(100%, 260px);
+  max-height: 72px;
 }
 
 .contact-section {
