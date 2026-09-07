@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { EventType } from "@prisma/client";
-import { IsBoolean, IsDateString, IsEnum, IsOptional, IsString, MaxLength } from "class-validator";
+import { IsArray, IsBoolean, IsDateString, IsEnum, IsOptional, IsString, MaxLength } from "class-validator";
 
 export class CreateAdminEventDto {
   @ApiProperty({ example: "Creative Currencies Africa 2026" })
@@ -16,6 +16,12 @@ export class CreateAdminEventDto {
   @IsOptional()
   @IsEnum(EventType, { message: "Choisissez un type d'événement valide." })
   type?: EventType;
+
+  @ApiPropertyOptional({ enum: EventType, isArray: true, example: [EventType.WORKSHOP, EventType.PANEL, EventType.ACTIVATION] })
+  @IsOptional()
+  @IsArray({ message: "Les types d'événement doivent être envoyés sous forme de liste." })
+  @IsEnum(EventType, { each: true, message: "Choisissez uniquement des types d'événement valides." })
+  types?: EventType[];
 
   @ApiProperty({ example: "2026-09-02T08:00:00.000Z" })
   @IsDateString({}, { message: "La date de début doit être une date valide." })

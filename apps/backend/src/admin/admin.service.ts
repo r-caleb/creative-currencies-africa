@@ -1565,18 +1565,25 @@ export class AdminService {
     const q = this.optionalText(query.q);
     const type = this.parseEnum(EventType, query.type, "Type d'événement invalide.");
     const published = this.parseBoolean(query.published);
+    const filters: Prisma.EventWhereInput[] = [];
+
+    if (type) {
+      filters.push({ OR: [{ type }, { types: { has: type } }] });
+    }
+
+    if (q) {
+      filters.push({
+        OR: [
+          { title: { contains: q, mode: "insensitive" } },
+          { description: { contains: q, mode: "insensitive" } },
+          { location: { contains: q, mode: "insensitive" } },
+        ],
+      });
+    }
+
     const where: Prisma.EventWhereInput = {
-      ...(type ? { type } : {}),
       ...(typeof published === "boolean" ? { published } : {}),
-      ...(q
-        ? {
-            OR: [
-              { title: { contains: q, mode: "insensitive" } },
-              { description: { contains: q, mode: "insensitive" } },
-              { location: { contains: q, mode: "insensitive" } },
-            ],
-          }
-        : {}),
+      ...(filters.length ? { AND: filters } : {}),
     };
     const [events, total] = await Promise.all([
       this.prisma.event.findMany({
@@ -1601,6 +1608,7 @@ export class AdminService {
     const endsAt = this.parseRequiredDate(input.endsAt, "La date de fin de l'événement est requise.");
     this.ensureDateOrder(startsAt, endsAt);
     const published = input.featuredOnLanding ? true : input.published ?? false;
+    const types = this.normalizeEventTypes(input.types, input.type);
 
     try {
       const event = await this.prisma.$transaction(async (tx) => {
@@ -1616,7 +1624,8 @@ export class AdminService {
             title,
             slug: await this.buildUniqueEventSlug(title),
             description: this.requiredText(input.description, "La description de l'événement est requise."),
-            type: input.type ?? EventType.WORKSHOP,
+            type: types[0],
+            types,
             startsAt,
             endsAt,
             location: this.requiredText(input.location, "Le lieu de l'événement est requis."),
@@ -1669,6 +1678,16 @@ export class AdminService {
 
     if (input.type !== undefined) {
       data.type = input.type;
+
+      if (input.types === undefined) {
+        data.types = [input.type];
+      }
+    }
+
+    if (input.types !== undefined) {
+      const types = this.normalizeEventTypes(input.types, input.type ?? current.type);
+      data.type = types[0];
+      data.types = types;
     }
 
     if (input.startsAt !== undefined) {
@@ -2785,12 +2804,15 @@ export class AdminService {
   }
 
   private serializeEvent(event: AdminEvent) {
+    const types = event.types.length ? event.types : [event.type];
+
     return {
       id: event.id,
       title: event.title,
       slug: event.slug,
       description: event.description,
       type: event.type,
+      types,
       startsAt: event.startsAt,
       endsAt: event.endsAt,
       location: event.location,
@@ -2805,6 +2827,12 @@ export class AdminService {
         registrations: event._count.registrations,
       },
     };
+  }
+
+  private normalizeEventTypes(types?: EventType[], fallback?: EventType) {
+    const normalized = Array.from(new Set((types?.length ? types : [fallback]).filter((type): type is EventType => !!type)));
+
+    return normalized.length ? normalized : [EventType.WORKSHOP];
   }
 
   private serializeResource(resource: AdminResource) {

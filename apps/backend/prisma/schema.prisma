@@ -115,6 +115,7 @@ enum EventType {
   MASTERCLASS
   CONFERENCE
   PANEL
+  NETWORKING
   ACTIVATION
   VISIT
   FESTIVAL
@@ -742,6 +743,7 @@ model Event {
   slug              String    @unique
   description       String
   type              EventType @default(WORKSHOP)
+  types             EventType[] @default([])
   startsAt          DateTime
   endsAt            DateTime
   location          String

@@ -717,7 +717,7 @@ export type PartnerPayload = {
 };
 
 export type AdminTrainingStatus = "DRAFT" | "PUBLISHED" | "COMPLETED" | "ARCHIVED";
-export type AdminEventType = "WORKSHOP" | "MASTERCLASS" | "CONFERENCE" | "PANEL" | "ACTIVATION" | "VISIT" | "FESTIVAL";
+export type AdminEventType = "WORKSHOP" | "MASTERCLASS" | "CONFERENCE" | "PANEL" | "NETWORKING" | "ACTIVATION" | "VISIT" | "FESTIVAL";
 export type AdminResourceType = "PDF" | "TEMPLATE" | "CONTRACT" | "GUIDE" | "VIDEO" | "PODCAST";
 export type AdminResourceAccessLevel = "PUBLIC" | "MEMBERS" | "ENROLLED" | "ADMIN_ONLY";
 export type AdminOpportunityType = "CONTEST" | "RESIDENCY" | "MISSION" | "FUNDING" | "CASTING" | "FESTIVAL" | "TRAINING";
@@ -757,6 +757,7 @@ export type AdminEvent = {
   slug: string;
   description: string;
   type: AdminEventType;
+  types: AdminEventType[];
   startsAt: string;
   endsAt: string;
   location: string;
@@ -972,6 +973,7 @@ export type EventPayload = {
   title: string;
   description: string;
   type?: AdminEventType;
+  types?: AdminEventType[];
   startsAt: string;
   endsAt: string;
   location: string;

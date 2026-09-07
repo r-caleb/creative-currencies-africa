@@ -168,7 +168,20 @@ const audienceLabels: Record<PublicationAudience, string> = {
   GROUP: "Groupe seulement",
   PRIVATE: "Privé",
 };
-const categories = ["Arts visuels", "Mode & stylisme", "Business créatif", "Création de contenu", "Formation", "Opportunités", "Autre"];
+const defaultPublicationCategories = ["Arts visuels", "Mode & stylisme", "Business créatif", "Création de contenu", "Formation", "Opportunités", "Autre"];
+const publicationCategories: Record<PublicationType, string[]> = {
+  CREATION: ["Mode & stylisme", "Photographie", "Cinéma & vidéo", "Musique", "Graphisme & design", "Architecture & scénographie", "Arts visuels", "Artisanat", "Design produit", "Création de contenu"],
+  PROJECT: ["Projet personnel", "Projet collectif", "Exposition", "Campagne créative", "Production audiovisuelle", "Marque créative", "Initiative culturelle", "Projet communautaire"],
+  QUESTION: ["Conseil artistique", "Question technique", "Business créatif", "Financement", "Droit d'auteur", "Portfolio", "Formation", "Réseau"],
+  COLLABORATION: ["Recherche équipe", "Co-création", "Recherche mentor", "Recherche lieu", "Partenariat marque", "Prestation créative", "Bénévolat", "Projet communautaire"],
+  OPPORTUNITY: ["Appel à projets", "Concours", "Résidence", "Financement", "Bourse", "Casting", "Festival", "Collaboration"],
+  JOB: ["Mission freelance", "Emploi", "Stage", "Prestation créative", "Direction artistique", "Production", "Communication digitale", "Événementiel"],
+  RESOURCE: ["PDF", "Guide", "Template", "Contrat", "Syllabus", "Replay vidéo", "Podcast", "Outil pratique", "Archive"],
+  GROUP_DISCUSSION: ["Discussion générale", "Conseil", "Projet de groupe", "Partage de ressources", "Annonce groupe"],
+  TRAINING: ["Workshop", "Masterclass", "Bootcamp", "Mentorat", "Atelier pratique", "Formation business", "Formation digitale", "Certification"],
+  EVENT: ["Workshop", "Panel", "Networking", "Conférence", "Exposition", "Festival", "Activation", "Visite", "Showcase"],
+  ANNOUNCEMENT: ["Communiqué CCA", "Information officielle", "Résultat concours", "Appel communauté", "Partenariat", "Programme CCA", "Rappel important"],
+};
 const publishTypeOrder: PublicationType[] = ["CREATION", "PROJECT", "COLLABORATION", "QUESTION", "OPPORTUNITY", "JOB", "RESOURCE", "TRAINING", "EVENT", "ANNOUNCEMENT"];
 const mentionLimit = 10;
 
@@ -184,7 +197,7 @@ export function PublishPage() {
   const [activeTypeId, setActiveTypeId] = useState<PublicationType>(localPublishTypes[0].id);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
-  const [category, setCategory] = useState(categories[0]);
+  const [category, setCategory] = useState(defaultPublicationCategories[0]);
   const [audience, setAudience] = useState<PublicationAudience>("MEMBERS");
   const [link, setLink] = useState("");
   const [structuredDate, setStructuredDate] = useState("");
@@ -259,6 +272,7 @@ export function PublishPage() {
   const activeType = availablePublishTypes.find((type) => type.id === activeTypeId) ?? availablePublishTypes[0] ?? publishTypes[0] ?? localPublishTypes[0];
   const activeTypeAllowed = availablePublishTypes.some((type) => type.id === activeType.id);
   const ActiveIcon = activeType.icon;
+  const categoryOptions = useMemo(() => categoryOptionsForType(activeType.id), [activeType.id]);
   const authorName = profile?.publicName || organizationProfile?.name || partnerProfile?.name || user?.fullName || "Membre CCA";
   const showStructuredDate = usesStructuredDate(activeType.id);
   const showOpportunityFields = isOpportunityLike(activeType.id);
@@ -278,6 +292,10 @@ export function PublishPage() {
 
     return Math.round((checks.filter(Boolean).length / checks.length) * 100);
   }, [activeTypeId, audience, body, category, structuredDateTime, title]);
+
+  useEffect(() => {
+    setCategory((current) => (categoryOptions.includes(current) ? current : categoryOptions[0]));
+  }, [categoryOptions]);
 
   useEffect(() => {
     if (!isMentionPickerOpen || !accessToken) {
@@ -485,6 +503,10 @@ export function PublishPage() {
                       onClick={() => {
                         setActiveTypeId(type.id);
                         setAudience(type.defaultAudience);
+                        setCategory((current) => {
+                          const nextOptions = categoryOptionsForType(type.id);
+                          return nextOptions.includes(current) ? current : nextOptions[0];
+                        });
                       }}
                     >
                       <Icon aria-hidden="true" strokeWidth={1.8} />
@@ -515,7 +537,7 @@ export function PublishPage() {
                 <label className={styles.field}>
                   <span>Catégorie</span>
                   <select value={category} onChange={(event) => setCategory(event.target.value)}>
-                    {categories.map((item) => <option key={item} value={item}>{item}</option>)}
+                    {categoryOptions.map((item) => <option key={item} value={item}>{item}</option>)}
                   </select>
                 </label>
                 <label className={styles.field}>
@@ -790,6 +812,10 @@ function destinationLabel(destination: string) {
   };
 
   return labels[destination] ?? destination;
+}
+
+function categoryOptionsForType(type: PublicationType) {
+  return publicationCategories[type] ?? defaultPublicationCategories;
 }
 
 function destinationToHref(destinations: string[], type: PublicationType) {

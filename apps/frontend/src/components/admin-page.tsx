@@ -239,6 +239,7 @@ const eventTypeLabels: Record<AdminEventType, string> = {
   MASTERCLASS: "Masterclass",
   CONFERENCE: "Conférence",
   PANEL: "Panel",
+  NETWORKING: "Networking",
   ACTIVATION: "Activation",
   VISIT: "Visite",
   FESTIVAL: "Festival",
@@ -246,6 +247,7 @@ const eventTypeLabels: Record<AdminEventType, string> = {
 
 const trainingStatusOptions = Object.keys(trainingStatusLabels) as AdminTrainingStatus[];
 const eventTypeOptions = Object.keys(eventTypeLabels) as AdminEventType[];
+const defaultEventTypes: AdminEventType[] = ["WORKSHOP"];
 
 const resourceTypeLabels: Record<AdminResourceType, string> = {
   PDF: "PDF",
@@ -406,6 +408,7 @@ export function AdminPage() {
     title: "",
     description: "",
     type: "WORKSHOP",
+    types: defaultEventTypes,
     startsAt: "",
     endsAt: "",
     location: "",
@@ -1070,6 +1073,7 @@ export function AdminPage() {
         title: "",
         description: "",
         type: "WORKSHOP",
+        types: defaultEventTypes,
         startsAt: "",
         endsAt: "",
         location: "",
@@ -2027,12 +2031,10 @@ function ContentAdminPanel({
               <input value={eventForm.title} onChange={(event) => onChangeEventForm((current) => ({ ...current, title: event.target.value }))} placeholder="Ex. Creative Currencies Africa 2026" />
             </div>
           </label>
-          <label>
-            <span>Type</span>
-            <select value={eventForm.type} onChange={(event) => onChangeEventForm((current) => ({ ...current, type: event.target.value as AdminEventType }))}>
-              {eventTypeOptions.map((type) => <option key={type} value={type}>{eventTypeLabels[type]}</option>)}
-            </select>
-          </label>
+          <AdminEventTypePicker
+            value={eventForm.types ?? [eventForm.type ?? "WORKSHOP"]}
+            onChange={(types) => onChangeEventForm((current) => ({ ...current, types, type: types[0] }))}
+          />
           <label>
             <span>Lieu</span>
             <div>
@@ -2957,6 +2959,7 @@ function EventContentRow({
     title: event.title,
     description: event.description,
     type: event.type,
+    types: event.types?.length ? event.types : [event.type],
     startsAt: toDateTimeInputValue(event.startsAt),
     endsAt: toDateTimeInputValue(event.endsAt),
     location: event.location,
@@ -2972,6 +2975,7 @@ function EventContentRow({
       title: event.title,
       description: event.description,
       type: event.type,
+      types: event.types?.length ? event.types : [event.type],
       startsAt: toDateTimeInputValue(event.startsAt),
       endsAt: toDateTimeInputValue(event.endsAt),
       location: event.location,
@@ -2991,12 +2995,10 @@ function EventContentRow({
             <span>Titre</span>
             <input value={form.title} onChange={(inputEvent) => setForm((current) => ({ ...current, title: inputEvent.target.value }))} />
           </label>
-          <label>
-            <span>Type</span>
-            <select value={form.type} onChange={(inputEvent) => setForm((current) => ({ ...current, type: inputEvent.target.value as AdminEventType }))}>
-              {eventTypeOptions.map((type) => <option key={type} value={type}>{eventTypeLabels[type]}</option>)}
-            </select>
-          </label>
+          <AdminEventTypePicker
+            value={form.types ?? [form.type ?? "WORKSHOP"]}
+            onChange={(types) => setForm((current) => ({ ...current, types, type: types[0] }))}
+          />
           <label>
             <span>Lieu</span>
             <input value={form.location} onChange={(inputEvent) => setForm((current) => ({ ...current, location: inputEvent.target.value }))} />
@@ -3059,7 +3061,7 @@ function EventContentRow({
       </div>
       <div className="admin-reference-row-main">
         <strong>{event.title}</strong>
-        <span>{[eventTypeLabels[event.type], event.location, formatDateRange(event.startsAt, event.endsAt), event.featuredOnLanding ? "accueil" : null].filter(Boolean).join(" · ")}</span>
+        <span>{[formatEventTypes(event), event.location, formatDateRange(event.startsAt, event.endsAt), event.featuredOnLanding ? "accueil" : null].filter(Boolean).join(" · ")}</span>
         <small>{event.counts.registrations} réservations · {event.whatsappUrl ? "WhatsApp" : "sans WhatsApp"} · {event.facebookEventUrl ? "Facebook" : "sans Facebook"}</small>
       </div>
       <StatusPill status={event.published ? "PUBLISHED" : "DRAFT"} label={event.published ? "Publié" : "Masqué"} />
@@ -3080,6 +3082,36 @@ function EventContentRow({
         </button>
       </div>
     </article>
+  );
+}
+
+function AdminEventTypePicker({ value, onChange }: { value: AdminEventType[]; onChange: (types: AdminEventType[]) => void }) {
+  const selectedTypes = normalizeEventTypeSelection(value);
+
+  function toggleType(type: AdminEventType) {
+    const nextTypes = selectedTypes.includes(type)
+      ? selectedTypes.filter((item) => item !== type)
+      : [...selectedTypes, type];
+
+    onChange(normalizeEventTypeSelection(nextTypes));
+  }
+
+  return (
+    <fieldset className="admin-event-type-picker">
+      <legend>Types d'événement</legend>
+      <div>
+        {eventTypeOptions.map((type) => (
+          <label key={type}>
+            <input
+              type="checkbox"
+              checked={selectedTypes.includes(type)}
+              onChange={() => toggleType(type)}
+            />
+            <span>{eventTypeLabels[type]}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
   );
 }
 
@@ -5074,6 +5106,12 @@ function normalizeTrainingCreatePayload(input: TrainingPayload) {
 function normalizeEventPayload(input: Partial<EventPayload>) {
   const payload = normalizeContentPayload(input) as Partial<EventPayload>;
 
+  if (input.types !== undefined || input.type !== undefined) {
+    const eventTypes = normalizeEventTypeSelection(input.types ?? (input.type ? [input.type] : undefined));
+    payload.type = eventTypes[0];
+    payload.types = eventTypes;
+  }
+
   if (input.startsAt !== undefined) {
     payload.startsAt = toApiDateTime(input.startsAt) ?? "";
   }
@@ -5085,12 +5123,28 @@ function normalizeEventPayload(input: Partial<EventPayload>) {
   return payload;
 }
 
+function normalizeEventTypeSelection(types?: AdminEventType[]) {
+  const selectedTypes = Array.from(new Set((types ?? []).filter((type): type is AdminEventType => eventTypeOptions.includes(type))));
+
+  return selectedTypes.length ? selectedTypes : defaultEventTypes;
+}
+
+function formatEventTypes(event: Pick<AdminEvent, "type" | "types">) {
+  return normalizeEventTypeSelection(event.types?.length ? event.types : [event.type])
+    .map((type) => eventTypeLabels[type])
+    .join(", ");
+}
+
 function normalizeEventCreatePayload(input: EventPayload) {
+  const eventTypes = normalizeEventTypeSelection(input.types ?? (input.type ? [input.type] : undefined));
+
   return {
     ...normalizeEventPayload(input),
     title: input.title.trim(),
     description: input.description.trim(),
     location: input.location.trim(),
+    type: eventTypes[0],
+    types: eventTypes,
   } as EventPayload;
 }
 
