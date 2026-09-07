@@ -18,7 +18,8 @@
     "lint": "npm --workspaces run lint",
     "prisma:generate": "npm --workspace apps/backend run prisma:generate",
     "prisma:migrate": "npm --workspace apps/backend run prisma:migrate",
-    "prisma:studio": "npm --workspace apps/backend run prisma:studio"
+    "prisma:studio": "npm --workspace apps/backend run prisma:studio",
+    "seed:admin": "npm --workspace apps/backend run seed:admin"
   },
   "overrides": {
     "@hono/node-server": "1.19.13",

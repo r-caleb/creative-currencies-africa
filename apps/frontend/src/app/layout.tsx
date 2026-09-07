@@ -1,7 +1,21 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { CcaFooter } from "@/components/cca-footer";
-import { CcaHeader } from "@/components/cca-header";
+import { SiteChrome } from "@/components/site-chrome";
+import { StoreProvider } from "@/store/provider";
+
+const themeInitScript = `
+(function () {
+  try {
+    var systemTheme = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+    var siteTheme = window.localStorage.getItem("cca-theme-v3");
+    var dashboardTheme = window.localStorage.getItem("cca-dashboard-theme-v1");
+
+    document.documentElement.dataset.theme = siteTheme === "dark" || siteTheme === "light" ? siteTheme : systemTheme;
+    document.documentElement.dataset.dashboardTheme = dashboardTheme === "dark" || dashboardTheme === "light" ? dashboardTheme : systemTheme;
+  } catch (_) {
+  }
+})();
+`;
 
 export const metadata: Metadata = {
   title: "Creative Currencies Africa",
@@ -25,11 +39,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr">
+    <html lang="fr" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
       <body>
-        <CcaHeader />
-        {children}
-        <CcaFooter />
+        <StoreProvider>
+          <SiteChrome>{children}</SiteChrome>
+        </StoreProvider>
       </body>
     </html>
   );

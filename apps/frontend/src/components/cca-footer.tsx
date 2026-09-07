@@ -11,48 +11,48 @@ export function CcaFooter() {
             à l'échelle mondiale.
           </p>
           <div className="footer-socials" aria-label="Réseaux sociaux">
-            <a href="#contact" aria-label="Facebook">
+            <a href="/#contact" aria-label="Facebook">
               <FaFacebookF aria-hidden="true" />
             </a>
-            <a href="#contact" aria-label="Instagram">
+            <a href="/#contact" aria-label="Instagram">
               <FaInstagram aria-hidden="true" />
             </a>
-            <a href="#contact" aria-label="TikTok">
+            <a href="/#contact" aria-label="TikTok">
               <FaTiktok aria-hidden="true" />
             </a>
-            <a href="#contact" aria-label="LinkedIn">
+            <a href="/#contact" aria-label="LinkedIn">
               <FaLinkedinIn aria-hidden="true" />
             </a>
           </div>
         </div>
         <div className="footer-links footer-column">
           <strong>Plateforme</strong>
-          <a href="#a-propos">À propos</a>
-          <a href="#evenement">Événements</a>
-          <a href="#industries">Industries créatives</a>
-          <a href="#createurs">Créateurs</a>
-          <a href="#communaute">Communauté</a>
+          <a href="/#a-propos">À propos</a>
+          <a href="/#evenement">Événements</a>
+          <a href="/#industries">Industries créatives</a>
+          <a href="/#createurs">Créateurs</a>
+          <a href="/#communaute">Communauté</a>
         </div>
         <div className="footer-links footer-column">
           <strong>Découvrir</strong>
-          <a href="#apprendre">Comment ça marche ?</a>
-          <a href="#industries">Disciplines créatives</a>
-          <a href="#partenaires">Partenaires</a>
-          <a href="#contact">Newsletter</a>
+          <a href="/#apprendre">Comment ça marche ?</a>
+          <a href="/#industries">Disciplines créatives</a>
+          <a href="/#partenaires">Partenaires</a>
+          <a href="/#contact">Newsletter</a>
         </div>
         <div className="footer-links footer-column">
           <strong>Contact</strong>
-          <a href="#a-propos">Notre mission</a>
-          <a href="#contact">Contact</a>
-          <a href="#contact">Coordonnées</a>
-          <a href="#contact">Réseaux sociaux</a>
+          <a href="/#a-propos">Notre mission</a>
+          <a href="/#contact">Contact</a>
+          <a href="/#contact">Coordonnées</a>
+          <a href="/#contact">Réseaux sociaux</a>
         </div>
         <div className="footer-links footer-column">
           <strong>Légal</strong>
-          <a href="#">Mentions légales</a>
-          <a href="#">Politique de confidentialité</a>
-          <a href="#">Conditions d'utilisation</a>
-          <a href="#">Politique de cookies</a>
+          <a href="/mentions-legales">Mentions légales</a>
+          <a href="/politique-de-confidentialite">Politique de confidentialité</a>
+          <a href="/conditions-utilisation">Conditions d'utilisation</a>
+          <a href="/politique-de-confidentialite#cookies">Politique de cookies</a>
         </div>
         <p className="footer-note">© 2026 Creative Currencies Africa.</p>
         <img className="footer-art" src="/assets/cca-footer-ornament-transparent.png" alt="" />

@@ -18,14 +18,20 @@ export class AppController {
   platform() {
     return {
       name: "Creative Currencies Africa",
-      phase: "Phase 1",
+      phase: "Phase 2 - backend foundation",
       modules: [
-        "site-public",
+        "auth",
+        "reference",
+        "member-dashboard",
         "creative-id",
+        "portfolio",
+        "formations",
+        "opportunites",
         "ressources",
         "agenda",
-        "certifications",
-        "communaute",
+        "certificats",
+        "notifications",
+        "back-office",
       ],
     };
   }

@@ -7,6 +7,7 @@ const nextConfig = (phase: string): NextConfig => {
   return {
     reactStrictMode: true,
     distDir: isDevServer ? ".next-dev" : ".next",
+    allowedDevOrigins: isDevServer ? ["127.0.0.1"] : undefined,
   };
 };
 

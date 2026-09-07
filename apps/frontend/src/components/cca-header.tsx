@@ -1,41 +1,52 @@
 "use client";
 
 import { Menu, Moon, Sun, X } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 type Theme = "dark" | "light";
 
 const themeStorageKey = "cca-theme-v3";
 
+function isTheme(value: string | undefined | null): value is Theme {
+  return value === "dark" || value === "light";
+}
+
 const navItems = [
-  { label: "Accueil", href: "#accueil" },
-  { label: "À propos", href: "#a-propos" },
-  { label: "Événements", href: "#evenement" },
-  { label: "Industries", href: "#industries" },
-  { label: "Créateurs", href: "#createurs" },
-  { label: "Communauté", href: "#communaute" },
+  { label: "Accueil", href: "/#accueil", sectionId: "accueil" },
+  { label: "À propos", href: "/#a-propos", sectionId: "a-propos" },
+  { label: "Événements", href: "/#evenement", sectionId: "evenement" },
+  { label: "Industries", href: "/#industries", sectionId: "industries" },
+  { label: "Créateurs", href: "/#createurs", sectionId: "createurs" },
+  { label: "Communauté", href: "/#communaute", sectionId: "communaute" },
 ];
 
 export function CcaHeader() {
-  const [theme, setTheme] = useState<Theme>("dark");
+  const pathname = usePathname();
+  const isLandingPage = pathname === "/";
+  const [theme, setTheme] = useState<Theme>("light");
   const [isThemeReady, setIsThemeReady] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
-  const [activeSection, setActiveSection] = useState(navItems[0].href);
+  const [activeSection, setActiveSection] = useState(navItems[0].sectionId);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
+    const applyTheme = (nextTheme: Theme) => {
+      setTheme(nextTheme);
+      document.documentElement.dataset.theme = nextTheme;
+    };
     const params = new URLSearchParams(window.location.search);
     const requestedTheme = params.get("theme");
 
-    if (requestedTheme === "dark" || requestedTheme === "light") {
-      setTheme(requestedTheme);
+    if (isTheme(requestedTheme)) {
+      applyTheme(requestedTheme);
       setIsThemeReady(true);
       return;
     }
 
     const stored = window.localStorage.getItem(themeStorageKey);
-    if (stored === "dark" || stored === "light") {
-      setTheme(stored);
+    if (isTheme(stored)) {
+      applyTheme(stored);
       setIsThemeReady(true);
       return;
     }
@@ -44,14 +55,21 @@ export function CcaHeader() {
     const updateThemeFromSystem = (event?: MediaQueryListEvent) => {
       const currentStored = window.localStorage.getItem(themeStorageKey);
 
-      if (currentStored === "dark" || currentStored === "light") {
+      if (isTheme(currentStored)) {
         return;
       }
 
-      setTheme((event?.matches ?? systemThemeQuery.matches) ? "light" : "dark");
+      applyTheme((event?.matches ?? systemThemeQuery.matches) ? "light" : "dark");
     };
 
-    updateThemeFromSystem();
+    const initializedTheme = document.documentElement.dataset.theme;
+
+    if (isTheme(initializedTheme)) {
+      setTheme(initializedTheme);
+    } else {
+      updateThemeFromSystem();
+    }
+
     setIsThemeReady(true);
     systemThemeQuery.addEventListener("change", updateThemeFromSystem);
 
@@ -70,6 +88,7 @@ export function CcaHeader() {
     const nextTheme = theme === "dark" ? "light" : "dark";
 
     setTheme(nextTheme);
+    document.documentElement.dataset.theme = nextTheme;
     window.localStorage.setItem(themeStorageKey, nextTheme);
   };
 
@@ -91,17 +110,21 @@ export function CcaHeader() {
   }, []);
 
   useEffect(() => {
-    const sectionIds = navItems.map((item) => item.href.replace("#", ""));
+    if (!isLandingPage) {
+      return;
+    }
+
+    const sectionIds = navItems.map((item) => item.sectionId);
 
     const updateActiveSection = () => {
       const scrollPosition = window.scrollY + 150;
-      let currentSection = navItems[0].href;
+      let currentSection = navItems[0].sectionId;
 
       for (const sectionId of sectionIds) {
         const section = document.getElementById(sectionId);
 
         if (section && section.offsetTop <= scrollPosition) {
-          currentSection = `#${sectionId}`;
+          currentSection = sectionId;
         }
       }
 
@@ -116,7 +139,7 @@ export function CcaHeader() {
       window.removeEventListener("scroll", updateActiveSection);
       window.removeEventListener("resize", updateActiveSection);
     };
-  }, []);
+  }, [isLandingPage]);
 
   return (
     <header
@@ -125,7 +148,7 @@ export function CcaHeader() {
     >
       <a
         className="brand-lockup"
-        href="#accueil"
+        href="/#accueil"
         aria-label="Creative Currencies Africa"
         onClick={() => setIsMobileMenuOpen(false)}
       >
@@ -136,9 +159,9 @@ export function CcaHeader() {
         {navItems.map((item) => (
           <a
             key={item.href}
-            className={activeSection === item.href ? "is-active" : undefined}
+            className={isLandingPage && activeSection === item.sectionId ? "is-active" : undefined}
             href={item.href}
-            aria-current={activeSection === item.href ? "page" : undefined}
+            aria-current={isLandingPage && activeSection === item.sectionId ? "page" : undefined}
           >
             {item.label}
           </a>
@@ -159,10 +182,10 @@ export function CcaHeader() {
             <Moon aria-hidden="true" strokeWidth={1.8} />
           )}
         </button>
-        <a className="button button-ghost login-preview header-glass-action" href="#">
+        <a className="button button-ghost login-preview header-glass-action" href="/connexion">
           Se connecter
         </a>
-        <a className="button button-gold header-join-action" href="#communaute">
+        <a className="button button-gold header-join-action" href="/inscription">
           Nous rejoindre
         </a>
         <button
@@ -190,9 +213,9 @@ export function CcaHeader() {
           {navItems.map((item) => (
             <a
               key={item.href}
-              className={activeSection === item.href ? "is-active" : undefined}
+              className={isLandingPage && activeSection === item.sectionId ? "is-active" : undefined}
               href={item.href}
-              aria-current={activeSection === item.href ? "page" : undefined}
+              aria-current={isLandingPage && activeSection === item.sectionId ? "page" : undefined}
               onClick={() => setIsMobileMenuOpen(false)}
             >
               {item.label}
@@ -215,10 +238,10 @@ export function CcaHeader() {
             )}
             <span>{theme === "dark" ? "Mode clair" : "Mode sombre"}</span>
           </button>
-          <a className="button button-ghost" href="#" onClick={() => setIsMobileMenuOpen(false)}>
+          <a className="button button-ghost" href="/connexion" onClick={() => setIsMobileMenuOpen(false)}>
             Se connecter
           </a>
-          <a className="button button-gold" href="#communaute" onClick={() => setIsMobileMenuOpen(false)}>
+          <a className="button button-gold" href="/inscription" onClick={() => setIsMobileMenuOpen(false)}>
             Nous rejoindre
           </a>
         </div>

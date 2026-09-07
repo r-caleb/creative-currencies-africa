@@ -119,6 +119,11 @@ const roadmap = [
   },
 ];
 
+const lazyImageProps = {
+  loading: "lazy" as const,
+  decoding: "async" as const,
+};
+
 export default function Home() {
   return (
     <main className="site-shell">
@@ -301,7 +306,7 @@ export default function Home() {
           </div>
 
           <figure className="event-poster">
-            <img src="/assets/cc-event-flyer.png" alt="Affiche Creative Currencies 2026" />
+            <img src="/assets/cc-event-flyer.png" alt="Affiche Creative Currencies 2026" {...lazyImageProps} />
           </figure>
         </div>
       </section>
@@ -320,7 +325,7 @@ export default function Home() {
         <div className="gallery-grid">
           {galleryItems.map((item) => (
             <article className="gallery-card" key={item.title}>
-              <img src={item.image} alt="" />
+              <img src={item.image} alt="" {...lazyImageProps} />
               <div>
                 <span>{item.title}</span>
                 <h3>{item.text}</h3>
@@ -383,7 +388,7 @@ export default function Home() {
           <div className="discipline-track" aria-label="Disciplines créatives">
             {[...disciplines, ...disciplines].map((discipline, index) => (
               <article className="discipline-card" key={`${discipline.title}-${index}`}>
-                <img src={discipline.image} alt="" />
+                <img src={discipline.image} alt="" {...lazyImageProps} />
                 <div>
                   <h3>{discipline.title}</h3>
                   <p>{discipline.text}</p>
@@ -408,7 +413,7 @@ export default function Home() {
         <div className="creator-grid">
           {creators.map((creator) => (
             <article className="creator-card" key={creator.name}>
-              <img src={creator.image} alt="" />
+              <img src={creator.image} alt="" {...lazyImageProps} />
               <button type="button" aria-label={`Ajouter ${creator.name} aux favoris`}>
                 ♡
               </button>
@@ -476,7 +481,7 @@ export default function Home() {
               className={`partner-logo-card${partner.wide ? " partner-logo-card--wide" : ""}`}
               key={partner.name}
             >
-              <img src={partner.logo} alt={partner.name} />
+              <img src={partner.logo} alt={partner.name} {...lazyImageProps} />
             </article>
           ))}
         </div>
