@@ -148,8 +148,14 @@ img {
 
 @media (prefers-reduced-motion: reduce) {
   .skeleton-line,
-  .skeleton-logo {
+  .skeleton-logo,
+  .discipline-track {
     animation: none;
+  }
+
+  .discipline-track {
+    width: 100%;
+    overflow-x: auto;
   }
 }
 
@@ -1028,7 +1034,7 @@ html[data-theme="light"] .about-card-grid p,
   overflow: hidden;
   padding: 0;
   background: #090b14;
-  flex: 0 0 236px;
+  flex: 0 0 var(--discipline-card-width, 236px);
 }
 
 .discipline-card img {
@@ -1068,6 +1074,10 @@ html[data-theme="light"] .about-card-grid p,
 }
 
 .discipline-carousel {
+  --discipline-gap: 18px;
+  --discipline-card-width: 236px;
+  --discipline-scroll-distance: -2540px;
+
   max-width: 1220px;
   margin: 64px auto 0;
   overflow: hidden;
@@ -1079,9 +1089,10 @@ html[data-theme="light"] .about-card-grid p,
 
 .discipline-track {
   display: flex;
+  gap: var(--discipline-gap);
   width: max-content;
-  gap: 18px;
-  animation: discipline-scroll 48s linear infinite;
+  animation: discipline-scroll 32s linear infinite;
+  will-change: transform;
 }
 
 .discipline-track:hover {
@@ -1094,7 +1105,7 @@ html[data-theme="light"] .about-card-grid p,
   }
 
   to {
-    transform: translateX(calc(-50% - 9px));
+    transform: translateX(var(--discipline-scroll-distance));
   }
 }
 
@@ -2499,13 +2510,14 @@ html[data-theme="dark"] .partner-logo-card {
     opacity: 0.42;
   }
 
+  .discipline-carousel {
+    --discipline-card-width: 218px;
+    --discipline-scroll-distance: -2360px;
+  }
+
   .discipline-card,
   .discipline-card img {
     min-height: 260px;
-  }
-
-  .discipline-card {
-    flex-basis: 218px;
   }
 
   .gallery-grid {

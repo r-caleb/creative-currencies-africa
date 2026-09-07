@@ -127,6 +127,11 @@ const lazyImageProps = {
   decoding: "async" as const,
 };
 
+const carouselImageProps = {
+  loading: "eager" as const,
+  decoding: "async" as const,
+};
+
 export default function Home() {
   return (
     <main className="site-shell">
@@ -389,9 +394,9 @@ export default function Home() {
           </div>
 
           <div className="discipline-track" aria-label="Disciplines créatives">
-            {[...disciplines, ...disciplines].map((discipline, index) => (
-              <article className="discipline-card" key={`${discipline.title}-${index}`}>
-                <img src={discipline.image} alt="" {...lazyImageProps} />
+            {[...disciplines, ...disciplines, ...disciplines].map((discipline, index) => (
+              <article className="discipline-card" key={`${discipline.title}-${index}`} aria-hidden={index >= disciplines.length}>
+                <img src={discipline.image} alt="" {...carouselImageProps} />
                 <div>
                   <h3>{discipline.title}</h3>
                   <p>{discipline.text}</p>
