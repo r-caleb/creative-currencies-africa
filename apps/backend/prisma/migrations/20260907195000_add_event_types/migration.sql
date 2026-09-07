@@ -1,0 +1,3 @@
+ALTER TYPE "EventType" ADD VALUE 'NETWORKING';
+
+ALTER TABLE "Event" ADD COLUMN "types" "EventType"[] NOT NULL DEFAULT ARRAY[]::"EventType"[];

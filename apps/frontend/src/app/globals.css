@@ -15879,6 +15879,63 @@ img.member-profile-avatar {
   accent-color: var(--member-purple);
 }
 
+.admin-event-type-picker {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: var(--member-muted);
+  font-weight: 900;
+}
+
+.admin-event-type-picker legend {
+  padding: 0;
+  color: var(--member-muted);
+  font-size: 0.94rem;
+}
+
+.admin-event-type-picker > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 6px;
+  border: 1px solid var(--member-field-border);
+  border-radius: 8px;
+  background: var(--member-card);
+}
+
+.admin-event-type-picker label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 6px 9px;
+  border: 1px solid var(--member-border);
+  border-radius: 999px;
+  background: rgba(126, 54, 216, 0.06);
+  color: var(--member-text);
+  font-size: 0.76rem;
+  line-height: 1;
+}
+
+.admin-event-type-picker input[type="checkbox"] {
+  flex: 0 0 14px;
+  width: 14px;
+  min-width: 14px;
+  height: 14px;
+  min-height: 14px;
+  margin: 0;
+  accent-color: var(--member-purple);
+}
+
+.admin-event-type-picker span {
+  white-space: nowrap;
+}
+
 .admin-reference-form .admin-upload-field,
 .admin-reference-edit-grid .admin-upload-field,
 .admin-certificate-form .admin-upload-field {

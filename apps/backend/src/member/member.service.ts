@@ -3134,6 +3134,7 @@ export class MemberService {
     title: string;
     description: string;
     type: EventType;
+    types: EventType[];
     startsAt: Date;
     endsAt: Date;
     location: string;
@@ -3148,7 +3149,7 @@ export class MemberService {
       source: "event",
       sourceId: event.id,
       kind: "EVENT",
-      kindLabel: this.eventTypeLabel(event.type),
+      kindLabel: this.eventTypeListLabel(event.types.length ? event.types : [event.type]),
       title: event.title,
       description: event.description,
       startsAt: event.startsAt,
@@ -3315,12 +3316,17 @@ export class MemberService {
       [EventType.MASTERCLASS]: "Masterclass",
       [EventType.CONFERENCE]: "Conférence",
       [EventType.PANEL]: "Panel",
+      [EventType.NETWORKING]: "Networking",
       [EventType.ACTIVATION]: "Activation",
       [EventType.VISIT]: "Visite",
       [EventType.FESTIVAL]: "Festival",
     };
 
     return labels[type];
+  }
+
+  private eventTypeListLabel(types: EventType[]) {
+    return Array.from(new Set(types)).map((type) => this.eventTypeLabel(type)).join(", ");
   }
 
   private agendaPublicationKindLabel(type: PublicationType, category?: string | null) {
