@@ -1,5 +1,6 @@
 import { CalendarDays, Gem, Globe2, GraduationCap, UsersRound } from "lucide-react";
 import { FaFacebookF, FaInstagram, FaLinkedinIn, FaTiktok, FaWhatsapp } from "react-icons/fa6";
+import { LandingPartners, type LandingPartner } from "@/components/landing-partners";
 
 const teaserVideoUrl = "https://dlglznbxtilvitplcedo.supabase.co/storage/v1/object/public/cca-public/landing/CC%20TEASER%20web%20720p.mp4";
 
@@ -11,7 +12,7 @@ const metrics = [
   { value: "150+", label: "Pays", icon: Globe2 },
 ];
 
-const partners = [
+const partners: LandingPartner[] = [
   { name: "Ministère de la Culture, Arts et Patrimoines", logo: "/assets/partners/transparent/min-culture.png", wide: true },
   { name: "Ministère de la Communication et Médias", logo: "/assets/partners/transparent/min-communication.png", wide: true },
   { name: "Ministère de l'Économie Numérique", logo: "/assets/partners/transparent/min-numerique.png", wide: true },
@@ -477,16 +478,7 @@ export default function Home() {
           Institutions, partenaires techniques, médias et acteurs créatifs soutiennent
           l'ambition de Creative Currencies Africa.
         </p>
-        <div className="partner-wall">
-          {partners.map((partner) => (
-            <article
-              className={`partner-logo-card${partner.wide ? " partner-logo-card--wide" : ""}`}
-              key={partner.name}
-            >
-              <img src={partner.logo} alt={partner.name} {...lazyImageProps} />
-            </article>
-          ))}
-        </div>
+        <LandingPartners fallbackPartners={partners} />
       </section>
 
       <section className="section contact-section" id="contact" aria-labelledby="contact-title">

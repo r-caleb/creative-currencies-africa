@@ -4778,6 +4778,8 @@ function AdminUploadField({
 }) {
   const inputId = useId();
   const isUploading = uploadingKey === uploadKey;
+  const [isEditingValue, setIsEditingValue] = useState(false);
+  const visibleValue = isEditingValue ? value : readableUploadValue(value);
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -4796,7 +4798,15 @@ function AdminUploadField({
       <span>{label}</span>
       <div className="admin-upload-control">
         <Icon aria-hidden="true" />
-        <input aria-label={label} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
+        <input
+          aria-label={label}
+          value={visibleValue}
+          onBlur={() => setIsEditingValue(false)}
+          onChange={(event) => onChange(event.target.value)}
+          onFocus={() => setIsEditingValue(true)}
+          placeholder={placeholder}
+          title={value || undefined}
+        />
         <button
           type="button"
           className="admin-upload-action"
@@ -4813,6 +4823,27 @@ function AdminUploadField({
       <input className="admin-upload-native-input" id={inputId} type="file" accept={accept} onChange={handleFileChange} disabled={isUploading} />
     </div>
   );
+}
+
+function readableUploadValue(value: string) {
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return "";
+  }
+
+  const cleanValue = trimmedValue.split(/[?#]/)[0] ?? trimmedValue;
+  const fileName = cleanValue.split("/").filter(Boolean).at(-1);
+
+  if (!fileName || !cleanValue.includes("/")) {
+    return trimmedValue;
+  }
+
+  try {
+    return decodeURIComponent(fileName);
+  } catch {
+    return fileName;
+  }
 }
 
 function ReferencePagination({
