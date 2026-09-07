@@ -1,5 +1,6 @@
 import { CalendarDays, Gem, Globe2, GraduationCap, UsersRound } from "lucide-react";
 import { FaFacebookF, FaInstagram, FaLinkedinIn, FaTiktok, FaWhatsapp } from "react-icons/fa6";
+import { LandingOfficialEvent, type LandingOfficialEventData } from "@/components/landing-official-event";
 import { LandingPartners, type LandingPartner } from "@/components/landing-partners";
 
 const teaserVideoUrl = "https://dlglznbxtilvitplcedo.supabase.co/storage/v1/object/public/cca-public/landing/CC%20TEASER%20web%20720p.mp4";
@@ -75,6 +76,19 @@ const galleryItems = [
     image: "/assets/activites.png",
   },
 ];
+
+const fallbackLandingEvent: LandingOfficialEventData = {
+  title: "Journée de formation Creative Currencies 2026",
+  description:
+    "Du 2 au 5 septembre 2026, Creative Currencies Africa réunit à Silikin Village des créateurs, experts et partenaires autour du stylisme, de la photographie, de la relation public et du panel talk The Business of Fashion.",
+  startsAt: "2026-09-02T08:00:00.000Z",
+  endsAt: "2026-09-05T17:00:00.000Z",
+  location: "Silikin Village, Kinshasa",
+  types: ["WORKSHOP", "PANEL", "NETWORKING"],
+  coverImageUrl: "/assets/cc-event-flyer.png",
+  whatsappUrl: "https://wa.me/243988192765",
+  facebookEventUrl: "https://fb.me/e/49aSYmtsr",
+};
 
 const steps = [
   {
@@ -246,78 +260,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="section teaser-section" id="evenement" aria-labelledby="event-title">
-        <div className="event-layout">
-          <div className="event-copy">
-            <div className="section-kicker">Événement officiel</div>
-            <h2 id="event-title">Journée de formation Creative Currencies 2026</h2>
-            <p>
-              Du 2 au 5 septembre 2026, Creative Currencies Africa réunit à Silikin
-              Village des créateurs, experts et partenaires autour du stylisme, de la
-              photographie, de la relation public et du panel talk The Business of Fashion.
-            </p>
-
-            <div className="event-details">
-              <div>
-                <strong>Dates</strong>
-                <span>2 - 5 septembre 2026</span>
-              </div>
-              <div>
-                <strong>Lieu</strong>
-                <span>Silikin Village, Kinshasa</span>
-              </div>
-              <div>
-                <strong>Format</strong>
-                <span>Workshops, panel talk, networking</span>
-              </div>
-            </div>
-
-            <div className="reservation-block">
-              <p>Réservez votre place</p>
-              <div className="social-actions" aria-label="Liens événement">
-                <a
-                  className="button button-gold social-button"
-                  href="https://wa.me/243988192765"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <span className="brand-icon brand-whatsapp" aria-hidden="true">
-                    <FaWhatsapp />
-                  </span>
-                  WhatsApp
-                </a>
-                <a
-                  className="button button-ghost social-button"
-                  href="https://fb.me/e/49aSYmtsr"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <span className="brand-icon brand-facebook" aria-hidden="true">
-                    <FaFacebookF />
-                  </span>
-                  Facebook
-                </a>
-                <a className="button button-ghost social-button" href="#contact">
-                  <span className="brand-icon brand-instagram" aria-hidden="true">
-                    <FaInstagram />
-                  </span>
-                  Instagram
-                </a>
-                <a className="button button-ghost social-button" href="#contact">
-                  <span className="brand-icon brand-tiktok" aria-hidden="true">
-                    <FaTiktok />
-                  </span>
-                  TikTok
-                </a>
-              </div>
-            </div>
-          </div>
-
-          <figure className="event-poster">
-            <img src="/assets/cc-event-flyer.png" alt="Affiche Creative Currencies 2026" {...landingImageProps} />
-          </figure>
-        </div>
-      </section>
+      <LandingOfficialEvent fallbackEvent={fallbackLandingEvent} imageProps={landingImageProps} />
 
       <section className="section gallery-section" aria-labelledby="gallery-title">
         <div className="gallery-heading">

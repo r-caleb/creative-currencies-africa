@@ -98,6 +98,36 @@ export class ReferenceService {
     });
   }
 
+  async getLandingEvent() {
+    const event = await this.prisma.event.findFirst({
+      where: { published: true },
+      orderBy: [{ featuredOnLanding: "desc" }, { createdAt: "desc" }],
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        type: true,
+        types: true,
+        startsAt: true,
+        endsAt: true,
+        location: true,
+        coverImageUrl: true,
+        whatsappUrl: true,
+        facebookEventUrl: true,
+        featuredOnLanding: true,
+      },
+    });
+
+    if (!event) {
+      return null;
+    }
+
+    return {
+      ...event,
+      types: event.types.length ? event.types : [event.type],
+    };
+  }
+
   async createDiscipline(authUser: AuthUser, input: CreateDisciplineDto) {
     this.ensureAdmin(authUser);
 

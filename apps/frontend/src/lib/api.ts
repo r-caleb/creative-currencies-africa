@@ -701,6 +701,22 @@ export type AdminPartner = {
 
 export type PublicPartner = Pick<AdminPartner, "id" | "name" | "type" | "description" | "logoUrl" | "website" | "order">;
 
+export type PublicLandingEvent = Pick<
+  AdminEvent,
+  | "id"
+  | "title"
+  | "description"
+  | "type"
+  | "types"
+  | "startsAt"
+  | "endsAt"
+  | "location"
+  | "coverImageUrl"
+  | "whatsappUrl"
+  | "facebookEventUrl"
+  | "featuredOnLanding"
+>;
+
 export type AdminPartnersResponse = {
   partners: AdminPartner[];
   total: number;
@@ -2846,6 +2862,12 @@ export function getAdminPartners(
 
 export function getPublicPartners() {
   return apiRequest<PublicPartner[]>("/reference/partners", {
+    method: "GET",
+  });
+}
+
+export function getPublicLandingEvent() {
+  return apiRequest<PublicLandingEvent | null>("/reference/landing-event", {
     method: "GET",
   });
 }
