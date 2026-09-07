@@ -5,7 +5,6 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import {
   AccountEvolutionRequestStatus,
   AccountStatus,
@@ -33,6 +32,7 @@ import type { AuthUser } from "../auth/auth.types";
 import { NotificationService } from "../notification/notification.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { RealtimeGateway } from "../realtime/realtime.gateway";
+import { StorageService } from "../storage/storage.service";
 import { CreateAdminEventDto } from "./dto/create-admin-event.dto";
 import { CreateAdminOpportunityDto } from "./dto/create-admin-opportunity.dto";
 import { CreateAdminResourceDto } from "./dto/create-admin-resource.dto";
@@ -64,8 +64,7 @@ import { UpdateTrainingEnrollmentDto } from "./dto/update-training-enrollment.dt
 import { CreateDisciplineDto } from "../reference/dto/create-discipline.dto";
 import { UpdateDisciplineDto } from "../reference/dto/update-discipline.dto";
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
-import { extname, join, resolve } from "node:path";
+import { extname } from "node:path";
 
 const adminUserInclude = {
   profile: true,
@@ -272,8 +271,8 @@ export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationService,
-    private readonly config: ConfigService,
     private readonly realtime: RealtimeGateway,
+    private readonly storage: StorageService,
   ) {}
 
   async overview(authUser: AuthUser) {
@@ -366,15 +365,16 @@ export class AdminService {
     const extension = this.fileExtension(file);
     const originalName = this.safeOriginalFileName(file.originalname, extension);
     const fileName = `${safePurpose}-${Date.now()}-${originalName}-${randomUUID()}${extension}`;
-    const relativeDirectory = join("admin", safePurpose);
-    const uploadsRoot = resolve(process.cwd(), this.config.get<string>("UPLOADS_DIR") ?? "uploads");
-    const directory = join(uploadsRoot, relativeDirectory);
-
-    await mkdir(directory, { recursive: true });
-    await writeFile(join(directory, fileName), file.buffer);
+    const storedFile = await this.storage.storeFile({
+      directory: `admin/${safePurpose}`,
+      fileName,
+      buffer: file.buffer,
+      mimeType: file.mimetype,
+      visibility: "public",
+    });
 
     return {
-      url: `${this.publicBackendUrl()}/uploads/${relativeDirectory}/${fileName}`,
+      url: storedFile.url,
       name: file.originalname,
       mimeType: file.mimetype,
       sizeBytes: file.size,
@@ -3227,17 +3227,6 @@ export class AdminService {
       .slice(0, 48);
 
     return normalized || "fichier";
-  }
-
-  private publicBackendUrl() {
-    const configuredUrl = this.config.get<string>("PUBLIC_BACKEND_URL");
-
-    if (configuredUrl?.trim()) {
-      return configuredUrl.replace(/\/+$/, "");
-    }
-
-    const port = this.config.get<number>("PORT") ?? 4000;
-    return `http://localhost:${port}`;
   }
 
   private requiredText(value: unknown, message: string) {

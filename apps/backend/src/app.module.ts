@@ -11,6 +11,7 @@ import { PrismaModule } from "./prisma/prisma.module";
 import { PublicationModule } from "./publication/publication.module";
 import { ReferenceModule } from "./reference/reference.module";
 import { RealtimeModule } from "./realtime/realtime.module";
+import { StorageModule } from "./storage/storage.module";
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { RealtimeModule } from "./realtime/realtime.module";
       isGlobal: true,
     }),
     PrismaModule,
+    StorageModule,
     AdminModule,
     AuthModule,
     ReferenceModule,

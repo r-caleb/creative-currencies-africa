@@ -11,7 +11,7 @@ test("keeps the Creative Currencies Africa landing page content", async () => {
   assert.match(page, /plateforme éducative dédiée au développement/);
   assert.match(page, /Journée de formation Creative Currencies 2026/);
   assert.match(page, /cc-teaser-poster-0s\.jpg/);
-  assert.match(page, /CC%20TEASER%20web%20720p\.mp4/);
+  assert.match(page, /supabase\.co\/storage\/v1\/object\/public\/cca-public\/landing\/CC%20TEASER%20web%20720p\.mp4/);
   assert.match(page, /Revivez les moments forts/);
   assert.match(page, /Industries créatives en RDC/);
   assert.match(page, /Transformer la créativité congolaise/);
@@ -670,7 +670,6 @@ test("keeps client visual assets available to the frontend", async () => {
     access(new URL("../public/assets/marketing.jpg", import.meta.url)),
     access(new URL("../public/assets/innovation.jpg", import.meta.url)),
     access(new URL("../public/assets/cc-teaser-poster-0s.jpg", import.meta.url)),
-    access(new URL("../public/assets/CC TEASER web 720p.mp4", import.meta.url)),
     access(new URL("../public/assets/partners/transparent/min-culture.png", import.meta.url)),
     access(new URL("../public/assets/partners/transparent/min-communication.png", import.meta.url)),
     access(new URL("../public/assets/partners/transparent/min-numerique.png", import.meta.url)),

@@ -2,11 +2,11 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException,
 import { ConfigService } from "@nestjs/config";
 import { AccountEvolutionRequestStatus, AccountStatus, AccountType, ApplicationStatus, CertificateStatus, EnrollmentStatus, EventRegistrationStatus, EventType, NetworkConnectionKind, NetworkConnectionStatus, NotificationType, OpportunityStatus, OpportunityType, Prisma, ProfileVisibility, PublicationAudience, PublicationStatus, PublicationType, ResourceAccessLevel, TrainingStatus } from "@prisma/client";
 import { randomUUID } from "node:crypto";
-import { mkdir, unlink, writeFile } from "node:fs/promises";
-import { extname, join, resolve, sep } from "node:path";
+import { extname } from "node:path";
 import { PrismaService } from "../prisma/prisma.service";
 import type { AuthUser } from "../auth/auth.types";
 import { NotificationService } from "../notification/notification.service";
+import { StorageService } from "../storage/storage.service";
 import { ApplyOpportunityDto } from "./dto/apply-opportunity.dto";
 import { CreatePortfolioItemDto } from "./dto/create-portfolio-item.dto";
 import { EnrollTrainingDto } from "./dto/enroll-training.dto";
@@ -23,6 +23,7 @@ export class MemberService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly notifications: NotificationService,
+    private readonly storage: StorageService,
   ) {}
 
   async search(authUser: AuthUser, query: MemberSearchQueryDto = {}) {
@@ -2216,16 +2217,17 @@ export class MemberService {
     const safeKind = kind.toLowerCase();
     const originalName = this.safeOriginalFileName(file.originalname, extension);
     const fileName = `${safeKind}-${Date.now()}-${originalName}-${randomUUID()}${extension}`;
-    const relativeDirectory = join("member", userId);
-    const uploadsRoot = resolve(process.cwd(), this.config.get<string>("UPLOADS_DIR") ?? "uploads");
-    const directory = join(uploadsRoot, relativeDirectory);
-
-    await mkdir(directory, { recursive: true });
-    await writeFile(join(directory, fileName), file.buffer);
+    const storedFile = await this.storage.storeFile({
+      directory: `member/${userId}`,
+      fileName,
+      buffer: file.buffer,
+      mimeType: file.mimetype,
+      visibility: "public",
+    });
 
     return {
       fileName,
-      url: `${this.publicBackendUrl()}/uploads/${relativeDirectory}/${fileName}`,
+      url: storedFile.url,
     };
   }
 
@@ -2258,21 +2260,7 @@ export class MemberService {
   }
 
   private async deleteStoredUpload(url: string) {
-    const publicUploadsPrefix = `${this.publicBackendUrl()}/uploads/`;
-
-    if (!url.startsWith(publicUploadsPrefix)) {
-      return;
-    }
-
-    const uploadsRoot = resolve(process.cwd(), this.config.get<string>("UPLOADS_DIR") ?? "uploads");
-    const relativePath = decodeURIComponent(url.slice(publicUploadsPrefix.length));
-    const filePath = resolve(uploadsRoot, relativePath);
-
-    if (filePath !== uploadsRoot && !filePath.startsWith(`${uploadsRoot}${sep}`)) {
-      return;
-    }
-
-    await unlink(filePath).catch(() => undefined);
+    await this.storage.deleteFile(url).catch(() => undefined);
   }
 
   private fileExtension(file: Express.Multer.File) {
@@ -2303,17 +2291,6 @@ export class MemberService {
       .slice(0, 48);
 
     return normalized || "fichier";
-  }
-
-  private publicBackendUrl() {
-    const configuredUrl = this.config.get<string>("PUBLIC_BACKEND_URL");
-
-    if (configuredUrl?.trim()) {
-      return configuredUrl.replace(/\/+$/, "");
-    }
-
-    const port = this.config.get<number>("PORT") ?? 4000;
-    return `http://localhost:${port}`;
   }
 
   private publicFrontendUrl() {

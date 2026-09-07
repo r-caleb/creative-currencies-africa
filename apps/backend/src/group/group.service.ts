@@ -5,7 +5,6 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import {
   AccountStatus,
   AccountType,
@@ -20,12 +19,12 @@ import {
   Prisma,
 } from "@prisma/client";
 import { randomUUID } from "node:crypto";
-import { mkdir, unlink, writeFile } from "node:fs/promises";
-import { extname, join, resolve, sep } from "node:path";
+import { extname } from "node:path";
 import type { AuthUser } from "../auth/auth.types";
 import { NotificationService } from "../notification/notification.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { RealtimeGateway } from "../realtime/realtime.gateway";
+import { StorageService } from "../storage/storage.service";
 import type { AddGroupMemberDto } from "./dto/add-group-member.dto";
 import type { CreateGroupInvitationDto } from "./dto/create-group-invitation.dto";
 import type { CreateGroupMessageDto } from "./dto/create-group-message.dto";
@@ -109,9 +108,9 @@ type GroupJoinRequestWithRelations = Prisma.CommunityGroupJoinRequestGetPayload<
 export class GroupService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
     private readonly realtime: RealtimeGateway,
     private readonly notifications: NotificationService,
+    private readonly storage: StorageService,
   ) {}
 
   async listGroups(authUser: AuthUser, query: GroupQueryDto = {}) {
@@ -1579,35 +1578,22 @@ export class GroupService {
     const extension = this.fileExtension(file);
     const originalName = this.safeOriginalFileName(file.originalname, extension);
     const fileName = `avatar-${Date.now()}-${originalName}-${randomUUID()}${extension}`;
-    const relativeDirectory = join("groups", groupId);
-    const uploadsRoot = resolve(process.cwd(), this.config.get<string>("UPLOADS_DIR") ?? "uploads");
-    const directory = join(uploadsRoot, relativeDirectory);
-
-    await mkdir(directory, { recursive: true });
-    await writeFile(join(directory, fileName), file.buffer);
+    const storedFile = await this.storage.storeFile({
+      directory: `groups/${groupId}`,
+      fileName,
+      buffer: file.buffer,
+      mimeType: file.mimetype,
+      visibility: "public",
+    });
 
     return {
       fileName,
-      url: `${this.publicBackendUrl()}/uploads/${relativeDirectory}/${fileName}`,
+      url: storedFile.url,
     };
   }
 
   private async deleteStoredUpload(url: string) {
-    const publicUploadsPrefix = `${this.publicBackendUrl()}/uploads/`;
-
-    if (!url.startsWith(publicUploadsPrefix)) {
-      return;
-    }
-
-    const uploadsRoot = resolve(process.cwd(), this.config.get<string>("UPLOADS_DIR") ?? "uploads");
-    const relativePath = decodeURIComponent(url.slice(publicUploadsPrefix.length));
-    const filePath = resolve(uploadsRoot, relativePath);
-
-    if (filePath !== uploadsRoot && !filePath.startsWith(`${uploadsRoot}${sep}`)) {
-      return;
-    }
-
-    await unlink(filePath).catch(() => undefined);
+    await this.storage.deleteFile(url).catch(() => undefined);
   }
 
   private fileExtension(file: Express.Multer.File) {
@@ -1637,10 +1623,6 @@ export class GroupService {
       .slice(0, 48);
 
     return normalized || "photo-groupe";
-  }
-
-  private publicBackendUrl() {
-    return (this.config.get<string>("PUBLIC_BACKEND_URL") ?? "http://localhost:4000").replace(/\/$/, "");
   }
 
   private async countTotalUnreadForUser(userId: string) {

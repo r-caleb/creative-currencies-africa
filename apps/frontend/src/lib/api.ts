@@ -2264,6 +2264,16 @@ export function uploadPublicationAttachment(accessToken: string | null | undefin
   }, accessToken);
 }
 
+export function uploadMessageAttachment(accessToken: string | null | undefined, file: File) {
+  const body = new FormData();
+  body.append("file", file);
+
+  return authenticatedApiRequest<PublicationUploadResponse>("/messages/uploads", {
+    method: "POST",
+    body,
+  }, accessToken);
+}
+
 export function getPublications(accessToken?: string | null, query: PublicationQuery = {}) {
   const params = new URLSearchParams();
 
