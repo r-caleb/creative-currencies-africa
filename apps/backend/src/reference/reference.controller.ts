@@ -33,6 +33,13 @@ export class ReferenceController {
     return this.referenceService.getPartners();
   }
 
+  @Get("landing-event")
+  @ApiOperation({ summary: "Afficher l'événement officiel de la landing page" })
+  @ApiOkResponse({ description: "Dernier événement publié, prioritairement mis en avant sur l'accueil" })
+  landingEvent() {
+    return this.referenceService.getLandingEvent();
+  }
+
   @Post("disciplines")
   @ApiBearerAuth("access-token")
   @UseGuards(JwtAuthGuard)
