@@ -122,8 +122,8 @@ const roadmap = [
   },
 ];
 
-const lazyImageProps = {
-  loading: "lazy" as const,
+const landingImageProps = {
+  loading: "eager" as const,
   decoding: "async" as const,
 };
 
@@ -314,7 +314,7 @@ export default function Home() {
           </div>
 
           <figure className="event-poster">
-            <img src="/assets/cc-event-flyer.png" alt="Affiche Creative Currencies 2026" {...lazyImageProps} />
+            <img src="/assets/cc-event-flyer.png" alt="Affiche Creative Currencies 2026" {...landingImageProps} />
           </figure>
         </div>
       </section>
@@ -333,7 +333,7 @@ export default function Home() {
         <div className="gallery-grid">
           {galleryItems.map((item) => (
             <article className="gallery-card" key={item.title}>
-              <img src={item.image} alt="" {...lazyImageProps} />
+              <img src={item.image} alt="" {...landingImageProps} />
               <div>
                 <span>{item.title}</span>
                 <h3>{item.text}</h3>
@@ -421,7 +421,7 @@ export default function Home() {
         <div className="creator-grid">
           {creators.map((creator) => (
             <article className="creator-card" key={creator.name}>
-              <img src={creator.image} alt="" {...lazyImageProps} />
+              <img src={creator.image} alt="" {...landingImageProps} />
               <button type="button" aria-label={`Ajouter ${creator.name} aux favoris`}>
                 ♡
               </button>
