@@ -1,9 +1,12 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { AccountStatus, AccountType, DirectMessageReportStatus, NotificationType, Prisma } from "@prisma/client";
+import { randomUUID } from "node:crypto";
+import { extname } from "node:path";
 import type { AuthUser } from "../auth/auth.types";
 import { NotificationService } from "../notification/notification.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { RealtimeGateway } from "../realtime/realtime.gateway";
+import { StorageService } from "../storage/storage.service";
 import type { BlockUserDto } from "./dto/block-user.dto";
 import type { CreateDirectConversationDto } from "./dto/create-direct-conversation.dto";
 import type { CreateDirectMessageDto } from "./dto/create-direct-message.dto";
@@ -93,7 +96,32 @@ export class MessageService {
     private readonly prisma: PrismaService,
     private readonly realtime: RealtimeGateway,
     private readonly notifications: NotificationService,
+    private readonly storage: StorageService,
   ) {}
+
+  async uploadMessageAttachment(authUser: AuthUser, file?: Express.Multer.File) {
+    const user = await this.getCurrentUser(authUser);
+    this.validateMessageAttachment(file);
+
+    const extension = this.fileExtension(file);
+    const originalName = this.safeOriginalFileName(file.originalname, extension);
+    const kind = this.attachmentKind(file.mimetype, file.originalname);
+    const fileName = `${kind}-${Date.now()}-${originalName}-${randomUUID()}${extension}`;
+    const storedFile = await this.storage.storeFile({
+      directory: `messages/${user.id}`,
+      fileName,
+      buffer: file.buffer,
+      mimeType: file.mimetype,
+      visibility: "public",
+    });
+
+    return {
+      url: storedFile.url,
+      name: file.originalname,
+      mimeType: file.mimetype,
+      sizeBytes: file.size,
+    };
+  }
 
   async listConversations(authUser: AuthUser) {
     const user = await this.getCurrentUser(authUser);
@@ -795,6 +823,73 @@ export class MessageService {
     }
 
     return "file";
+  }
+
+  private validateMessageAttachment(file?: Express.Multer.File): asserts file is Express.Multer.File {
+    if (!file) {
+      throw new BadRequestException("Ajoutez un fichier à joindre au message.");
+    }
+
+    const acceptedTypes = [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "image/gif",
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.ms-powerpoint",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "text/plain",
+    ];
+
+    if (!acceptedTypes.includes(file.mimetype)) {
+      throw new BadRequestException("Format non accepté. Ajoutez une image, un PDF ou un document bureautique.");
+    }
+
+    if (file.size > 20 * 1024 * 1024) {
+      throw new BadRequestException("La pièce jointe ne doit pas dépasser 20 Mo.");
+    }
+  }
+
+  private fileExtension(file: Express.Multer.File) {
+    const extension = extname(file.originalname).toLowerCase();
+
+    if ([".jpg", ".jpeg", ".png", ".webp", ".gif", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt"].includes(extension)) {
+      return extension;
+    }
+
+    const extensions: Record<string, string> = {
+      "image/jpeg": ".jpg",
+      "image/png": ".png",
+      "image/webp": ".webp",
+      "image/gif": ".gif",
+      "application/pdf": ".pdf",
+      "application/msword": ".doc",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+      "application/vnd.ms-excel": ".xls",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+      "application/vnd.ms-powerpoint": ".ppt",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
+      "text/plain": ".txt",
+    };
+
+    return extensions[file.mimetype] ?? "";
+  }
+
+  private safeOriginalFileName(originalName: string, extension: string) {
+    const withoutExtension = originalName.slice(0, extension ? -extension.length : undefined);
+    const normalized = withoutExtension
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 48);
+
+    return normalized || "piece-jointe";
   }
 
   private serializeMessage(message: DirectMessageWithAuthor, currentUserId: string, targetLastReadAt?: Date | null) {

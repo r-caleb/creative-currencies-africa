@@ -1,6 +1,8 @@
 import { CalendarDays, Gem, Globe2, GraduationCap, UsersRound } from "lucide-react";
 import { FaFacebookF, FaInstagram, FaLinkedinIn, FaTiktok, FaWhatsapp } from "react-icons/fa6";
 
+const teaserVideoUrl = "https://dlglznbxtilvitplcedo.supabase.co/storage/v1/object/public/cca-public/landing/CC%20TEASER%20web%20720p.mp4";
+
 const metrics = [
   { value: "25K+", label: "Créateurs", icon: UsersRound },
   { value: "120K+", label: "Œuvres", icon: Gem },
@@ -231,7 +233,7 @@ export default function Home() {
           </div>
           <figure className="video-player" aria-label="Teaser Creative Currencies Africa">
             <video controls preload="metadata" poster="/assets/cc-teaser-poster-0s.jpg">
-              <source src="/assets/CC%20TEASER%20web%20720p.mp4" type="video/mp4" />
+              <source src={teaserVideoUrl} type="video/mp4" />
               Votre navigateur ne peut pas lire cette vidéo.
             </video>
           </figure>

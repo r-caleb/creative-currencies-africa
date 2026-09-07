@@ -40,7 +40,7 @@ import {
   reportDirectMessage,
   searchDirectMessages,
   unarchiveDirectConversation,
-  uploadPublicationAttachment,
+  uploadMessageAttachment,
 } from "@/lib/api";
 import type { CommunityGroup, CommunityGroupMessage, DirectConversation, DirectConversationAttachment, DirectMessage, DirectMessageSearchResponse, NetworkMember } from "@/lib/api";
 import { buildInitials } from "@/lib/member-display";
@@ -775,7 +775,7 @@ export function MessagesPage() {
     setError("");
 
     try {
-      const uploaded = await uploadPublicationAttachment(accessToken, file);
+      const uploaded = await uploadMessageAttachment(accessToken, file);
       setAttachment({
         url: uploaded.url,
         name: uploaded.name,

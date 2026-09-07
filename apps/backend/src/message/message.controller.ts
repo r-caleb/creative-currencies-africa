@@ -1,5 +1,6 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
-import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiOperation } from "@nestjs/swagger";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiCreatedResponse, ApiOkResponse, ApiOperation } from "@nestjs/swagger";
 import type { AuthUser } from "../auth/auth.types";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { BlockUserDto } from "./dto/block-user.dto";
@@ -78,6 +79,24 @@ export class MessageController {
   @ApiCreatedResponse({ description: "Conversation privée prête" })
   createConversation(@Req() req: AuthedRequest, @Body() body: CreateDirectConversationDto) {
     return this.messages.createConversation(req.user, body);
+  }
+
+  @Post("uploads")
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 20 * 1024 * 1024 } }))
+  @ApiOperation({ summary: "Uploader une pièce jointe de message" })
+  @ApiConsumes("multipart/form-data")
+  @ApiBody({
+    schema: {
+      type: "object",
+      properties: {
+        file: { type: "string", format: "binary" },
+      },
+      required: ["file"],
+    },
+  })
+  @ApiCreatedResponse({ description: "Pièce jointe prête à être envoyée dans une conversation" })
+  uploadAttachment(@Req() req: AuthedRequest, @UploadedFile() file?: Express.Multer.File) {
+    return this.messages.uploadMessageAttachment(req.user, file);
   }
 
   @Get("conversations/:id/messages")

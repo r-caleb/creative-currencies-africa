@@ -120,6 +120,7 @@ test("keeps backend bootstrap aligned with the frontend and API contract", async
     verifyEmailDto,
     verifyPasswordResetCodeDto,
     emailService,
+    storageService,
     memberController,
     memberService,
     updateMemberProfileDto,
@@ -132,6 +133,8 @@ test("keeps backend bootstrap aligned with the frontend and API contract", async
     createPublicationDto,
     updatePublicationDto,
     publicationQueryDto,
+    messageController,
+    messageService,
     publicationMigration,
     groupController,
     groupService,
@@ -183,6 +186,7 @@ test("keeps backend bootstrap aligned with the frontend and API contract", async
     readFile(new URL("../src/auth/dto/verify-email.dto.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/auth/dto/verify-password-reset-code.dto.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/email/email.service.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/storage/storage.service.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/member/member.controller.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/member/member.service.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/member/dto/update-member-profile.dto.ts", import.meta.url), "utf8"),
@@ -195,6 +199,8 @@ test("keeps backend bootstrap aligned with the frontend and API contract", async
     readFile(new URL("../src/publication/dto/create-publication.dto.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/publication/dto/update-publication.dto.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/publication/dto/publication-query.dto.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/message/message.controller.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/message/message.service.ts", import.meta.url), "utf8"),
     readFile(new URL("../prisma/migrations/20260821093000_add_publications_hub/migration.sql", import.meta.url), "utf8"),
     readFile(new URL("../src/group/group.controller.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/group/group.service.ts", import.meta.url), "utf8"),
@@ -392,8 +398,17 @@ test("keeps backend bootstrap aligned with the frontend and API contract", async
   assert.match(memberService, /toAuthUserResponse/);
   assert.match(memberService, /uploadProfileAsset/);
   assert.match(memberService, /validateUploadedFile/);
-  assert.match(memberService, /PUBLIC_BACKEND_URL/);
-  assert.match(memberService, /writeFile/);
+  assert.match(memberService, /StorageService/);
+  assert.match(memberService, /storage\.storeFile/);
+  assert.match(storageService, /STORAGE_PROVIDER/);
+  assert.match(storageService, /SUPABASE_URL/);
+  assert.match(storageService, /SUPABASE_SERVICE_ROLE_KEY/);
+  assert.match(storageService, /SUPABASE_PUBLIC_BUCKET/);
+  assert.match(storageService, /SUPABASE_PRIVATE_BUCKET/);
+  assert.match(storageService, /storage\/v1\/object/);
+  assert.match(storageService, /writeFile/);
+  assert.match(envExample, /STORAGE_PROVIDER/);
+  assert.match(envExample, /SUPABASE_SERVICE_ROLE_KEY/);
   assert.match(updateMemberProfileDto, /UpdateMemberProfileDto/);
   assert.match(updateMemberProfileDto, /organizationName/);
   assert.match(updateMemberProfileDto, /partnerName/);
@@ -446,8 +461,8 @@ test("keeps backend bootstrap aligned with the frontend and API contract", async
   assert.match(adminService, /deleteEvent/);
   assert.match(adminService, /uploadAdminAsset/);
   assert.match(adminService, /validateAdminUpload/);
-  assert.match(adminService, /PUBLIC_BACKEND_URL/);
-  assert.match(adminService, /writeFile/);
+  assert.match(adminService, /StorageService/);
+  assert.match(adminService, /storage\.storeFile/);
   assert.match(adminService, /featuredOnLanding: true/);
   assert.match(adminService, /data: \{ featuredOnLanding: false \}/);
   assert.match(adminService, /listDisciplines/);
@@ -514,6 +529,13 @@ test("keeps backend bootstrap aligned with the frontend and API contract", async
   assert.match(publicationService, /toggleReaction/);
   assert.match(publicationService, /routingDestinations/);
   assert.match(publicationService, /Ajoutez un lien ou un fichier pour publier une ressource/);
+  assert.match(messageController, /@Controller\("messages"\)/);
+  assert.match(messageController, /@Post\("uploads"\)/);
+  assert.match(messageController, /FileInterceptor\("file"/);
+  assert.match(messageService, /uploadMessageAttachment/);
+  assert.match(messageService, /directory: `messages\/\$\{user\.id\}`/);
+  assert.match(messageService, /StorageService/);
+  assert.match(messageService, /La pièce jointe ne doit pas dépasser 20 Mo/);
   assert.match(createPublicationDto, /CreatePublicationDto/);
   assert.match(createPublicationDto, /PublicationAttachmentDto/);
   assert.match(createPublicationDto, /publishNow/);

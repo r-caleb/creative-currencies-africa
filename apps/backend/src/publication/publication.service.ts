@@ -18,14 +18,13 @@ import {
   PublicationStatus,
   PublicationType,
 } from "@prisma/client";
-import { ConfigService } from "@nestjs/config";
 import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
-import { extname, join, resolve } from "node:path";
+import { extname } from "node:path";
 import type { AuthUser } from "../auth/auth.types";
 import { NotificationService } from "../notification/notification.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { StorageService } from "../storage/storage.service";
 import type { CreatePublicationCommentDto } from "./dto/create-publication-comment.dto";
 import type { CreatePublicationDto, PublicationAttachmentDto } from "./dto/create-publication.dto";
 import type { ModeratePublicationReportDto } from "./dto/moderate-publication-report.dto";
@@ -265,8 +264,8 @@ const publicationPolicies: Record<PublicationType, PublicationPolicy> = {
 export class PublicationService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
     private readonly notifications: NotificationService,
+    private readonly storage: StorageService,
   ) {}
 
   async getCapabilities(authUser: AuthUser) {
@@ -1394,16 +1393,17 @@ export class PublicationService {
     const safeType = type.toLowerCase();
     const originalName = this.safeOriginalFileName(file.originalname, extension);
     const fileName = `${safeType}-${Date.now()}-${originalName}-${randomUUID()}${extension}`;
-    const relativeDirectory = join("publications", userId);
-    const uploadsRoot = resolve(process.cwd(), this.config.get<string>("UPLOADS_DIR") ?? "uploads");
-    const directory = join(uploadsRoot, relativeDirectory);
-
-    await mkdir(directory, { recursive: true });
-    await writeFile(join(directory, fileName), file.buffer);
+    const storedFile = await this.storage.storeFile({
+      directory: `publications/${userId}`,
+      fileName,
+      buffer: file.buffer,
+      mimeType: file.mimetype,
+      visibility: "public",
+    });
 
     return {
       fileName,
-      url: `${this.publicBackendUrl()}/uploads/${relativeDirectory}/${fileName}`,
+      url: storedFile.url,
     };
   }
 
@@ -1445,17 +1445,6 @@ export class PublicationService {
       .slice(0, 48);
 
     return normalized || "fichier";
-  }
-
-  private publicBackendUrl() {
-    const configuredUrl = this.config.get<string>("PUBLIC_BACKEND_URL");
-
-    if (configuredUrl?.trim()) {
-      return configuredUrl.replace(/\/+$/, "");
-    }
-
-    const port = this.config.get<number>("PORT") ?? 4000;
-    return `http://localhost:${port}`;
   }
 
   private serializePublication(publication: PublicationWithRelations, currentUserId: string) {
