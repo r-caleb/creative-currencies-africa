@@ -1151,10 +1151,14 @@ html[data-theme="light"] .about-card-grid p,
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
+  padding: 0;
   color: inherit;
   background: #090b14;
   box-shadow: var(--shadow);
+  font: inherit;
   text-decoration: none;
+  text-align: left;
+  cursor: pointer;
 }
 
 .gallery-card:first-child {
@@ -9387,6 +9391,27 @@ img.member-profile-avatar {
   color: rgba(255, 255, 255, 0.72);
   font-size: 0.86rem;
   line-height: 1.5;
+}
+
+.gallery-lightbox-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: fit-content;
+  margin: 10px auto 0;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 0.85rem;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.gallery-lightbox-link:hover {
+  background: rgba(255, 255, 255, 0.16);
 }
 
 .gallery-lightbox-close,
