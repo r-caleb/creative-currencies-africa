@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import { ArrowRight, Camera, Image as ImageIcon, Images, Search, Sparkles } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { ArrowLeft, ArrowRight, Camera, Image as ImageIcon, Images, Search, Sparkles } from "lucide-react";
 import { MemberShell } from "@/components/member-shell";
 import { getApiErrorMessage, getPublicGalleryAlbums } from "@/lib/api";
 import type { GalleryAlbumCategory, PublicGalleryAlbum } from "@/lib/api";
@@ -20,10 +20,14 @@ const galleryCategoryLabels: Record<GalleryAlbumCategory, string> = {
 };
 
 export function GalleryPage() {
+  const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const requestedAlbum = searchParams.get("album");
   const [albums, setAlbums] = useState<PublicGalleryAlbum[]>([]);
   const [selectedAlbumId, setSelectedAlbumId] = useState<string | null>(null);
+  const [openedAlbumId, setOpenedAlbumId] = useState<string | null>(null);
+  const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState(galleryFilters[0]);
   const [status, setStatus] = useState("");
@@ -40,7 +44,12 @@ export function GalleryPage() {
         }
 
         setAlbums(response);
-        setSelectedAlbumId(findRequestedAlbum(response, requestedAlbum)?.id ?? response[0]?.id ?? null);
+        const requested = findRequestedAlbum(response, requestedAlbum);
+        const firstAlbum = response[0] ?? null;
+        const activeAlbum = requested ?? firstAlbum;
+        setSelectedAlbumId(activeAlbum?.id ?? null);
+        setOpenedAlbumId(requested?.id ?? null);
+        setSelectedPhotoId(getDefaultPhotoId(activeAlbum));
         setStatus("");
       })
       .catch((error) => {
@@ -86,6 +95,21 @@ export function GalleryPage() {
   }, [activeFilter, albums, query]);
 
   const selectedAlbum = albums.find((album) => album.id === selectedAlbumId) ?? filteredAlbums[0] ?? albums[0] ?? null;
+  const openedAlbum = albums.find((album) => album.id === openedAlbumId) ?? null;
+  const selectedPhoto = openedAlbum ? getSelectedPhoto(openedAlbum, selectedPhotoId) : null;
+
+  function openAlbum(album: PublicGalleryAlbum, photoId?: string) {
+    setSelectedAlbumId(album.id);
+    setOpenedAlbumId(album.id);
+    setSelectedPhotoId(photoId ?? getDefaultPhotoId(album));
+    router.push(`${pathname}?album=${encodeURIComponent(album.slug)}#album-detail`, { scroll: false });
+  }
+
+  function closeAlbum() {
+    setOpenedAlbumId(null);
+    setSelectedPhotoId(getDefaultPhotoId(selectedAlbum));
+    router.push(pathname, { scroll: false });
+  }
 
   return (
     <MemberShell activeItem="Galerie">
@@ -144,6 +168,60 @@ export function GalleryPage() {
 
         {status ? <p className="auth-form-error">{status}</p> : null}
 
+        {openedAlbum ? (
+          <section id="album-detail" className="member-card gallery-album-detail">
+            <div className="gallery-album-detail-header">
+              <button type="button" className="member-secondary-button" onClick={closeAlbum}>
+                <ArrowLeft aria-hidden="true" strokeWidth={1.8} />
+                Tous les albums
+              </button>
+              <div>
+                <span className="member-kicker">{galleryCategoryLabels[openedAlbum.category]}</span>
+                <h2>{openedAlbum.title}</h2>
+                <p>{openedAlbum.description || "Album officiel publié par Creative Currencies Africa."}</p>
+              </div>
+              <span className="resource-count">{openedAlbum.photos.length} photo{openedAlbum.photos.length > 1 ? "s" : ""}</span>
+            </div>
+
+            <div className="gallery-album-viewer">
+              <figure>
+                {selectedPhoto?.imageUrl || openedAlbum.coverImageUrl ? (
+                  <img
+                    src={selectedPhoto?.imageUrl ?? openedAlbum.coverImageUrl ?? ""}
+                    alt={selectedPhoto?.altText || selectedPhoto?.title || openedAlbum.title}
+                    loading="eager"
+                    decoding="async"
+                  />
+                ) : (
+                  <span><ImageIcon aria-hidden="true" strokeWidth={1.8} /></span>
+                )}
+                <figcaption>
+                  <strong>{selectedPhoto?.title || openedAlbum.title}</strong>
+                  <p>{selectedPhoto?.caption || selectedPhoto?.altText || openedAlbum.description || "Photo officielle CCA."}</p>
+                </figcaption>
+              </figure>
+
+              <div className="gallery-album-thumbnails" aria-label={`Photos de ${openedAlbum.title}`}>
+                {openedAlbum.photos.length ? (
+                  openedAlbum.photos.map((photo) => (
+                    <button
+                      key={photo.id}
+                      className={photo.id === selectedPhoto?.id ? "is-active" : undefined}
+                      type="button"
+                      onClick={() => setSelectedPhotoId(photo.id)}
+                    >
+                      <img src={photo.imageUrl} alt={photo.altText || photo.title || openedAlbum.title} loading="eager" decoding="async" />
+                      <span>{photo.title || photo.caption || "Photo officielle"}</span>
+                    </button>
+                  ))
+                ) : (
+                  <GalleryEmptyState title="Photos à venir" text="La couverture est publiée, les photos détaillées pourront être ajoutées ensuite." />
+                )}
+              </div>
+            </div>
+          </section>
+        ) : null}
+
         <div className="member-module-grid gallery-member-grid">
           <section id="albums-officiels" className="member-module-main">
             <section className="member-card">
@@ -164,7 +242,7 @@ export function GalleryPage() {
                       key={album.id}
                       className={album.id === selectedAlbum?.id ? "gallery-member-album is-active" : "gallery-member-album"}
                       type="button"
-                      onClick={() => setSelectedAlbumId(album.id)}
+                      onClick={() => openAlbum(album)}
                     >
                       {album.coverImageUrl ? (
                         <img src={album.coverImageUrl} alt={album.title} loading="eager" decoding="async" />
@@ -175,7 +253,7 @@ export function GalleryPage() {
                         <small>{galleryCategoryLabels[album.category]}</small>
                         <strong>{album.title}</strong>
                         <p>{album.description || "Album officiel publié par Creative Currencies Africa."}</p>
-                        <em>{album.photos.length} photo{album.photos.length > 1 ? "s" : ""}</em>
+                        <em>{album.photos.length} photo{album.photos.length > 1 ? "s" : ""} · Ouvrir</em>
                       </div>
                     </button>
                   ))}
@@ -207,13 +285,16 @@ export function GalleryPage() {
                   {selectedAlbum.coverImageUrl ? <img src={selectedAlbum.coverImageUrl} alt={selectedAlbum.title} loading="eager" decoding="async" /> : null}
                   <strong>{selectedAlbum.title}</strong>
                   <p>{selectedAlbum.description || "Cet album rassemble les images officielles publiées par CCA."}</p>
+                  <button type="button" className="member-secondary-button" onClick={() => openAlbum(selectedAlbum)}>
+                    Ouvrir l'album
+                  </button>
                   <div className="gallery-member-photo-strip">
                     {selectedAlbum.photos.length ? (
                       selectedAlbum.photos.map((photo) => (
-                        <article key={photo.id}>
+                        <button key={photo.id} type="button" onClick={() => openAlbum(selectedAlbum, photo.id)}>
                           <img src={photo.imageUrl} alt={photo.altText || photo.title || selectedAlbum.title} loading="eager" decoding="async" />
                           <span>{photo.title || photo.caption || "Photo officielle"}</span>
-                        </article>
+                        </button>
                       ))
                     ) : (
                       <GalleryEmptyState title="Photos à venir" text="La couverture est publiée, les photos détaillées pourront être ajoutées ensuite." />
@@ -229,6 +310,14 @@ export function GalleryPage() {
       </div>
     </MemberShell>
   );
+}
+
+function getDefaultPhotoId(album: PublicGalleryAlbum | null) {
+  return album?.photos[0]?.id ?? null;
+}
+
+function getSelectedPhoto(album: PublicGalleryAlbum, photoId: string | null) {
+  return album.photos.find((photo) => photo.id === photoId) ?? album.photos[0] ?? null;
 }
 
 function GalleryEmptyState({ title, text, onReset }: { title: string; text: string; onReset?: () => void }) {

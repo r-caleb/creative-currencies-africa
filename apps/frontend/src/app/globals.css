@@ -9045,7 +9045,7 @@ img.member-profile-avatar {
   padding-right: 4px;
 }
 
-.gallery-member-photo-strip article {
+.gallery-member-photo-strip button {
   display: grid;
   grid-template-columns: 86px minmax(0, 1fr);
   gap: 10px;
@@ -9053,7 +9053,20 @@ img.member-profile-avatar {
   border: 1px solid var(--member-line);
   border-radius: 8px;
   padding: 8px;
+  color: inherit;
   background: var(--member-bg-soft);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 180ms ease,
+    background 180ms ease;
+}
+
+.gallery-member-photo-strip button:hover,
+.gallery-member-photo-strip button:focus-visible {
+  border-color: color-mix(in srgb, var(--member-purple) 34%, var(--member-line));
+  background: color-mix(in srgb, var(--member-purple) 7%, var(--member-bg-soft));
+  outline: none;
 }
 
 .gallery-member-photo-strip img {
@@ -9077,6 +9090,137 @@ img.member-profile-avatar {
 
 .gallery-member-preview .certificate-empty-state > svg {
   color: var(--member-purple);
+}
+
+.gallery-album-detail {
+  display: grid;
+  gap: 18px;
+  scroll-margin-top: 92px;
+}
+
+.gallery-album-detail-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: start;
+}
+
+.gallery-album-detail-header h2 {
+  margin: 4px 0 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.65rem, 2.2vw, 2.35rem);
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+.gallery-album-detail-header p {
+  max-width: 860px;
+  margin: 8px 0 0;
+  color: var(--member-muted);
+  line-height: 1.6;
+}
+
+.gallery-album-viewer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.32fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.gallery-album-viewer figure {
+  display: grid;
+  overflow: hidden;
+  margin: 0;
+  border: 1px solid var(--member-line);
+  border-radius: 8px;
+  background: var(--member-bg-soft);
+}
+
+.gallery-album-viewer figure > img,
+.gallery-album-viewer figure > span {
+  width: 100%;
+  min-height: 420px;
+  max-height: 680px;
+  aspect-ratio: 16 / 10;
+}
+
+.gallery-album-viewer figure > img {
+  display: block;
+  object-fit: cover;
+}
+
+.gallery-album-viewer figure > span {
+  display: grid;
+  place-items: center;
+  color: var(--member-purple);
+  background: color-mix(in srgb, var(--member-purple) 9%, var(--member-surface));
+}
+
+.gallery-album-viewer figcaption {
+  display: grid;
+  gap: 5px;
+  padding: 16px;
+}
+
+.gallery-album-viewer figcaption strong {
+  color: var(--member-text);
+  font-size: 1.02rem;
+  font-weight: 950;
+}
+
+.gallery-album-viewer figcaption p {
+  margin: 0;
+  color: var(--member-muted);
+  line-height: 1.5;
+}
+
+.gallery-album-thumbnails {
+  display: grid;
+  gap: 10px;
+  max-height: 720px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.gallery-album-thumbnails button {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  border: 1px solid var(--member-line);
+  border-radius: 8px;
+  padding: 8px;
+  color: var(--member-text);
+  background: var(--member-bg-soft);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 180ms ease,
+    background 180ms ease,
+    transform 180ms ease;
+}
+
+.gallery-album-thumbnails button:hover,
+.gallery-album-thumbnails button.is-active {
+  border-color: color-mix(in srgb, var(--member-purple) 44%, var(--member-line));
+  background: color-mix(in srgb, var(--member-purple) 8%, var(--member-bg-soft));
+  transform: translateY(-1px);
+}
+
+.gallery-album-thumbnails img {
+  width: 92px;
+  aspect-ratio: 4 / 3;
+  display: block;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.gallery-album-thumbnails span {
+  color: var(--member-muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .resource-count {
@@ -12569,6 +12713,8 @@ img.member-profile-avatar {
   .member-module-hero,
   .member-module-side,
   .gallery-member-album-grid,
+  .gallery-album-detail-header,
+  .gallery-album-viewer,
   .member-resource-list article,
   .global-results-search,
   .global-result-card,
@@ -12593,6 +12739,15 @@ img.member-profile-avatar {
   .settings-journey-status-icon {
     width: 46px;
     height: 46px;
+  }
+
+  .gallery-album-viewer figure > img,
+  .gallery-album-viewer figure > span {
+    min-height: 260px;
+  }
+
+  .gallery-album-thumbnails {
+    max-height: none;
   }
 
   .settings-journey-form .settings-save-button,
