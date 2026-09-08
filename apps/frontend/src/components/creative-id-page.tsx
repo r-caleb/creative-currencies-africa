@@ -6,6 +6,8 @@ import {
   BadgeCheck,
   BriefcaseBusiness,
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   CheckCircle2,
   Copy,
   ExternalLink,
@@ -24,6 +26,7 @@ import {
   ShieldCheck,
   Trash2,
   UsersRound,
+  X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
@@ -75,6 +78,14 @@ type PortfolioFormState = {
   featured: boolean;
 };
 
+type CreativeCreationGalleryItem = {
+  id: string;
+  title: string;
+  category: string;
+  description: string;
+  media: ReturnType<typeof getCreativePublicationMedia>;
+};
+
 const emptyPortfolioForm: PortfolioFormState = {
   title: "",
   category: "",
@@ -97,6 +108,7 @@ export function CreativeIdPage() {
   const [creationPublications, setCreationPublications] = useState<Publication[]>([]);
   const [isLoadingCreations, setIsLoadingCreations] = useState(false);
   const [creationsError, setCreationsError] = useState("");
+  const [activeCreationIndex, setActiveCreationIndex] = useState<number | null>(null);
   const [record, setRecord] = useState<CreativeIdRecord | null>(null);
   const [isLoadingRecord, setIsLoadingRecord] = useState(false);
   const [recordError, setRecordError] = useState("");
@@ -157,6 +169,8 @@ export function CreativeIdPage() {
       value: profile?.cvUrl ? "Disponible" : "À ajouter",
     },
   ];
+  const creationGalleryItems = useMemo(() => creationPublications.map(buildCreativeCreationGalleryItem), [creationPublications]);
+  const activeCreation = activeCreationIndex === null ? null : creationGalleryItems[activeCreationIndex] ?? null;
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -234,6 +248,36 @@ export function CreativeIdPage() {
       isMounted = false;
     };
   }, [accessToken]);
+
+  useEffect(() => {
+    if (activeCreationIndex === null) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setActiveCreationIndex(null);
+      }
+
+      if (event.key === "ArrowLeft") {
+        setActiveCreationIndex((current) => getPreviousIndex(current, creationGalleryItems.length));
+      }
+
+      if (event.key === "ArrowRight") {
+        setActiveCreationIndex((current) => getNextIndex(current, creationGalleryItems.length));
+      }
+    }
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [activeCreationIndex, creationGalleryItems.length]);
 
   useEffect(() => {
     if (!accessToken) {
@@ -557,9 +601,10 @@ export function CreativeIdPage() {
                 </Link>
               </div>
               <CreativeCreationGrid
-                publications={creationPublications}
+                items={creationGalleryItems}
                 isLoading={isLoadingCreations}
                 error={creationsError}
+                onPreview={(index) => setActiveCreationIndex(index)}
               />
             </section>
 
@@ -764,6 +809,30 @@ export function CreativeIdPage() {
           </aside>
         </div>
       </div>
+      {activeCreation?.media ? (
+        <div className="gallery-lightbox creative-creation-lightbox" role="dialog" aria-modal="true" aria-label={activeCreation.title}>
+          <button className="gallery-lightbox-close" type="button" onClick={() => setActiveCreationIndex(null)} aria-label="Fermer l'aperçu">
+            <X aria-hidden="true" strokeWidth={1.8} />
+          </button>
+          <button className="gallery-lightbox-nav gallery-lightbox-nav--prev" type="button" onClick={() => setActiveCreationIndex((current) => getPreviousIndex(current, creationGalleryItems.length))} aria-label="Création précédente">
+            <ChevronLeft aria-hidden="true" strokeWidth={1.8} />
+          </button>
+          <figure>
+            {activeCreation.media.type === "video" ? (
+              <video src={activeCreation.media.url} controls autoPlay playsInline />
+            ) : (
+              <img src={activeCreation.media.url} alt={activeCreation.title} />
+            )}
+            <figcaption>
+              <strong>{activeCreation.title}</strong>
+              <p>{[activeCreation.category, activeCreation.description].filter(Boolean).join(" · ")}</p>
+            </figcaption>
+          </figure>
+          <button className="gallery-lightbox-nav gallery-lightbox-nav--next" type="button" onClick={() => setActiveCreationIndex((current) => getNextIndex(current, creationGalleryItems.length))} aria-label="Création suivante">
+            <ChevronRight aria-hidden="true" strokeWidth={1.8} />
+          </button>
+        </div>
+      ) : null}
     </MemberShell>
   );
 }
@@ -850,13 +919,15 @@ function CreativeHistoryList({ items }: { items: CreativeIdRecord["history"] }) 
 }
 
 function CreativeCreationGrid({
-  publications,
+  items,
   isLoading,
   error,
+  onPreview,
 }: {
-  publications: Publication[];
+  items: CreativeCreationGalleryItem[];
   isLoading: boolean;
   error: string;
+  onPreview: (index: number) => void;
 }) {
   if (isLoading) {
     return (
@@ -871,7 +942,7 @@ function CreativeCreationGrid({
     return <p className="auth-form-error" role="alert">{error}</p>;
   }
 
-  if (!publications.length) {
+  if (!items.length) {
     return (
       <div className="creative-creation-empty">
         <ImageIcon aria-hidden="true" strokeWidth={1.8} />
@@ -889,13 +960,15 @@ function CreativeCreationGrid({
 
   return (
     <div className="creative-creation-grid">
-      {publications.map((publication) => (
-        <article key={publication.id}>
-          <CreativeCreationMedia publication={publication} />
+      {items.map((item, index) => (
+        <article key={item.id}>
+          <button className="creative-creation-preview" type="button" disabled={!item.media} onClick={() => onPreview(index)} aria-label={`Agrandir ${item.title}`}>
+            <CreativeCreationMedia item={item} />
+          </button>
           <div>
-            <small>{publication.category || "Création"}</small>
-            <strong>{publication.title}</strong>
-            <p>{publication.excerpt || publication.content}</p>
+            <small>{item.category}</small>
+            <strong>{item.title}</strong>
+            <p>{item.description}</p>
           </div>
         </article>
       ))}
@@ -903,8 +976,8 @@ function CreativeCreationGrid({
   );
 }
 
-function CreativeCreationMedia({ publication }: { publication: Publication }) {
-  const media = getCreativePublicationMedia(publication);
+function CreativeCreationMedia({ item }: { item: CreativeCreationGalleryItem }) {
+  const media = item.media;
 
   if (media?.type === "image") {
     return <img src={media.url} alt="" loading="lazy" decoding="async" />;
@@ -915,6 +988,16 @@ function CreativeCreationMedia({ publication }: { publication: Publication }) {
   }
 
   return <span><ImageIcon aria-hidden="true" strokeWidth={1.8} /></span>;
+}
+
+function buildCreativeCreationGalleryItem(publication: Publication): CreativeCreationGalleryItem {
+  return {
+    id: publication.id,
+    title: publication.title,
+    category: publication.category || "Création",
+    description: publication.content || publication.excerpt || "Création publiée dans la communauté CCA.",
+    media: getCreativePublicationMedia(publication),
+  };
 }
 
 function getCreativePublicationMedia(publication: Publication) {
@@ -931,6 +1014,22 @@ function getCreativePublicationMedia(publication: Publication) {
   }
 
   return null;
+}
+
+function getPreviousIndex(current: number | null, total: number) {
+  if (!total) {
+    return null;
+  }
+
+  return current === null || current <= 0 ? total - 1 : current - 1;
+}
+
+function getNextIndex(current: number | null, total: number) {
+  if (!total) {
+    return null;
+  }
+
+  return current === null || current >= total - 1 ? 0 : current + 1;
 }
 
 function CreativeLinkCard({

@@ -428,6 +428,7 @@ export type Publication = {
     reactions: number;
     shares: number;
   };
+  viewerReaction: PublicationReactionType | null;
   permissions: {
     canEdit: boolean;
     canArchive: boolean;
@@ -456,6 +457,16 @@ export type PublicationComment = {
     canEdit: boolean;
     canDelete: boolean;
   };
+};
+
+export type PublicationReactionUser = PublicationAuthor & {
+  reactionType: PublicationReactionType;
+  reactedAt: string;
+};
+
+export type PublicationReactionsResponse = {
+  count: number;
+  items: PublicationReactionUser[];
 };
 
 export type PublicationReport = {
@@ -2387,6 +2398,12 @@ export function reactToPublication(accessToken: string | null | undefined, publi
   return authenticatedApiRequest<{ active: boolean; type: PublicationReactionType; count: number }>(`/publications/${publicationId}/reactions`, {
     method: "POST",
     body: JSON.stringify({ type }),
+  }, accessToken);
+}
+
+export function getPublicationReactions(accessToken: string | null | undefined, publicationId: string) {
+  return authenticatedApiRequest<PublicationReactionsResponse>(`/publications/${publicationId}/reactions`, {
+    method: "GET",
   }, accessToken);
 }
 
