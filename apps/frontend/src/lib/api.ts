@@ -970,6 +970,20 @@ export type GalleryAlbumsResponse = {
   total: number;
 };
 
+export type PublicLandingGalleryAlbum = Pick<
+  GalleryAlbum,
+  "id" | "title" | "slug" | "description" | "category" | "coverImageUrl" | "featuredOnLanding" | "sortOrder"
+> & {
+  photos: Array<Pick<GalleryPhoto, "id" | "title" | "caption" | "imageUrl" | "altText" | "sortOrder">>;
+};
+
+export type PublicGalleryAlbum = Pick<
+  GalleryAlbum,
+  "id" | "title" | "slug" | "description" | "category" | "coverImageUrl" | "featuredOnLanding" | "sortOrder" | "createdAt"
+> & {
+  photos: Array<Pick<GalleryPhoto, "id" | "title" | "caption" | "imageUrl" | "altText" | "sortOrder" | "createdAt">>;
+};
+
 export type TrainingPayload = {
   title: string;
   description: string;
@@ -2868,6 +2882,18 @@ export function getPublicPartners() {
 
 export function getPublicLandingEvent() {
   return apiRequest<PublicLandingEvent | null>("/reference/landing-event", {
+    method: "GET",
+  });
+}
+
+export function getPublicLandingGalleryAlbums() {
+  return apiRequest<PublicLandingGalleryAlbum[]>("/reference/landing-gallery", {
+    method: "GET",
+  });
+}
+
+export function getPublicGalleryAlbums() {
+  return apiRequest<PublicGalleryAlbum[]>("/reference/gallery-albums", {
     method: "GET",
   });
 }

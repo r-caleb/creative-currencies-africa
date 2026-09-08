@@ -40,6 +40,20 @@ export class ReferenceController {
     return this.referenceService.getLandingEvent();
   }
 
+  @Get("landing-gallery")
+  @ApiOperation({ summary: "Lister les albums publiés de la galerie officielle" })
+  @ApiOkResponse({ description: "Albums publiés affichables dans la galerie de la landing page" })
+  landingGallery() {
+    return this.referenceService.getLandingGalleryAlbums();
+  }
+
+  @Get("gallery-albums")
+  @ApiOperation({ summary: "Lister les albums publiés de la galerie officielle pour les membres" })
+  @ApiOkResponse({ description: "Albums publiés consultables dans l'espace membre" })
+  galleryAlbums() {
+    return this.referenceService.getPublishedGalleryAlbums();
+  }
+
   @Post("disciplines")
   @ApiBearerAuth("access-token")
   @UseGuards(JwtAuthGuard)

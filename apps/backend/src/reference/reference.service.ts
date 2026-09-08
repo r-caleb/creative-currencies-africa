@@ -128,6 +128,86 @@ export class ReferenceService {
     };
   }
 
+  async getLandingGalleryAlbums() {
+    const albums = await this.prisma.galleryAlbum.findMany({
+      where: {
+        published: true,
+        OR: [{ coverImageUrl: { not: null } }, { photos: { some: { published: true } } }],
+      },
+      orderBy: [{ featuredOnLanding: "desc" }, { sortOrder: "asc" }, { createdAt: "desc" }],
+      take: 5,
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+        description: true,
+        category: true,
+        coverImageUrl: true,
+        featuredOnLanding: true,
+        sortOrder: true,
+        photos: {
+          where: { published: true },
+          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+          take: 3,
+          select: {
+            id: true,
+            title: true,
+            caption: true,
+            imageUrl: true,
+            altText: true,
+            sortOrder: true,
+          },
+        },
+      },
+    });
+
+    return albums
+      .map((album) => ({
+        ...album,
+        coverImageUrl: album.coverImageUrl ?? album.photos[0]?.imageUrl ?? null,
+      }))
+      .filter((album) => Boolean(album.coverImageUrl));
+  }
+
+  async getPublishedGalleryAlbums() {
+    const albums = await this.prisma.galleryAlbum.findMany({
+      where: {
+        published: true,
+        OR: [{ coverImageUrl: { not: null } }, { photos: { some: { published: true } } }],
+      },
+      orderBy: [{ featuredOnLanding: "desc" }, { sortOrder: "asc" }, { createdAt: "desc" }],
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+        description: true,
+        category: true,
+        coverImageUrl: true,
+        featuredOnLanding: true,
+        sortOrder: true,
+        createdAt: true,
+        photos: {
+          where: { published: true },
+          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+          select: {
+            id: true,
+            title: true,
+            caption: true,
+            imageUrl: true,
+            altText: true,
+            sortOrder: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+
+    return albums.map((album) => ({
+      ...album,
+      coverImageUrl: album.coverImageUrl ?? album.photos[0]?.imageUrl ?? null,
+    }));
+  }
+
   async createDiscipline(authUser: AuthUser, input: CreateDisciplineDto) {
     this.ensureAdmin(authUser);
 

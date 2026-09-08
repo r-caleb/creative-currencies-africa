@@ -1,5 +1,6 @@
 import { CalendarDays, Gem, Globe2, GraduationCap, UsersRound } from "lucide-react";
 import { FaFacebookF, FaInstagram, FaLinkedinIn, FaTiktok, FaWhatsapp } from "react-icons/fa6";
+import { LandingGalleryAlbums, type LandingGalleryItem } from "@/components/landing-gallery-albums";
 import { LandingOfficialEvent, type LandingOfficialEventData } from "@/components/landing-official-event";
 import { LandingPartners, type LandingPartner } from "@/components/landing-partners";
 
@@ -49,7 +50,7 @@ const creators = [
   { name: "Bokani T.", role: "Musicien", country: "RDC", image: "/assets/musique.jpg" },
 ];
 
-const galleryItems = [
+const galleryItems: LandingGalleryItem[] = [
   {
     title: "Formations & workshops",
     text: "Photos des ateliers, masterclass et sessions d'apprentissage",
@@ -262,7 +263,7 @@ export default function Home() {
 
       <LandingOfficialEvent fallbackEvent={fallbackLandingEvent} imageProps={landingImageProps} />
 
-      <section className="section gallery-section" aria-labelledby="gallery-title">
+      <section className="section gallery-section" id="galerie" aria-labelledby="gallery-title">
         <div className="gallery-heading">
           <div className="section-kicker">Galerie</div>
           <h2 id="gallery-title">Revivez les moments forts de Creative Currencies.</h2>
@@ -273,17 +274,7 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="gallery-grid">
-          {galleryItems.map((item) => (
-            <article className="gallery-card" key={item.title}>
-              <img src={item.image} alt="" {...landingImageProps} />
-              <div>
-                <span>{item.title}</span>
-                <h3>{item.text}</h3>
-              </div>
-            </article>
-          ))}
-        </div>
+        <LandingGalleryAlbums fallbackItems={galleryItems} imageProps={landingImageProps} />
       </section>
 
       <section className="section industries-section" id="industries" aria-labelledby="industries-title">
