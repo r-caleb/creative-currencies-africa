@@ -29,8 +29,8 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { MemberShell } from "@/components/member-shell";
-import { commentPublication, deletePublicationComment, getApiErrorMessage, getPublicationCapabilities, getPublicationComments, getPublicationsPage, reactToPublication, reportPublication, saveNetworkMember, sharePublication } from "@/lib/api";
-import type { MemberProfile, OrganizationProfile, PartnerProfile, Publication, PublicationCapability, PublicationComment, PublicationType } from "@/lib/api";
+import { commentPublication, deletePublicationComment, getApiErrorMessage, getPublicationCapabilities, getPublicationComments, getPublicationReactions, getPublicationsPage, reactToPublication, reportPublication, saveNetworkMember, sharePublication } from "@/lib/api";
+import type { MemberProfile, OrganizationProfile, PartnerProfile, Publication, PublicationCapability, PublicationComment, PublicationReactionUser, PublicationType } from "@/lib/api";
 import { accountTypeLabel, buildInitials, getMemberDisplayName, getMemberProfileTitle } from "@/lib/member-display";
 import { useAppSelector } from "@/store/hooks";
 
@@ -214,6 +214,10 @@ export function MemberDashboard() {
   const [replyTargets, setReplyTargets] = useState<Map<string, PublicationComment>>(() => new Map());
   const [loadingCommentsPostId, setLoadingCommentsPostId] = useState("");
   const [submittingCommentPostId, setSubmittingCommentPostId] = useState("");
+  const [openReactionsPostId, setOpenReactionsPostId] = useState("");
+  const [reactionUsersByPostId, setReactionUsersByPostId] = useState<Map<string, PublicationReactionUser[]>>(() => new Map());
+  const [reactionErrorsByPostId, setReactionErrorsByPostId] = useState<Map<string, string>>(() => new Map());
+  const [loadingReactionsPostId, setLoadingReactionsPostId] = useState("");
   const [publicationCapabilities, setPublicationCapabilities] = useState<PublicationCapability[]>([]);
   const feedLoadMoreRef = useRef<HTMLDivElement | null>(null);
 
@@ -370,11 +374,62 @@ export function MemberDashboard() {
       setFeedPosts((current) => current.map((item) => item.id === post.id ? {
         ...item,
         counts: { ...item.counts, reactions: response.count },
+        viewerReaction: response.active ? response.type : null,
       } : item));
+      setReactionUsersByPostId((current) => {
+        if (!current.has(post.id)) {
+          return current;
+        }
+
+        const next = new Map(current);
+        next.delete(post.id);
+        return next;
+      });
     } catch (requestError) {
       setFeedError(getApiErrorMessage(requestError, "Impossible de mettre à jour la réaction pour le moment."));
     } finally {
       setReactingPostId("");
+    }
+  }
+
+  async function toggleReactions(post: Publication) {
+    if (!accessToken || loadingReactionsPostId) {
+      return;
+    }
+
+    if (openReactionsPostId === post.id) {
+      setOpenReactionsPostId("");
+      return;
+    }
+
+    setOpenReactionsPostId(post.id);
+
+    if (reactionUsersByPostId.has(post.id)) {
+      return;
+    }
+
+    setLoadingReactionsPostId(post.id);
+    setReactionErrorsByPostId((current) => {
+      const next = new Map(current);
+      next.delete(post.id);
+      return next;
+    });
+
+    try {
+      const response = await getPublicationReactions(accessToken, post.id);
+      setReactionUsersByPostId((current) => {
+        const next = new Map(current);
+        next.set(post.id, response.items);
+        return next;
+      });
+    } catch (requestError) {
+      setReactionErrorsByPostId((current) => {
+        const next = new Map(current);
+        next.set(post.id, getApiErrorMessage(requestError, "Impossible de charger les réactions pour le moment."));
+        return next;
+      });
+    } finally {
+      setLoadingReactionsPostId("");
     }
   }
 
@@ -695,11 +750,19 @@ export function MemberDashboard() {
                     isCommentsOpen={openCommentsPostId === post.id}
                     isCommentsLoading={loadingCommentsPostId === post.id}
                     isCommentSubmitting={submittingCommentPostId === post.id}
+                    isReactionsOpen={openReactionsPostId === post.id}
+                    isReactionsLoading={loadingReactionsPostId === post.id}
                     comments={commentsByPostId.get(post.id) ?? []}
                     commentDraft={commentDrafts.get(post.id) ?? ""}
                     replyTarget={replyTargets.get(post.id) ?? null}
+                    reactionUsers={reactionUsersByPostId.get(post.id) ?? []}
+                    reactionsError={reactionErrorsByPostId.get(post.id) ?? ""}
+                    getRelationStatus={(authorId) => authorRelationStatuses.get(authorId) ?? null}
+                    getIsConnecting={(authorId) => connectingAuthorId === authorId}
                     onConnect={() => connectToAuthor(post.author)}
+                    onConnectAuthor={connectToAuthor}
                     onReact={() => reactToPost(post)}
+                    onToggleReactions={() => toggleReactions(post)}
                     onShare={() => sharePost(post)}
                     onToggleReportMenu={() => setReportMenuPostId((current) => current === post.id ? "" : post.id)}
                     onReport={(reason) => reportPost(post, reason)}
@@ -923,11 +986,19 @@ function FeedPost({
   isCommentsOpen,
   isCommentsLoading,
   isCommentSubmitting,
+  isReactionsOpen,
+  isReactionsLoading,
   comments,
   commentDraft,
   replyTarget,
+  reactionUsers,
+  reactionsError,
+  getRelationStatus,
+  getIsConnecting,
   onConnect,
+  onConnectAuthor,
   onReact,
+  onToggleReactions,
   onShare,
   onToggleReportMenu,
   onReport,
@@ -950,11 +1021,19 @@ function FeedPost({
   isCommentsOpen: boolean;
   isCommentsLoading: boolean;
   isCommentSubmitting: boolean;
+  isReactionsOpen: boolean;
+  isReactionsLoading: boolean;
   comments: PublicationComment[];
   commentDraft: string;
   replyTarget: PublicationComment | null;
+  reactionUsers: PublicationReactionUser[];
+  reactionsError: string;
+  getRelationStatus: (authorId: string) => RelationStatus | null;
+  getIsConnecting: (authorId: string) => boolean;
   onConnect: () => void;
+  onConnectAuthor: (author: FeedAuthor) => void;
   onReact: () => void;
+  onToggleReactions: () => void;
   onShare: () => void;
   onToggleReportMenu: () => void;
   onReport: (reason: ReportReason) => void;
@@ -965,11 +1044,15 @@ function FeedPost({
   onCancelReply: () => void;
   onDeleteComment: (comment: PublicationComment) => void;
 }) {
+  const [isContentExpanded, setIsContentExpanded] = useState(false);
   const isOwnPost = post.author.id === currentUserId;
   const isOfficialPost = isOfficialAccount(post.author.accountType);
   const action = getRelationAction(post.author, relationStatus);
   const authorLocation = [post.author.city, post.author.country].filter(Boolean).join(", ");
   const shareCount = post.counts.shares ?? 0;
+  const postContent = post.content || post.excerpt || "";
+  const shouldClampContent = postContent.length > 260 || postContent.split(/\s+/).length > 42;
+  const isLiked = post.viewerReaction === "LIKE";
   const rootComments = comments.filter((comment) => !comment.parentId);
   const repliesByParentId = comments.reduce<Map<string, PublicationComment[]>>((groups, comment) => {
     if (!comment.parentId) {
@@ -1010,17 +1093,28 @@ function FeedPost({
           {post.publishedAt ? <time>{formatFeedDate(post.publishedAt)}</time> : null}
         </div>
         <h3>{post.title}</h3>
-        <p>{post.excerpt || post.content}</p>
+        <p className={isContentExpanded ? "is-expanded" : undefined}>{postContent}</p>
+        {shouldClampContent ? (
+          <button className="feed-post-read-toggle" type="button" onClick={() => setIsContentExpanded((current) => !current)}>
+            {isContentExpanded ? "Lire moins" : "Lire plus"}
+          </button>
+        ) : null}
         {post.mentions?.length ? <span className="feed-post-mentions">Avec {formatMentionedAuthors(post.mentions)}</span> : null}
       </div>
 
       {post.coverImageUrl ? <img src={post.coverImageUrl} alt="" loading="lazy" decoding="async" /> : null}
 
       <footer className="feed-post-actions">
-        <button type="button" disabled={isReacting} onClick={onReact}>
-          <Heart aria-hidden="true" strokeWidth={1.8} />
+        <button type="button" className={isLiked ? "is-active" : undefined} disabled={isReacting} aria-pressed={isLiked} onClick={onReact}>
+          <Heart aria-hidden="true" fill={isLiked ? "currentColor" : "none"} strokeWidth={1.8} />
           {post.counts.reactions} réaction{post.counts.reactions > 1 ? "s" : ""}
         </button>
+        {isOwnPost && post.counts.reactions > 0 ? (
+          <button type="button" className="feed-reactions-toggle" aria-expanded={isReactionsOpen} disabled={isReactionsLoading} onClick={onToggleReactions}>
+            <UsersRound aria-hidden="true" strokeWidth={1.8} />
+            {isReactionsLoading ? "Chargement..." : "Voir les likes"}
+          </button>
+        ) : null}
         <button type="button" aria-expanded={isCommentsOpen} onClick={onToggleComments}>
           <MessageCircle aria-hidden="true" strokeWidth={1.8} />
           {post.counts.comments} commentaire{post.counts.comments > 1 ? "s" : ""}
@@ -1057,6 +1151,42 @@ function FeedPost({
         </section>
       ) : null}
 
+      {isReactionsOpen ? (
+        <section className="feed-reactions-panel" aria-label={`Personnes qui ont aimé ${post.title}`}>
+          <div>
+            <strong>Personnes qui ont aimé</strong>
+            <span>{post.counts.reactions} réaction{post.counts.reactions > 1 ? "s" : ""} sur cette publication.</span>
+          </div>
+          {isReactionsLoading ? (
+            <div className="feed-reactions-loading">
+              <Loader2 aria-hidden="true" strokeWidth={1.8} />
+              <span>Chargement des profils...</span>
+            </div>
+          ) : reactionsError ? (
+            <p className="auth-form-error" role="alert">{reactionsError}</p>
+          ) : reactionUsers.length ? (
+            <div className="feed-reactions-list">
+              {reactionUsers.map((reactionUser) => (
+                <article key={`${post.id}-${reactionUser.id}`}>
+                  <span className="feed-comment-avatar">
+                    {reactionUser.avatarUrl ? <img src={reactionUser.avatarUrl} alt="" loading="lazy" decoding="async" /> : buildInitials(reactionUser.displayName)}
+                  </span>
+                  <div>
+                    <strong>
+                      {reactionUser.displayName}
+                      {reactionUser.verified ? <BadgeCheck aria-label="Profil vérifié" strokeWidth={1.8} /> : null}
+                    </strong>
+                    <small>{[accountTypeLabel(reactionUser.accountType), reactionUser.discipline, reactionUser.city].filter(Boolean).join(" · ") || "Membre CCA"}</small>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="feed-reactions-empty">Aucune réaction à afficher pour le moment.</p>
+          )}
+        </section>
+      ) : null}
+
       {isCommentsOpen ? (
         <section className="feed-comments-panel" aria-label={`Commentaires sur ${post.title}`}>
           {isCommentsLoading ? (
@@ -1071,6 +1201,12 @@ function FeedPost({
                   key={comment.id}
                   comment={comment}
                   replies={repliesByParentId.get(comment.id) ?? []}
+                  currentUserId={currentUserId}
+                  relationStatus={getRelationStatus(comment.author.id)}
+                  isConnecting={getIsConnecting(comment.author.id)}
+                  getRelationStatus={getRelationStatus}
+                  getIsConnecting={getIsConnecting}
+                  onConnectAuthor={onConnectAuthor}
                   onReply={onReply}
                   onDelete={onDeleteComment}
                 />
@@ -1110,14 +1246,29 @@ function FeedPost({
 function CommentItem({
   comment,
   replies,
+  currentUserId,
+  relationStatus,
+  isConnecting,
+  getRelationStatus,
+  getIsConnecting,
+  onConnectAuthor,
   onReply,
   onDelete,
 }: {
   comment: PublicationComment;
   replies: PublicationComment[];
+  currentUserId?: string;
+  relationStatus: RelationStatus | null;
+  isConnecting: boolean;
+  getRelationStatus: (authorId: string) => RelationStatus | null;
+  getIsConnecting: (authorId: string) => boolean;
+  onConnectAuthor: (author: FeedAuthor) => void;
   onReply: (comment: PublicationComment) => void;
   onDelete: (comment: PublicationComment) => void;
 }) {
+  const action = getRelationAction(comment.author, relationStatus);
+  const canConnect = comment.author.id !== currentUserId && !isOfficialAccount(comment.author.accountType) && !action.disabled;
+
   return (
     <article className="feed-comment">
       <span className="feed-comment-avatar">
@@ -1128,6 +1279,11 @@ function CommentItem({
           <strong>
             {comment.author.displayName}
             {comment.author.verified ? <BadgeCheck aria-label="Profil vérifié" strokeWidth={1.8} /> : null}
+            {canConnect ? (
+              <button type="button" disabled={isConnecting} onClick={() => onConnectAuthor(comment.author)}>
+                {isConnecting ? "..." : action.label}
+              </button>
+            ) : null}
           </strong>
           <small>{[accountTypeLabel(comment.author.accountType), comment.author.discipline].filter(Boolean).join(" · ")}</small>
           <p>{comment.content}</p>
@@ -1142,7 +1298,19 @@ function CommentItem({
         {replies.length ? (
           <div className="feed-comment-replies">
             {replies.map((reply) => (
-              <CommentItem key={reply.id} comment={reply} replies={[]} onReply={onReply} onDelete={onDelete} />
+              <CommentItem
+                key={reply.id}
+                comment={reply}
+                replies={[]}
+                currentUserId={currentUserId}
+                relationStatus={getRelationStatus(reply.author.id)}
+                isConnecting={getIsConnecting(reply.author.id)}
+                getRelationStatus={getRelationStatus}
+                getIsConnecting={getIsConnecting}
+                onConnectAuthor={onConnectAuthor}
+                onReply={onReply}
+                onDelete={onDelete}
+              />
             ))}
           </div>
         ) : null}

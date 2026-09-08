@@ -370,7 +370,8 @@ export class PublicationService {
     });
     const pageItems = query.paginated ? publications.slice(0, limit) : publications;
     const rankedItems = this.rankPublicationsForUser(pageItems, user);
-    const serializedItems = rankedItems.map((publication) => this.serializePublication(publication, user.id));
+    const viewerReactions = await this.loadViewerReactions(rankedItems.map((publication) => publication.id), user.id);
+    const serializedItems = rankedItems.map((publication) => this.serializePublication(publication, user.id, viewerReactions.get(publication.id) ?? null));
 
     if (query.paginated) {
       return {
@@ -393,7 +394,7 @@ export class PublicationService {
 
     this.ensureCanRead(user, publication);
 
-    return this.serializePublication(publication, user.id);
+    return this.serializePublication(publication, user.id, await this.loadViewerReaction(publication.id, user.id));
   }
 
   async listComments(authUser: AuthUser, publicationId: string) {
@@ -681,6 +682,47 @@ export class PublicationService {
       active: !existing,
       type,
       count,
+    };
+  }
+
+  async listReactions(authUser: AuthUser, publicationId: string) {
+    const user = await this.getActiveUser(authUser);
+    const publication = await this.findPublicationOrThrow(publicationId);
+    this.ensureCanRead(user, publication);
+
+    if (publication.authorId !== user.id && user.type !== AccountType.ADMIN) {
+      throw new ForbiddenException("Seul l'auteur de la publication peut consulter la liste des réactions.");
+    }
+
+    const [reactions, count] = await this.prisma.$transaction([
+      this.prisma.publicationReaction.findMany({
+        where: {
+          publicationId,
+          type: PublicationReactionType.LIKE,
+        },
+        include: {
+          user: {
+            select: publicationAuthorSelect,
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 80,
+      }),
+      this.prisma.publicationReaction.count({
+        where: {
+          publicationId,
+          type: PublicationReactionType.LIKE,
+        },
+      }),
+    ]);
+
+    return {
+      count,
+      items: reactions.map((reaction) => ({
+        ...this.serializeAuthor(reaction.user),
+        reactionType: reaction.type,
+        reactedAt: reaction.createdAt,
+      })),
     };
   }
 
@@ -1447,7 +1489,7 @@ export class PublicationService {
     return normalized || "fichier";
   }
 
-  private serializePublication(publication: PublicationWithRelations, currentUserId: string) {
+  private serializePublication(publication: PublicationWithRelations, currentUserId: string, viewerReaction: PublicationReactionType | null = null) {
     return {
       id: publication.id,
       type: publication.type,
@@ -1482,11 +1524,40 @@ export class PublicationService {
         reactions: publication._count.reactions,
         shares: publication._count.shares,
       },
+      viewerReaction,
       permissions: {
         canEdit: publication.authorId === currentUserId,
         canArchive: publication.authorId === currentUserId,
       },
     };
+  }
+
+  private async loadViewerReaction(publicationId: string, userId: string) {
+    const reaction = await this.prisma.publicationReaction.findFirst({
+      where: { publicationId, userId },
+      select: { type: true },
+    });
+
+    return reaction?.type ?? null;
+  }
+
+  private async loadViewerReactions(publicationIds: string[], userId: string) {
+    if (!publicationIds.length) {
+      return new Map<string, PublicationReactionType>();
+    }
+
+    const reactions = await this.prisma.publicationReaction.findMany({
+      where: {
+        publicationId: { in: publicationIds },
+        userId,
+      },
+      select: {
+        publicationId: true,
+        type: true,
+      },
+    });
+
+    return new Map(reactions.map((reaction) => [reaction.publicationId, reaction.type]));
   }
 
   private serializePublicationComment(comment: PublicationCommentWithAuthor, currentUserId: string, publicationAuthorId?: string) {

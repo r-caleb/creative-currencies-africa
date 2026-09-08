@@ -91,6 +91,13 @@ export class PublicationController {
     return this.publicationService.listComments(req.user, id);
   }
 
+  @Get(":id/reactions")
+  @ApiOperation({ summary: "Lister les membres qui ont aimé une publication" })
+  @ApiOkResponse({ description: "Réactions visibles par l'auteur de la publication" })
+  reactions(@Req() req: AuthedRequest, @Param("id") id: string) {
+    return this.publicationService.listReactions(req.user, id);
+  }
+
   @Get(":id")
   @ApiOperation({ summary: "Consulter une publication" })
   @ApiOkResponse({ description: "Publication détaillée" })
