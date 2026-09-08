@@ -2173,6 +2173,13 @@ function ContentAdminPanel({
             <span>Photos</span>
             <textarea value={galleryAlbumForm.photosText} onChange={(event) => onChangeGalleryAlbumForm((current) => ({ ...current, photosText: event.target.value }))} placeholder={"/assets/gallery/photo-01.jpg\n/assets/gallery/photo-02.jpg"} />
           </label>
+          <GalleryPhotosUploadField
+            value={galleryAlbumForm.photosText ?? ""}
+            uploadKey="gallery-photos"
+            uploadingKey={uploadingKey}
+            onChange={(value) => onChangeGalleryAlbumForm((current) => ({ ...current, photosText: value }))}
+            onUpload={onUpload}
+          />
           <button type="submit" className="member-primary-button" disabled={!galleryAlbumForm.title.trim() || busyKey === "gallery-create"}>
             <Plus aria-hidden="true" /> Ajouter l'album
           </button>
@@ -3340,6 +3347,13 @@ function GalleryAlbumRow({
               placeholder={"/assets/gallery/photo-01.jpg\n/assets/gallery/photo-02.jpg"}
             />
           </label>
+          <GalleryPhotosUploadField
+            value={form.photosText ?? ""}
+            uploadKey={`gallery-${album.id}-photos`}
+            uploadingKey={uploadingKey}
+            onChange={(value) => setForm((current) => ({ ...current, photosText: value }))}
+            onUpload={onUpload}
+          />
         </div>
         <div className="admin-reference-row-actions">
           <button type="button" onClick={() => onUpdate(album, form)} disabled={!form.title.trim() || busyKey === `gallery-${album.id}`}>
@@ -4863,6 +4877,76 @@ function AdminUploadField({
       <input className="admin-upload-native-input" id={inputId} type="file" accept={accept} onChange={handleFileChange} disabled={isUploading} />
     </div>
   );
+}
+
+function GalleryPhotosUploadField({
+  value,
+  uploadKey,
+  uploadingKey,
+  onChange,
+  onUpload,
+}: {
+  value: string;
+  uploadKey: string;
+  uploadingKey: string | null;
+  onChange: (value: string) => void;
+  onUpload: (purpose: AdminUploadPurpose, file: File, key: string) => Promise<string>;
+}) {
+  const inputId = useId();
+  const isUploading = uploadingKey === uploadKey;
+
+  async function handleFilesChange(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+
+    if (!files.length) {
+      return;
+    }
+
+    const urls: string[] = [];
+
+    for (const file of files) {
+      urls.push(await onUpload("gallery", file, uploadKey));
+    }
+
+    onChange(appendGalleryPhotoUrls(value, urls));
+  }
+
+  return (
+    <div className="admin-gallery-photo-upload">
+      <button
+        type="button"
+        className="admin-upload-action"
+        disabled={isUploading}
+        onClick={(event) => {
+          event.preventDefault();
+          document.getElementById(inputId)?.click();
+        }}
+      >
+        {isUploading ? <Loader2 aria-hidden="true" /> : <Plus aria-hidden="true" />}
+        <em>{isUploading ? "Import..." : "Importer des photos"}</em>
+      </button>
+      <span>Les images importées sont ajoutées automatiquement à la liste.</span>
+      <input
+        className="admin-upload-native-input"
+        id={inputId}
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={handleFilesChange}
+        disabled={isUploading}
+      />
+    </div>
+  );
+}
+
+function appendGalleryPhotoUrls(currentValue: string, urls: string[]) {
+  const existingUrls = currentValue
+    .split("\n")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return [...existingUrls, ...urls].join("\n");
 }
 
 function readableUploadValue(value: string) {
