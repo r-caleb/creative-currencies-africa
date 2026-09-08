@@ -16010,6 +16010,22 @@ img.member-profile-avatar {
   display: none;
 }
 
+.admin-gallery-photo-upload {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  color: var(--member-muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.admin-gallery-photo-upload > span {
+  min-width: 0;
+  line-height: 1.35;
+}
+
 .admin-upload-action svg {
   width: 16px;
   height: 16px;
