@@ -981,6 +981,7 @@ export type PublicGalleryAlbum = Pick<
   GalleryAlbum,
   "id" | "title" | "slug" | "description" | "category" | "coverImageUrl" | "featuredOnLanding" | "sortOrder" | "createdAt"
 > & {
+  photoCount: number;
   photos: Array<Pick<GalleryPhoto, "id" | "title" | "caption" | "imageUrl" | "altText" | "sortOrder" | "createdAt">>;
 };
 
@@ -2894,6 +2895,12 @@ export function getPublicLandingGalleryAlbums() {
 
 export function getPublicGalleryAlbums() {
   return apiRequest<PublicGalleryAlbum[]>("/reference/gallery-albums", {
+    method: "GET",
+  });
+}
+
+export function getPublicGalleryAlbum(slug: string) {
+  return apiRequest<PublicGalleryAlbum>(`/reference/gallery-albums/${encodeURIComponent(slug)}`, {
     method: "GET",
   });
 }
