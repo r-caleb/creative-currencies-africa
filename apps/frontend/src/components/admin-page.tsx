@@ -5275,14 +5275,14 @@ function normalizeGalleryAlbumPayload(input: Partial<GalleryAlbumFormState>) {
   delete (payload as Partial<GalleryAlbumFormState>).photosText;
 
   if (input.photosText !== undefined) {
-    payload.photos = galleryPhotosFromText(input.photosText);
+    payload.photos = galleryPhotosFromText(input.photosText, input.coverImageUrl);
   }
 
   return payload;
 }
 
 function normalizeGalleryAlbumCreatePayload(input: GalleryAlbumFormState) {
-  const photos = galleryPhotosFromText(input.photosText ?? "");
+  const photos = galleryPhotosFromText(input.photosText ?? "", input.coverImageUrl);
 
   return {
     ...normalizeGalleryAlbumPayload(input),
@@ -5291,11 +5291,16 @@ function normalizeGalleryAlbumCreatePayload(input: GalleryAlbumFormState) {
   } as GalleryAlbumPayload;
 }
 
-function galleryPhotosFromText(value: string) {
-  return value
+function galleryPhotosFromText(value: string, coverImageUrl?: string) {
+  const urls = value
     .split("\n")
     .map((item) => item.trim())
-    .filter(Boolean)
+    .filter(Boolean);
+
+  const coverUrl = coverImageUrl?.trim();
+  const orderedUrls = coverUrl ? [coverUrl, ...urls.filter((url) => url !== coverUrl)] : urls;
+
+  return orderedUrls
     .map((imageUrl, index) => ({
       imageUrl,
       sortOrder: index + 1,
