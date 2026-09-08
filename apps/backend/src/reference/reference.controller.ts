@@ -54,6 +54,13 @@ export class ReferenceController {
     return this.referenceService.getPublishedGalleryAlbums();
   }
 
+  @Get("gallery-albums/:slug")
+  @ApiOperation({ summary: "Afficher un album publié de la galerie officielle" })
+  @ApiOkResponse({ description: "Détail d'un album publié avec toutes ses photos" })
+  galleryAlbum(@Param("slug") slug: string) {
+    return this.referenceService.getPublishedGalleryAlbum(slug);
+  }
+
   @Post("disciplines")
   @ApiBearerAuth("access-token")
   @UseGuards(JwtAuthGuard)

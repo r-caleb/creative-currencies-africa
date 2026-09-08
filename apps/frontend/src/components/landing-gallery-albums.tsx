@@ -34,7 +34,7 @@ export function LandingGalleryAlbums({ fallbackItems, imageProps }: LandingGalle
               title: album.title,
               text: album.description?.trim() || galleryCategoryLabels[album.category] || "Album officiel Creative Currencies Africa",
               image,
-              href: `/espace-membre/galerie?album=${encodeURIComponent(album.slug)}`,
+              href: `/espace-membre/galerie/${encodeURIComponent(album.slug)}`,
             };
           })
           .filter((album) => album.image);

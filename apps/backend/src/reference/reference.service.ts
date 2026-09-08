@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { AccountType, Prisma } from "@prisma/client";
 import type { AuthUser } from "../auth/auth.types";
 import { PrismaService } from "../prisma/prisma.service";
@@ -186,6 +186,52 @@ export class ReferenceService {
         featuredOnLanding: true,
         sortOrder: true,
         createdAt: true,
+        _count: {
+          select: {
+            photos: true,
+          },
+        },
+        photos: {
+          where: { published: true },
+          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+          take: 4,
+          select: {
+            id: true,
+            title: true,
+            caption: true,
+            imageUrl: true,
+            altText: true,
+            sortOrder: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+
+    return albums.map(({ _count, ...album }) => ({
+      ...album,
+      photoCount: _count.photos,
+      coverImageUrl: album.coverImageUrl ?? album.photos[0]?.imageUrl ?? null,
+    }));
+  }
+
+  async getPublishedGalleryAlbum(slug: string) {
+    const album = await this.prisma.galleryAlbum.findFirst({
+      where: {
+        slug,
+        published: true,
+        OR: [{ coverImageUrl: { not: null } }, { photos: { some: { published: true } } }],
+      },
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+        description: true,
+        category: true,
+        coverImageUrl: true,
+        featuredOnLanding: true,
+        sortOrder: true,
+        createdAt: true,
         photos: {
           where: { published: true },
           orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
@@ -202,10 +248,15 @@ export class ReferenceService {
       },
     });
 
-    return albums.map((album) => ({
+    if (!album) {
+      throw new NotFoundException("Album introuvable ou non publié.");
+    }
+
+    return {
       ...album,
+      photoCount: album.photos.length,
       coverImageUrl: album.coverImageUrl ?? album.photos[0]?.imageUrl ?? null,
-    }));
+    };
   }
 
   async createDiscipline(authUser: AuthUser, input: CreateDisciplineDto) {
