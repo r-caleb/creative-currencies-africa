@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ChevronLeft, ChevronRight, Image as ImageIcon, Images, Loader2, X } from "lucide-react";
 import { MemberShell } from "@/components/member-shell";
-import { getApiErrorMessage, getPublicGalleryAlbum } from "@/lib/api";
+import { ApiError, getApiErrorMessage, getPublicGalleryAlbum, getPublicGalleryAlbums } from "@/lib/api";
 import type { GalleryAlbumCategory, PublicGalleryAlbum } from "@/lib/api";
 
 type GalleryDisplayPhoto = {
@@ -36,7 +36,7 @@ export function GalleryAlbumDetailPage({ slug }: { slug: string }) {
     let isMounted = true;
 
     setIsLoading(true);
-    getPublicGalleryAlbum(slug)
+    loadGalleryAlbum(slug)
       .then((response) => {
         if (!isMounted) {
           return;
@@ -190,6 +190,25 @@ export function GalleryAlbumDetailPage({ slug }: { slug: string }) {
       ) : null}
     </MemberShell>
   );
+}
+
+async function loadGalleryAlbum(slug: string) {
+  try {
+    return await getPublicGalleryAlbum(slug);
+  } catch (error) {
+    if (!(error instanceof ApiError) || error.status !== 404) {
+      throw error;
+    }
+
+    const albums = await getPublicGalleryAlbums();
+    const album = albums.find((item) => item.slug === slug);
+
+    if (!album) {
+      throw error;
+    }
+
+    return album;
+  }
 }
 
 function GalleryDetailEmptyState({ title, text }: { title: string; text: string }) {
