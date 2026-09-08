@@ -2173,7 +2173,8 @@ export class AdminService {
   async createGalleryAlbum(authUser: AuthUser, input: CreateGalleryAlbumDto) {
     const admin = await this.ensureAdmin(authUser);
     const title = this.requiredText(input.title, "Le titre de l'album est requis.");
-    const photos = input.photos?.map((photo, index) => this.normalizeGalleryPhotoCreate(photo, index)) ?? [];
+    const coverImageUrl = this.optionalText(input.coverImageUrl);
+    const photos = this.normalizeGalleryPhotos(input.photos, coverImageUrl);
 
     try {
       const album = await this.prisma.galleryAlbum.create({
@@ -2182,7 +2183,7 @@ export class AdminService {
           slug: await this.buildUniqueGalleryAlbumSlug(title),
           description: this.optionalText(input.description),
           category: input.category ?? GalleryAlbumCategory.EVENT,
-          coverImageUrl: this.optionalText(input.coverImageUrl) ?? photos[0]?.imageUrl ?? null,
+          coverImageUrl: coverImageUrl ?? photos[0]?.imageUrl ?? null,
           published: input.published ?? false,
           featuredOnLanding: input.featuredOnLanding ?? false,
           sortOrder: input.sortOrder ?? 0,
@@ -2244,7 +2245,7 @@ export class AdminService {
     }
 
     if (input.photos !== undefined) {
-      const photos = input.photos.map((photo, index) => this.normalizeGalleryPhotoCreate(photo, index));
+      const photos = this.normalizeGalleryPhotos(input.photos, this.optionalText(input.coverImageUrl));
       data.photos = {
         deleteMany: {},
         ...(photos.length ? { create: photos } : {}),
@@ -3386,6 +3387,24 @@ export class AdminService {
       sortOrder: input.sortOrder ?? index + 1,
       published: input.published ?? true,
     };
+  }
+
+  private normalizeGalleryPhotos(inputs: CreateGalleryPhotoDto[] | undefined, coverImageUrl?: string | null) {
+    const photos = inputs?.map((photo, index) => this.normalizeGalleryPhotoCreate(photo, index)) ?? [];
+    const seenUrls = new Set(photos.map((photo) => photo.imageUrl));
+
+    if (coverImageUrl && !seenUrls.has(coverImageUrl)) {
+      photos.unshift({
+        imageUrl: coverImageUrl,
+        title: null,
+        caption: null,
+        altText: null,
+        sortOrder: 1,
+        published: true,
+      });
+    }
+
+    return photos.map((photo, index) => ({ ...photo, sortOrder: index + 1 }));
   }
 
   private resolveUniqueSlug(baseSlug: string, existingSlugs: Set<string>) {
