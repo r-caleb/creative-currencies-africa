@@ -93,10 +93,25 @@ export function OpportunitiesPage() {
           myApplications: response.myApplications ?? [],
           myPublished: response.myPublished ?? [],
         };
+        const requestedOpportunityId = new URLSearchParams(window.location.search).get("opportunity");
 
         setData(safeResponse);
-        setSelectedId((current) => current || safeResponse.catalog[0]?.id || "");
+        setSelectedId((current) => {
+          if (requestedOpportunityId && safeResponse.catalog.some((opportunity) => opportunity.id === requestedOpportunityId)) {
+            return requestedOpportunityId;
+          }
+
+          if (current && safeResponse.catalog.some((opportunity) => opportunity.id === current)) {
+            return current;
+          }
+
+          return safeResponse.catalog[0]?.id || "";
+        });
         setStatus("");
+
+        if (requestedOpportunityId) {
+          scrollToOpportunityDetail();
+        }
       })
       .catch((error) => {
         if (isMounted) {
@@ -188,8 +203,37 @@ export function OpportunitiesPage() {
     socialLinks: splitTextareaList(applicationForm.socialLinksText),
   });
 
+  const selectOpportunity = (opportunityId: string, shouldScroll = false) => {
+    setSelectedId(opportunityId);
+
+    if (shouldScroll) {
+      scrollToOpportunityDetail();
+    }
+  };
+
+  const previewOpportunity = (opportunity: MemberOpportunity) => {
+    selectOpportunity(opportunity.id, true);
+
+    if (opportunity.application) {
+      setStatus("Votre dossier est ouvert. Vous pouvez consulter le détail ou continuer la préparation.");
+      return;
+    }
+
+    if (opportunity.canApply) {
+      setStatus("Consultez les modalités, puis préparez ou soumettez votre dossier depuis le détail.");
+      return;
+    }
+
+    if (opportunity.linkUrl) {
+      setStatus("Consultez les modalités dans le détail, ou ouvrez le lien externe si nécessaire.");
+      return;
+    }
+
+    setStatus("Cette opportunité est une annonce. Les modalités sont visibles dans le détail.");
+  };
+
   const saveApplication = async (opportunity: MemberOpportunity) => {
-    setSelectedId(opportunity.id);
+    selectOpportunity(opportunity.id, true);
 
     if (!opportunity.canApply || opportunity.source !== "opportunity") {
       if (opportunity.linkUrl) {
@@ -226,7 +270,7 @@ export function OpportunitiesPage() {
   };
 
   const submitApplication = async (opportunity: MemberOpportunity) => {
-    setSelectedId(opportunity.id);
+    selectOpportunity(opportunity.id, true);
 
     if (!opportunity.canApply || opportunity.source !== "opportunity") {
       await saveApplication(opportunity);
@@ -356,8 +400,8 @@ export function OpportunitiesPage() {
                             <span><BadgeCheck aria-hidden="true" /> Compatibilité {item.fit}%</span>
                           </div>
                         </div>
-                        <button className="member-secondary-button" type="button" disabled={isApplying} onClick={() => void saveApplication(item)}>
-                          {item.application ? statusLabel(item.application.status) : item.canApply ? "Postuler" : "Modalités"}
+                        <button className="member-secondary-button" type="button" disabled={isApplying} onClick={() => previewOpportunity(item)}>
+                          {item.application ? "Voir dossier" : item.canApply ? "Postuler" : "Modalités"}
                         </button>
                       </article>
                     );
@@ -413,7 +457,7 @@ export function OpportunitiesPage() {
                         <div className="application-tracking-actions">
                           <small>{progress}%</small>
                           {application?.adminNote ? <em>{application.adminNote}</em> : null}
-                          <button type="button" onClick={() => setSelectedId(opportunity.id)}>Ouvrir</button>
+                          <button type="button" onClick={() => selectOpportunity(opportunity.id, true)}>Ouvrir</button>
                         </div>
                       </article>
                     );
@@ -436,7 +480,7 @@ export function OpportunitiesPage() {
 
           <aside className="opportunities-side">
             {selectedOpportunity ? (
-              <section className="member-card opportunity-detail-card">
+              <section id="opportunite-detail" className="member-card opportunity-detail-card">
                 <span className="member-kicker">Détail</span>
                 <strong>{selectedOpportunity.title}</strong>
                 <p>{selectedOpportunity.description}</p>
@@ -559,7 +603,7 @@ export function OpportunitiesPage() {
                 </div>
                 <div className="training-recommended-list">
                   {data.myPublished.length ? data.myPublished.slice(0, 4).map((item) => (
-                    <button key={item.id} type="button" onClick={() => setSelectedId(item.id)}>
+                    <button key={item.id} type="button" onClick={() => selectOpportunity(item.id, true)}>
                       <Lightbulb aria-hidden="true" strokeWidth={1.8} />
                       <span>
                         <strong>{item.title}</strong>
@@ -619,6 +663,14 @@ function normalizeSearch(value: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
+}
+
+function scrollToOpportunityDetail() {
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      document.getElementById("opportunite-detail")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
 }
 
 function splitTextareaList(value: string) {

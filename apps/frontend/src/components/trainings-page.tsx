@@ -55,10 +55,25 @@ export function TrainingsPage() {
           myEnrollments: response.myEnrollments ?? [],
           myPublished: response.myPublished ?? [],
         };
+        const requestedTrainingId = new URLSearchParams(window.location.search).get("formation");
 
         setData(safeResponse);
-        setSelectedId((current) => current || safeResponse.catalog[0]?.id || "");
+        setSelectedId((current) => {
+          if (requestedTrainingId && safeResponse.catalog.some((training) => training.id === requestedTrainingId)) {
+            return requestedTrainingId;
+          }
+
+          if (current && safeResponse.catalog.some((training) => training.id === current)) {
+            return current;
+          }
+
+          return safeResponse.catalog[0]?.id || "";
+        });
         setStatus("");
+
+        if (requestedTrainingId) {
+          scrollToTrainingDetail();
+        }
       })
       .catch((error) => {
         if (isMounted) {
@@ -123,8 +138,16 @@ export function TrainingsPage() {
     });
   }, [selectedTraining?.enrollment, selectedTraining?.id, user?.phone]);
 
-  const handleTrainingAction = async (training: MemberTraining) => {
-    setSelectedId(training.id);
+  const selectTraining = (trainingId: string, shouldScroll = false) => {
+    setSelectedId(trainingId);
+
+    if (shouldScroll) {
+      scrollToTrainingDetail();
+    }
+  };
+
+  const handleTrainingAction = async (training: MemberTraining, action: "preview" | "confirm" = "preview") => {
+    selectTraining(training.id, true);
 
     if (training.enrollment) {
       setStatus("Votre inscription est déjà active pour cette formation.");
@@ -132,6 +155,11 @@ export function TrainingsPage() {
     }
 
     if (training.canEnroll && training.source === "training") {
+      if (action === "preview") {
+        setStatus("Vérifiez les détails de la formation puis confirmez votre inscription.");
+        return;
+      }
+
       if (!accessToken) {
         setStatus("Connectez-vous pour vous inscrire à cette formation.");
         return;
@@ -267,7 +295,7 @@ export function TrainingsPage() {
                           disabled={isEnrolling}
                           onClick={() => void handleTrainingAction(training)}
                         >
-                          {training.enrollment ? "Voir détails" : training.canEnroll ? "S’inscrire" : training.linkUrl ? "Ouvrir le lien" : "Voir détails"}
+                          {training.enrollment ? "Voir détails" : training.canEnroll ? "Préparer" : training.linkUrl ? "Ouvrir le lien" : "Voir détails"}
                         </button>
                       </div>
                     </article>
@@ -321,7 +349,7 @@ export function TrainingsPage() {
                         <div className="application-tracking-actions">
                           <small>{progress}%</small>
                           {enrollment?.adminNote ? <em>{enrollment.adminNote}</em> : null}
-                          <button type="button" onClick={() => setSelectedId(training.id)}>Ouvrir</button>
+                          <button type="button" onClick={() => selectTraining(training.id, true)}>Ouvrir</button>
                         </div>
                       </article>
                     );
@@ -381,7 +409,7 @@ export function TrainingsPage() {
                         </label>
                       </div>
                       {!selectedTraining.enrollment ? (
-                        <button className="member-create-button" type="button" disabled={isEnrolling} onClick={() => void handleTrainingAction(selectedTraining)}>
+                        <button className="member-create-button" type="button" disabled={isEnrolling} onClick={() => void handleTrainingAction(selectedTraining, "confirm")}>
                           {isEnrolling ? <Loader2 aria-hidden="true" strokeWidth={1.8} /> : null}
                           Confirmer l'inscription
                         </button>
@@ -471,7 +499,7 @@ export function TrainingsPage() {
                 </div>
                 <div className="training-recommended-list">
                   {data.myPublished.length ? data.myPublished.slice(0, 4).map((item) => (
-                    <button key={item.id} type="button" onClick={() => setSelectedId(item.id)}>
+                    <button key={item.id} type="button" onClick={() => selectTraining(item.id, true)}>
                       <BookOpen aria-hidden="true" strokeWidth={1.8} />
                       <span>
                         <strong>{item.title}</strong>
@@ -492,7 +520,7 @@ export function TrainingsPage() {
               </div>
               <div className="training-recommended-list">
                 {recommended.length ? recommended.map((item) => (
-                  <button key={item.id} type="button" onClick={() => setSelectedId(item.id)}>
+                  <button key={item.id} type="button" onClick={() => selectTraining(item.id, true)}>
                     <BookOpen aria-hidden="true" strokeWidth={1.8} />
                     <span>
                       <strong>{item.title}</strong>
@@ -541,6 +569,14 @@ function normalizeSearch(value: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
+}
+
+function scrollToTrainingDetail() {
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      document.getElementById("formation-detail")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
 }
 
 function enrollmentStatusLabel(status?: string | null) {

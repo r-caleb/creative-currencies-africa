@@ -1572,7 +1572,10 @@ export class MemberService {
       this.prisma.event.findMany({
         where: {
           published: true,
-          startsAt: { gte: now },
+          OR: [
+            { startsAt: { gte: now } },
+            { endsAt: { gte: now } },
+          ],
         },
         include: {
           registrations: {
@@ -1586,7 +1589,11 @@ export class MemberService {
       this.prisma.training.findMany({
         where: {
           status: TrainingStatus.PUBLISHED,
-          startsAt: { not: null, gte: now },
+          startsAt: { not: null },
+          OR: [
+            { startsAt: { gte: now } },
+            { endsAt: { not: null, gte: now } },
+          ],
         },
         include: {
           enrollments: {
@@ -3197,7 +3204,7 @@ export class MemberService {
       location: training.location ?? "À confirmer",
       organizerName: this.isOfficialCcaTraining(training.title) ? "Creative Currencies Africa" : "Organisateur CCA",
       href: null,
-      routeHref: "/espace-membre/formations",
+      routeHref: `/espace-membre/formations?formation=${training.id}#formation-detail`,
       actionLabel: enrollment ? "Inscrit" : "Voir la formation",
       canRegister: false,
       registrationStatus: null,
@@ -3236,7 +3243,7 @@ export class MemberService {
       location: opportunity.location ?? "À confirmer",
       organizerName: this.isOfficialCcaOpportunity(opportunity.title) ? "Creative Currencies Africa" : "Organisation CCA",
       href: opportunity.eligibilityUrl,
-      routeHref: "/espace-membre/opportunites",
+      routeHref: `/espace-membre/opportunites?opportunity=${opportunity.id}#opportunite-detail`,
       actionLabel: application ? "Dossier ouvert" : "Voir l'opportunité",
       canRegister: false,
       registrationStatus: null,
