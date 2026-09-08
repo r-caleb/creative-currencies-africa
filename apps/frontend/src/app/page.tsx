@@ -1,6 +1,7 @@
 import { CalendarDays, Gem, Globe2, GraduationCap, UsersRound } from "lucide-react";
 import { FaFacebookF, FaInstagram, FaLinkedinIn, FaTiktok, FaWhatsapp } from "react-icons/fa6";
 import { LandingGalleryAlbums, type LandingGalleryItem } from "@/components/landing-gallery-albums";
+import { LandingNetworkLink } from "@/components/landing-network-link";
 import { LandingOfficialEvent, type LandingOfficialEventData } from "@/components/landing-official-event";
 import { LandingPartners, type LandingPartner } from "@/components/landing-partners";
 
@@ -347,9 +348,9 @@ export default function Home() {
             <div className="section-kicker">Créateurs</div>
             <h2 id="creators-title">Créateurs à découvrir</h2>
           </div>
-          <a className="text-link" href="#communaute">
+          <LandingNetworkLink className="text-link">
             Voir tous les créateurs
-          </a>
+          </LandingNetworkLink>
         </div>
 
         <div className="creator-grid">
