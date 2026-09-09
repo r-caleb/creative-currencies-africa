@@ -26,6 +26,8 @@ import {
   Sparkles,
   UserPlus,
   UsersRound,
+  Video,
+  X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { MemberShell } from "@/components/member-shell";
@@ -37,6 +39,12 @@ import { useAppSelector } from "@/store/hooks";
 type RelationStatus = "PENDING" | "ACCEPTED" | "DECLINED";
 type FeedAuthor = Publication["author"];
 type ReportReason = "SPAM" | "INAPPROPRIATE" | "MISLEADING" | "HARASSMENT" | "OTHER";
+type FeedMediaPreview = {
+  kind: "image" | "video";
+  url: string;
+  title: string;
+  description?: string | null;
+};
 type QuickPublishAction = {
   type: PublicationType;
   label: string;
@@ -225,6 +233,7 @@ export function MemberDashboard() {
   const [reactionUsersByPostId, setReactionUsersByPostId] = useState<Map<string, PublicationReactionUser[]>>(() => new Map());
   const [reactionErrorsByPostId, setReactionErrorsByPostId] = useState<Map<string, string>>(() => new Map());
   const [loadingReactionsPostId, setLoadingReactionsPostId] = useState("");
+  const [previewMedia, setPreviewMedia] = useState<FeedMediaPreview | null>(null);
   const [publicationCapabilities, setPublicationCapabilities] = useState<PublicationCapability[]>([]);
   const feedLoadMoreRef = useRef<HTMLDivElement | null>(null);
 
@@ -297,6 +306,27 @@ export function MemberDashboard() {
       isActive = false;
     };
   }, [accessToken]);
+
+  useEffect(() => {
+    if (!previewMedia) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setPreviewMedia(null);
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [previewMedia]);
 
   const loadFeedPage = useCallback(async (cursor: string | null = null, append = false) => {
     if (!accessToken) {
@@ -823,6 +853,7 @@ export function MemberDashboard() {
                     onReply={(comment) => selectReplyTarget(post.id, comment)}
                     onCancelReply={() => clearReplyTarget(post.id)}
                     onDeleteComment={(comment) => removeComment(post, comment)}
+                    onPreviewMedia={setPreviewMedia}
                   />
                 ))}
                 {hasMoreFeed ? (
@@ -911,6 +942,24 @@ export function MemberDashboard() {
         </aside>
       </div>
       </div>
+      {previewMedia ? (
+        <div className="gallery-lightbox feed-media-lightbox" role="dialog" aria-modal="true" aria-label={previewMedia.title}>
+          <button className="gallery-lightbox-close" type="button" onClick={() => setPreviewMedia(null)} aria-label="Fermer l'aperçu">
+            <X aria-hidden="true" strokeWidth={1.8} />
+          </button>
+          <figure>
+            {previewMedia.kind === "video" ? (
+              <video src={previewMedia.url} controls playsInline />
+            ) : (
+              <img src={previewMedia.url} alt={previewMedia.title} />
+            )}
+            <figcaption>
+              <strong>{previewMedia.title}</strong>
+              {previewMedia.description ? <p>{previewMedia.description}</p> : null}
+            </figcaption>
+          </figure>
+        </div>
+      ) : null}
     </MemberShell>
   );
 }
@@ -1061,6 +1110,7 @@ function FeedPost({
   onReply,
   onCancelReply,
   onDeleteComment,
+  onPreviewMedia,
 }: {
   post: Publication;
   currentUserId?: string;
@@ -1098,6 +1148,7 @@ function FeedPost({
   onReply: (comment: PublicationComment) => void;
   onCancelReply: () => void;
   onDeleteComment: (comment: PublicationComment) => void;
+  onPreviewMedia: (media: FeedMediaPreview) => void;
 }) {
   const [isContentExpanded, setIsContentExpanded] = useState(false);
   const isOwnPost = post.author.id === currentUserId;
@@ -1108,6 +1159,7 @@ function FeedPost({
   const postContent = post.content || post.excerpt || "";
   const shouldClampContent = postContent.length > 260 || postContent.split(/\s+/).length > 42;
   const isLiked = post.viewerReaction === "LIKE";
+  const previewMedia = getPostPreviewMedia(post);
   const rootComments = comments.filter((comment) => !comment.parentId);
   const repliesByParentId = comments.reduce<Map<string, PublicationComment[]>>((groups, comment) => {
     if (!comment.parentId) {
@@ -1157,7 +1209,25 @@ function FeedPost({
         {post.mentions?.length ? <span className="feed-post-mentions">Avec {formatMentionedAuthors(post.mentions)}</span> : null}
       </div>
 
-      {post.coverImageUrl ? <img src={post.coverImageUrl} alt="" loading="lazy" decoding="async" /> : null}
+      {previewMedia ? (
+        <button
+          className={previewMedia.kind === "video" ? "feed-post-media is-video" : "feed-post-media"}
+          type="button"
+          onClick={() => onPreviewMedia(previewMedia)}
+          aria-label={`Agrandir ${previewMedia.title}`}
+        >
+          {previewMedia.kind === "video" ? (
+            <>
+              <video src={previewMedia.url} preload="metadata" muted playsInline />
+              <span>
+                <Video aria-hidden="true" strokeWidth={1.8} />
+              </span>
+            </>
+          ) : (
+            <img src={previewMedia.url} alt="" loading="lazy" decoding="async" />
+          )}
+        </button>
+      ) : null}
 
       <footer className="feed-post-actions">
         <button type="button" className={isLiked ? "is-active" : undefined} disabled={isReacting} aria-pressed={isLiked} onClick={onReact}>
@@ -1443,6 +1513,39 @@ function formatMentionedAuthors(authors: FeedAuthor[]) {
   const remainingCount = names.length - 2;
 
   return `${names.slice(0, 2).join(", ")} et ${remainingCount} autre${remainingCount > 1 ? "s" : ""}`;
+}
+
+function getPostPreviewMedia(post: Publication): FeedMediaPreview | null {
+  if (post.coverImageUrl) {
+    return {
+      kind: "image",
+      url: post.coverImageUrl,
+      title: post.title,
+      description: post.excerpt || post.content,
+    };
+  }
+
+  const image = post.attachments.find((attachment) => attachment.type === "IMAGE");
+  if (image) {
+    return {
+      kind: "image",
+      url: image.url,
+      title: image.name || post.title,
+      description: post.excerpt || post.content,
+    };
+  }
+
+  const video = post.attachments.find((attachment) => attachment.type === "VIDEO");
+  if (video) {
+    return {
+      kind: "video",
+      url: video.url,
+      title: video.name || post.title,
+      description: post.excerpt || post.content,
+    };
+  }
+
+  return null;
 }
 
 function postDestinationHref(post: Publication) {
