@@ -6,6 +6,7 @@ import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { CreatePublicationCommentDto } from "./dto/create-publication-comment.dto";
 import { CreatePublicationDto } from "./dto/create-publication.dto";
 import { ModeratePublicationReportDto } from "./dto/moderate-publication-report.dto";
+import { PublicationCommentsQueryDto } from "./dto/publication-comments-query.dto";
 import { PublicationQueryDto } from "./dto/publication-query.dto";
 import { PublicationReportQueryDto } from "./dto/publication-report-query.dto";
 import { ReportPublicationDto } from "./dto/report-publication.dto";
@@ -87,8 +88,8 @@ export class PublicationController {
   @Get(":id/comments")
   @ApiOperation({ summary: "Lister les commentaires d'une publication" })
   @ApiOkResponse({ description: "Commentaires visibles de la publication" })
-  comments(@Req() req: AuthedRequest, @Param("id") id: string) {
-    return this.publicationService.listComments(req.user, id);
+  comments(@Req() req: AuthedRequest, @Param("id") id: string, @Query() query: PublicationCommentsQueryDto) {
+    return this.publicationService.listComments(req.user, id, query);
   }
 
   @Get(":id/reactions")

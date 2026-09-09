@@ -459,6 +459,13 @@ export type PublicationComment = {
   };
 };
 
+export type PublicationCommentsResponse = {
+  items: PublicationComment[];
+  nextCursor: string | null;
+  hasMore: boolean;
+  total: number;
+};
+
 export type PublicationReactionUser = PublicationAuthor & {
   reactionType: PublicationReactionType;
   reactedAt: string;
@@ -2375,8 +2382,8 @@ export function getMyPublications(accessToken?: string | null, query: Publicatio
   }, accessToken);
 }
 
-export function getPublicationComments(accessToken: string | null | undefined, publicationId: string) {
-  return authenticatedApiRequest<PublicationComment[]>(`/publications/${publicationId}/comments`, {
+export function getPublicationComments(accessToken: string | null | undefined, publicationId: string, query: { cursor?: string; limit?: number } = {}) {
+  return authenticatedApiRequest<PublicationCommentsResponse>(`/publications/${publicationId}/comments${buildQueryString(query)}`, {
     method: "GET",
   }, accessToken);
 }

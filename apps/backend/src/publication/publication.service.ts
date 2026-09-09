@@ -28,6 +28,7 @@ import { StorageService } from "../storage/storage.service";
 import type { CreatePublicationCommentDto } from "./dto/create-publication-comment.dto";
 import type { CreatePublicationDto, PublicationAttachmentDto } from "./dto/create-publication.dto";
 import type { ModeratePublicationReportDto } from "./dto/moderate-publication-report.dto";
+import type { PublicationCommentsQueryDto } from "./dto/publication-comments-query.dto";
 import type { PublicationQueryDto } from "./dto/publication-query.dto";
 import type { PublicationReportQueryDto } from "./dto/publication-report-query.dto";
 import type { ReportPublicationDto } from "./dto/report-publication.dto";
@@ -397,18 +398,49 @@ export class PublicationService {
     return this.serializePublication(publication, user.id, await this.loadViewerReaction(publication.id, user.id));
   }
 
-  async listComments(authUser: AuthUser, publicationId: string) {
+  async listComments(authUser: AuthUser, publicationId: string, query: PublicationCommentsQueryDto = {}) {
     const user = await this.getActiveUser(authUser);
     const publication = await this.findPublicationOrThrow(publicationId);
     this.ensureCanRead(user, publication);
+    const limit = this.resolveCommentLimit(query.limit);
 
-    const comments = await this.prisma.publicationComment.findMany({
-      where: { publicationId },
+    const rootComments = await this.prisma.publicationComment.findMany({
+      where: this.addCommentCursorToWhere({ publicationId, parentId: null }, query.cursor),
       include: publicationCommentInclude,
-      orderBy: [{ createdAt: "asc" }],
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: limit + 1,
     });
+    const pageRoots = rootComments.slice(0, limit);
+    const rootIds = pageRoots.map((comment) => comment.id);
+    const replies = rootIds.length
+      ? await this.prisma.publicationComment.findMany({
+          where: {
+            publicationId,
+            parentId: { in: rootIds },
+          },
+          include: publicationCommentInclude,
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        })
+      : [];
+    const repliesByParentId = replies.reduce<Map<string, PublicationCommentWithAuthor[]>>((groups, reply) => {
+      if (!reply.parentId) {
+        return groups;
+      }
 
-    return comments.map((comment) => this.serializePublicationComment(comment, user.id, publication.authorId));
+      const items = groups.get(reply.parentId) ?? [];
+      items.push(reply);
+      groups.set(reply.parentId, items);
+      return groups;
+    }, new Map());
+    const comments = pageRoots.flatMap((comment) => [comment, ...(repliesByParentId.get(comment.id) ?? [])]);
+    const total = await this.prisma.publicationComment.count({ where: { publicationId } });
+
+    return {
+      items: comments.map((comment) => this.serializePublicationComment(comment, user.id, publication.authorId)),
+      nextCursor: rootComments.length > limit && pageRoots.length ? this.encodeCommentCursor(pageRoots[pageRoots.length - 1]) : null,
+      hasMore: rootComments.length > limit,
+      total,
+    };
   }
 
   async updatePublication(authUser: AuthUser, id: string, input: UpdatePublicationDto) {
@@ -1110,7 +1142,31 @@ export class PublicationService {
     return Math.min(Math.max(value ?? 30, 1), 80);
   }
 
+  private resolveCommentLimit(value?: number) {
+    return Math.min(Math.max(value ?? 8, 1), 30);
+  }
+
   private addCursorToWhere(where: Prisma.PublicationWhereInput, cursor?: string): Prisma.PublicationWhereInput {
+    const decodedCursor = this.decodePublicationCursor(cursor);
+
+    if (!decodedCursor) {
+      return where;
+    }
+
+    return {
+      AND: [
+        where,
+        {
+          OR: [
+            { createdAt: { lt: decodedCursor.createdAt } },
+            { createdAt: { equals: decodedCursor.createdAt }, id: { lt: decodedCursor.id } },
+          ],
+        },
+      ],
+    };
+  }
+
+  private addCommentCursorToWhere(where: Prisma.PublicationCommentWhereInput, cursor?: string): Prisma.PublicationCommentWhereInput {
     const decodedCursor = this.decodePublicationCursor(cursor);
 
     if (!decodedCursor) {
@@ -1132,6 +1188,10 @@ export class PublicationService {
 
   private encodePublicationCursor(publication: PublicationWithRelations) {
     return Buffer.from(`${publication.createdAt.toISOString()}|${publication.id}`, "utf8").toString("base64url");
+  }
+
+  private encodeCommentCursor(comment: PublicationCommentWithAuthor) {
+    return Buffer.from(`${comment.createdAt.toISOString()}|${comment.id}`, "utf8").toString("base64url");
   }
 
   private decodePublicationCursor(cursor?: string) {
