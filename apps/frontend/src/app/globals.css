@@ -3940,6 +3940,10 @@ html[data-dashboard-theme="light"] .member-shell--skeleton .member-sidebar {
   width: 178px;
 }
 
+.member-mobile-menu-button {
+  display: none;
+}
+
 .member-nav {
   flex: 1 1 auto;
   overflow-y: auto;
@@ -4651,19 +4655,63 @@ img.member-profile-avatar {
   }
 
   .member-sidebar {
-    position: static;
+    position: sticky;
+    top: 0;
+    z-index: 40;
     height: auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px;
+    align-items: center;
+    gap: 12px;
     overflow: visible;
+    border-right: 0;
+    border-bottom: 1px solid var(--member-line);
+    padding: 12px 16px;
+    background: color-mix(in srgb, var(--member-bg) 88%, transparent);
   }
 
-  .member-nav {
-    overflow: visible;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+  .member-brand {
+    width: 154px;
+    margin: 0;
+  }
+
+  .member-mobile-menu-button {
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--member-line);
+    border-radius: 8px;
+    color: var(--member-text);
+    background: var(--member-surface);
+    cursor: pointer;
+  }
+
+  .member-mobile-menu-button svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .member-nav,
+  .member-premium-card {
+    grid-column: 1 / -1;
+    display: none;
+  }
+
+  .member-sidebar.is-open .member-nav {
+    max-height: calc(100dvh - 96px);
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow-y: auto;
     padding-right: 0;
   }
 
+  .member-sidebar.is-open .member-premium-card {
+    display: grid;
+  }
+
   .member-premium-card {
-    display: none;
+    margin-top: 2px;
   }
 
   .member-topbar,
@@ -9641,12 +9689,23 @@ img.member-profile-avatar {
 }
 
 .gallery-lightbox figure {
+  grid-column: 2;
+  width: min(1180px, 100%);
   display: grid;
   gap: 14px;
   min-width: 0;
   max-width: min(1180px, 100%);
   max-height: calc(100dvh - 48px);
   margin: 0 auto;
+}
+
+.feed-media-lightbox {
+  grid-template-columns: minmax(0, 1fr);
+  place-items: center;
+}
+
+.feed-media-lightbox figure {
+  grid-column: 1;
 }
 
 .gallery-lightbox img {
@@ -9781,6 +9840,11 @@ img.member-profile-avatar {
     padding: 14px;
   }
 
+  .gallery-lightbox figure {
+    grid-column: 1;
+    width: 100%;
+  }
+
   .gallery-lightbox-nav {
     position: absolute;
     top: 50%;
@@ -9807,10 +9871,13 @@ img.member-profile-avatar {
   }
 
   .gallery-lightbox img {
+    width: 100%;
     max-height: calc(100dvh - 150px);
   }
 
-  .creative-creation-lightbox video {
+  .creative-creation-lightbox video,
+  .feed-media-lightbox video {
+    width: 100%;
     max-height: calc(100dvh - 150px);
   }
 }
@@ -14709,6 +14776,10 @@ img.member-profile-avatar {
   font-weight: 800;
 }
 
+.member-shell .messages-back-button {
+  display: none;
+}
+
 .member-shell .messages-thread-body {
   display: grid;
   align-content: start;
@@ -15373,18 +15444,139 @@ img.member-profile-avatar {
 
 @media (max-width: 1280px) {
   .member-shell .social-grid,
-  .member-shell .social-groups-grid,
-  .member-shell .messages-shell-card {
+  .member-shell .social-groups-grid {
     grid-template-columns: 1fr;
   }
 
   .member-shell .social-group-list {
     grid-template-columns: 1fr;
   }
+}
+
+@media (max-width: 900px) {
+  .member-shell .messages-layout {
+    gap: 12px;
+  }
+
+  .member-shell .messages-layout .social-hero {
+    display: none;
+  }
+
+  .member-shell .messages-shell-card {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr);
+    height: calc(100dvh - 190px);
+    min-height: 520px;
+  }
 
   .member-shell .messages-inbox {
+    grid-template-rows: auto auto minmax(0, 1fr);
+    gap: 10px;
+    min-height: 0;
     border-right: 0;
-    border-bottom: 1px solid var(--member-line);
+    border-bottom: 0;
+    padding: 12px;
+  }
+
+  .member-shell .messages-shell-card.is-mobile-thread-open .messages-inbox {
+    display: none;
+  }
+
+  .member-shell .messages-thread {
+    display: none;
+  }
+
+  .member-shell .messages-shell-card.is-mobile-thread-open .messages-thread {
+    display: grid;
+  }
+
+  .member-shell .messages-inbox-head {
+    gap: 8px;
+  }
+
+  .member-shell .messages-inbox-head strong {
+    font-size: 0.96rem;
+  }
+
+  .member-shell .messages-search {
+    min-height: 40px;
+  }
+
+  .member-shell .messages-search-results {
+    max-height: 190px;
+    overflow-y: auto;
+  }
+
+  .member-shell .messages-conversation-list {
+    display: grid;
+    gap: 8px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 0 2px 0 0;
+  }
+
+  .member-shell .messages-conversation {
+    width: 100%;
+  }
+
+  .member-shell .messages-suggestions {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-top: 0;
+    padding-top: 0;
+  }
+
+  .member-shell .messages-suggestions > span {
+    flex: 0 0 auto;
+    align-self: center;
+  }
+
+  .member-shell .messages-suggestions button {
+    flex: 0 0 min(260px, 78vw);
+  }
+
+  .member-shell .messages-thread-header {
+    grid-template-columns: 38px 44px minmax(0, 1fr);
+    padding: 12px;
+  }
+
+  .member-shell .messages-back-button {
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--member-line);
+    border-radius: 999px;
+    color: var(--member-text);
+    background: var(--member-surface);
+    cursor: pointer;
+  }
+
+  .member-shell .messages-back-button svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .member-shell .messages-thread-actions,
+  .member-shell .messages-thread-header > .member-secondary-button {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
+  .member-shell .messages-thread-actions {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .member-shell .messages-thread-body {
+    padding: 14px;
+  }
+
+  .member-shell .message-bubble {
+    max-width: 92%;
   }
 }
 
@@ -15400,18 +15592,36 @@ img.member-profile-avatar {
   .member-shell .notification-card,
   .member-shell .social-group-card,
   .member-shell .social-group-form,
-  .member-shell .social-message-composer,
-  .member-shell .messages-thread-header {
+  .member-shell .social-message-composer {
     grid-template-columns: 1fr;
   }
 
+  .member-shell .messages-shell-card {
+    height: calc(100dvh - 176px);
+    min-height: 500px;
+  }
+
   .member-shell .messages-composer {
-    grid-template-columns: 40px 40px minmax(0, 1fr) 44px;
-    padding: 12px;
+    grid-template-columns: 38px 38px minmax(0, 1fr) 42px;
+    gap: 6px;
+    padding: 10px;
+  }
+
+  .member-shell .messages-composer button:not(.member-create-button) {
+    width: 38px;
+    height: 38px;
+  }
+
+  .member-shell .messages-composer .member-create-button {
+    width: 42px;
+    min-width: 42px;
+    min-height: 42px;
   }
 
   .member-shell .messages-composer input {
+    min-height: 42px;
     min-width: 0;
+    padding-inline: 14px;
   }
 
   .member-shell .social-state-pill {
@@ -18160,5 +18370,362 @@ img.member-profile-avatar {
 
   .admin-certificate-status {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .member-main {
+    padding: 12px;
+  }
+
+  .member-sidebar {
+    padding: 10px 12px;
+  }
+
+  .member-brand {
+    width: 132px;
+  }
+
+  .member-sidebar.is-open .member-nav {
+    grid-template-columns: 1fr;
+  }
+
+  .member-premium-card {
+    padding: 12px;
+  }
+
+  .member-topbar {
+    position: static;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin: -12px -12px 12px;
+    padding: 10px 12px;
+  }
+
+  .member-topbar > div:first-child {
+    display: none;
+  }
+
+  .member-global-search {
+    min-width: 0;
+  }
+
+  .member-search input {
+    min-height: 42px;
+    font-size: 0.86rem;
+  }
+
+  .member-actions {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .member-actions::-webkit-scrollbar {
+    display: none;
+  }
+
+  .member-actions > * {
+    flex: 0 0 auto;
+  }
+
+  .member-topbar .member-create-button {
+    min-width: 42px;
+    min-height: 42px;
+    justify-content: center;
+    padding: 0 12px;
+  }
+
+  .member-icon-button {
+    width: 42px;
+    height: 42px;
+  }
+
+  .member-profile-chip {
+    min-height: 42px;
+    padding: 3px 8px 3px 4px;
+  }
+
+  .member-card {
+    padding: 14px;
+  }
+
+  .member-card-title {
+    display: grid;
+    gap: 8px;
+    align-items: start;
+  }
+
+  .member-card-title > a,
+  .member-card-title > button {
+    justify-self: start;
+  }
+
+  .member-module-hero,
+  .creative-id-hero,
+  .training-hero,
+  .opportunities-hero,
+  .settings-hero,
+  .gallery-member-hero,
+  .gallery-detail-hero,
+  .admin-hero,
+  .publish-hero,
+  .social-hero {
+    min-height: 0;
+    padding: 16px;
+  }
+
+  .member-module-hero h1,
+  .creative-id-hero h1,
+  .training-hero h1,
+  .opportunities-hero h1,
+  .settings-hero h1,
+  .gallery-member-hero h1,
+  .gallery-detail-hero h1,
+  .admin-hero h1,
+  .publish-hero h1,
+  .social-hero h1 {
+    font-size: clamp(1.45rem, 7vw, 2rem);
+    line-height: 1.12;
+  }
+
+  .member-module-highlight-grid,
+  .opportunities-highlight-grid,
+  .member-home-insights-grid,
+  .certificate-summary-grid {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .member-module-highlight-grid article,
+  .opportunities-highlight-grid article,
+  .member-home-insights-grid article,
+  .certificate-summary-grid article {
+    flex: 0 0 150px;
+    min-height: 94px;
+  }
+
+  .member-module-filters,
+  .opportunities-filters,
+  .social-filter-row,
+  .admin-filter-pills,
+  .settings-tabs {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+
+  .member-module-filters::-webkit-scrollbar,
+  .opportunities-filters::-webkit-scrollbar,
+  .social-filter-row::-webkit-scrollbar,
+  .admin-filter-pills::-webkit-scrollbar,
+  .settings-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .member-module-filters button,
+  .opportunities-filters button,
+  .social-filter-row button,
+  .admin-filter-pills button,
+  .settings-tabs button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .settings-tabs button {
+    min-width: 116px;
+  }
+
+  .member-module-toolbar,
+  .opportunities-toolbar,
+  .social-toolbar,
+  .admin-members-toolbar,
+  .admin-dossier-filter-fields,
+  .settings-form-grid,
+  .settings-field-grid,
+  .publish-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .member-resource-list article,
+  .agenda-timeline article,
+  .certificate-list article,
+  .admin-list-item,
+  .admin-member-row,
+  .admin-reference-row,
+  .admin-reference-row:has(.admin-reference-logo),
+  .admin-reference-row.is-editing {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .resource-row-actions,
+  .agenda-row-actions,
+  .certificate-actions,
+  .admin-list-actions,
+  .admin-member-actions,
+  .admin-reference-row-actions,
+  .application-tracking-actions,
+  .social-invitation-actions,
+  .social-request-actions,
+  .social-member-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr;
+    justify-content: stretch;
+  }
+
+  .resource-row-actions a,
+  .resource-row-actions button,
+  .agenda-row-actions a,
+  .agenda-row-actions button,
+  .certificate-actions a,
+  .certificate-actions button,
+  .admin-list-actions button,
+  .admin-member-actions button,
+  .admin-reference-row-actions button,
+  .application-tracking-actions a,
+  .application-tracking-actions button,
+  .social-invitation-actions button,
+  .social-request-actions button,
+  .social-member-actions button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .gallery-member-album-grid,
+  .network-member-list,
+  .creative-creation-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .gallery-mosaic {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .gallery-mosaic-item--cover {
+    min-height: 220px;
+  }
+
+  .gallery-lightbox {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .gallery-lightbox button {
+    justify-self: center;
+  }
+
+  .gallery-lightbox img {
+    max-height: calc(100dvh - 210px);
+  }
+
+  .publish-type-grid {
+    display: flex;
+    grid-template-columns: none;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+
+  .publish-type-grid::-webkit-scrollbar {
+    display: none;
+  }
+
+  .publish-type-grid button {
+    flex: 0 0 min(220px, 78vw);
+    min-height: 104px;
+  }
+
+  .publish-attachments {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .publish-attachments label,
+  .publish-attachments button,
+  .publish-actions > * {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 520px) {
+  .member-sidebar.is-open .member-nav a {
+    min-height: 40px;
+  }
+
+  .member-topbar {
+    gap: 8px;
+  }
+
+  .member-topbar .member-create-button span {
+    display: none;
+  }
+
+  .member-profile-chip > span:not(.member-profile-avatar) {
+    display: none;
+  }
+
+  .member-module-highlight-grid article,
+  .opportunities-highlight-grid article,
+  .member-home-insights-grid article,
+  .certificate-summary-grid article {
+    flex-basis: 132px;
+  }
+
+  .member-shell .messages-shell-card {
+    height: calc(100dvh - 154px);
+    min-height: 460px;
+  }
+
+  .member-shell .messages-thread-header {
+    grid-template-columns: 38px minmax(0, 1fr);
+  }
+
+  .member-shell .messages-thread-header .message-avatar {
+    display: none;
+  }
+
+  .member-shell .messages-thread-actions,
+  .member-shell .messages-thread-header > .member-secondary-button {
+    grid-column: 1 / -1;
+  }
+
+  .member-shell .messages-thread-body {
+    padding: 10px;
+  }
+
+  .member-shell .message-bubble {
+    max-width: 96%;
+  }
+
+  .message-attachment-lightbox {
+    padding: 12px;
+  }
+
+  .message-attachment-lightbox figure {
+    width: 100%;
+  }
+
+  .message-attachment-lightbox img,
+  .message-attachment-lightbox video {
+    width: 100%;
+    max-height: calc(100dvh - 184px);
+  }
+
+  .message-attachment-lightbox-close {
+    top: 12px;
+    right: 12px;
   }
 }
