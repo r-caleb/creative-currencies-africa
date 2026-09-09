@@ -11437,6 +11437,113 @@ img.member-profile-avatar {
   opacity: 0.7;
 }
 
+.message-report-panel {
+  display: grid;
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, var(--member-purple) 26%, var(--member-line));
+  border-radius: 8px;
+  margin-top: 3px;
+  padding: 11px;
+  color: var(--member-text);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--member-purple) 7%, transparent), transparent 72%),
+    var(--member-surface);
+}
+
+.message-report-panel > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.message-report-panel > div:first-child strong {
+  font-size: 0.82rem;
+  font-weight: 950;
+}
+
+.message-report-panel > div:first-child span {
+  color: var(--member-muted);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.message-report-reasons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.message-report-reasons button {
+  display: grid;
+  gap: 2px;
+  border: 1px solid var(--member-line);
+  border-radius: 8px;
+  padding: 8px 9px;
+  color: var(--member-text);
+  background: var(--member-bg-soft);
+  text-align: left;
+  cursor: pointer;
+}
+
+.message-report-reasons button.is-selected {
+  border-color: color-mix(in srgb, var(--member-purple) 48%, var(--member-line));
+  background: color-mix(in srgb, var(--member-purple) 10%, var(--member-surface));
+}
+
+.message-report-reasons strong {
+  font-size: 0.72rem;
+  font-weight: 950;
+}
+
+.message-report-reasons span {
+  color: var(--member-muted);
+  font-size: 0.66rem;
+  line-height: 1.35;
+}
+
+.message-report-panel textarea {
+  width: 100%;
+  min-width: 0;
+  resize: vertical;
+  border: 1px solid var(--member-line);
+  border-radius: 8px;
+  padding: 9px 10px;
+  color: var(--member-text);
+  background: var(--member-bg-soft);
+  font: inherit;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.message-report-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.message-report-actions button {
+  min-height: 32px;
+  border: 1px solid var(--member-line);
+  border-radius: 8px;
+  padding: 0 11px;
+  color: var(--member-text);
+  background: var(--member-bg-soft);
+  font-size: 0.72rem;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.message-report-actions button.is-danger {
+  border-color: color-mix(in srgb, #991b1b 34%, var(--member-line));
+  color: #991b1b;
+  background: #fff5f5;
+}
+
+.message-report-actions button:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
 .message-bubble span,
 .message-bubble small {
   display: inline-flex;
@@ -11571,6 +11678,14 @@ img.member-profile-avatar {
 
   .message-bubble {
     max-width: 100%;
+  }
+
+  .message-report-reasons {
+    grid-template-columns: 1fr;
+  }
+
+  .message-report-actions {
+    justify-content: flex-start;
   }
 
   .notification-actions {

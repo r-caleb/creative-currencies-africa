@@ -42,7 +42,7 @@ import {
   unarchiveDirectConversation,
   uploadMessageAttachment,
 } from "@/lib/api";
-import type { CommunityGroup, CommunityGroupMessage, DirectConversation, DirectConversationAttachment, DirectMessage, DirectMessageSearchResponse, NetworkMember } from "@/lib/api";
+import type { CommunityGroup, CommunityGroupMessage, DirectConversation, DirectConversationAttachment, DirectMessage, DirectMessageReportReason, DirectMessageSearchResponse, NetworkMember } from "@/lib/api";
 import { buildInitials } from "@/lib/member-display";
 import { normalizeProfileOption } from "@/lib/profile-options";
 import { connectRealtimeSocket } from "@/lib/realtime";
@@ -81,6 +81,19 @@ type Conversation = {
   isJoined?: boolean;
   messages: ConversationMessage[];
 };
+
+type MessageReportTarget = {
+  kind: "direct" | "group";
+  messageId: string;
+};
+
+const messageReportReasons: Array<{ value: DirectMessageReportReason; label: string; description: string }> = [
+  { value: "SPAM", label: "Spam", description: "Message répétitif, publicité abusive ou tentative d'arnaque." },
+  { value: "ABUSE", label: "Abus", description: "Comportement agressif, pression ou usage malveillant." },
+  { value: "HARASSMENT", label: "Harcèlement", description: "Attaques personnelles, intimidation ou propos ciblés." },
+  { value: "INAPPROPRIATE", label: "Inapproprié", description: "Contenu déplacé ou contraire à l'esprit de la communauté." },
+  { value: "OTHER", label: "Autre", description: "Un autre problème que l'équipe CCA doit vérifier." },
+];
 
 const emptyConversation: Conversation = {
   id: "empty",
@@ -128,6 +141,10 @@ export function MessagesPage() {
   const [isBlockingUser, setIsBlockingUser] = useState(false);
   const [reportedDirectMessageIds, setReportedDirectMessageIds] = useState<Set<string>>(() => new Set());
   const [reportedGroupMessageIds, setReportedGroupMessageIds] = useState<Set<string>>(() => new Set());
+  const [reportTarget, setReportTarget] = useState<MessageReportTarget | null>(null);
+  const [reportReason, setReportReason] = useState<DirectMessageReportReason | "">("");
+  const [reportNote, setReportNote] = useState("");
+  const [reportingMessageId, setReportingMessageId] = useState("");
   const [startingMemberId, setStartingMemberId] = useState<string | null>(null);
   const [error, setError] = useState("");
 
@@ -901,39 +918,66 @@ export function MessagesPage() {
     setError("Sélectionnez un membre ou un groupe avant d'écrire.");
   };
 
+  const openReportPanel = (target: MessageReportTarget) => {
+    setReportTarget((current) => {
+      if (current?.kind === target.kind && current.messageId === target.messageId) {
+        return null;
+      }
+
+      return target;
+    });
+    setReportReason("");
+    setReportNote("");
+    setError("");
+  };
+
+  const closeReportPanel = () => {
+    setReportTarget(null);
+    setReportReason("");
+    setReportNote("");
+  };
+
   const handleReportDirectMessage = async (message: ConversationMessage) => {
-    if (!accessToken || !selectedDirectConversationId || !message.source) {
+    if (!accessToken || !selectedDirectConversationId || !message.source || !reportReason) {
       return;
     }
 
     setError("");
+    setReportingMessageId(message.id);
 
     try {
       await reportDirectMessage(accessToken, selectedDirectConversationId, message.id, {
-        reason: "INAPPROPRIATE",
-        message: "Signalement depuis la messagerie membre.",
+        reason: reportReason,
+        message: reportNote.trim() || undefined,
       });
       setReportedDirectMessageIds((current) => new Set(current).add(message.id));
+      closeReportPanel();
     } catch (reportError) {
       setError(getApiErrorMessage(reportError, "Impossible de signaler ce message pour le moment."));
+    } finally {
+      setReportingMessageId("");
     }
   };
 
   const handleReportGroupMessage = async (message: ConversationMessage) => {
-    if (!accessToken || !selectedGroupId || !message.groupSource) {
+    if (!accessToken || !selectedGroupId || !message.groupSource || !reportReason) {
       return;
     }
 
     setError("");
+    setReportingMessageId(message.id);
 
     try {
       await reportCommunityGroupMessage(accessToken, selectedGroupId, message.id, {
-        reason: "INAPPROPRIATE",
-        message: "Signalement depuis une discussion de groupe.",
+        reason: reportReason,
+        message: reportNote.trim() || undefined,
       });
       setReportedGroupMessageIds((current) => new Set(current).add(message.id));
+      closeReportPanel();
     } catch (reportError) {
       setError(getApiErrorMessage(reportError, "Impossible de signaler ce message de groupe pour le moment."));
+    } finally {
+      setReportingMessageId("");
     }
   };
 
@@ -1192,7 +1236,8 @@ export function MessagesPage() {
                           className="message-report-button"
                           type="button"
                           disabled={reportedDirectMessageIds.has(message.id)}
-                          onClick={() => handleReportDirectMessage(message)}
+                          aria-expanded={reportTarget?.kind === "direct" && reportTarget.messageId === message.id}
+                          onClick={() => openReportPanel({ kind: "direct", messageId: message.id })}
                         >
                           <Flag aria-hidden="true" strokeWidth={1.8} />
                           {reportedDirectMessageIds.has(message.id) ? "Signalé" : "Signaler"}
@@ -1203,11 +1248,23 @@ export function MessagesPage() {
                           className="message-report-button"
                           type="button"
                           disabled={reportedGroupMessageIds.has(message.id)}
-                          onClick={() => handleReportGroupMessage(message)}
+                          aria-expanded={reportTarget?.kind === "group" && reportTarget.messageId === message.id}
+                          onClick={() => openReportPanel({ kind: "group", messageId: message.id })}
                         >
                           <Flag aria-hidden="true" strokeWidth={1.8} />
                           {reportedGroupMessageIds.has(message.id) ? "Signalé" : "Signaler"}
                         </button>
+                      ) : null}
+                      {reportTarget?.messageId === message.id ? (
+                        <MessageReportPanel
+                          reason={reportReason}
+                          note={reportNote}
+                          isSubmitting={reportingMessageId === message.id}
+                          onReasonChange={setReportReason}
+                          onNoteChange={setReportNote}
+                          onCancel={closeReportPanel}
+                          onSubmit={() => reportTarget.kind === "direct" ? handleReportDirectMessage(message) : handleReportGroupMessage(message)}
+                        />
                       ) : null}
                       <small>
                         {message.time}
@@ -1284,6 +1341,61 @@ export function MessagesPage() {
         </section>
       </div>
     </MemberShell>
+  );
+}
+
+function MessageReportPanel({
+  reason,
+  note,
+  isSubmitting,
+  onReasonChange,
+  onNoteChange,
+  onCancel,
+  onSubmit,
+}: {
+  reason: DirectMessageReportReason | "";
+  note: string;
+  isSubmitting: boolean;
+  onReasonChange: (reason: DirectMessageReportReason) => void;
+  onNoteChange: (note: string) => void;
+  onCancel: () => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <section className="message-report-panel" aria-label="Choisir la raison du signalement">
+      <div>
+        <strong>Pourquoi signaler ce message ?</strong>
+        <span>L'équipe CCA vérifiera le contenu et le contexte de la discussion.</span>
+      </div>
+      <div className="message-report-reasons">
+        {messageReportReasons.map((item) => (
+          <button
+            key={item.value}
+            type="button"
+            className={reason === item.value ? "is-selected" : undefined}
+            onClick={() => onReasonChange(item.value)}
+          >
+            <strong>{item.label}</strong>
+            <span>{item.description}</span>
+          </button>
+        ))}
+      </div>
+      <textarea
+        value={note}
+        maxLength={700}
+        rows={3}
+        onChange={(event) => onNoteChange(event.target.value)}
+        placeholder="Ajouter une précision utile pour l'équipe CCA..."
+      />
+      <div className="message-report-actions">
+        <button type="button" onClick={onCancel} disabled={isSubmitting}>
+          Annuler
+        </button>
+        <button type="button" className="is-danger" disabled={!reason || isSubmitting} onClick={onSubmit}>
+          {isSubmitting ? "Envoi..." : "Envoyer le signalement"}
+        </button>
+      </div>
+    </section>
   );
 }
 
