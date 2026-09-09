@@ -5676,12 +5676,20 @@ img.member-profile-avatar {
 }
 
 .member-feed-post {
+  scroll-margin-top: 112px;
   overflow: hidden;
   border: 1px solid var(--member-line);
   border-radius: 8px;
   padding: 16px;
   background: var(--member-surface);
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.11);
+}
+
+.member-feed-post.is-targeted {
+  border-color: color-mix(in srgb, var(--member-purple) 72%, var(--member-line));
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--member-purple) 18%, transparent),
+    0 22px 56px rgba(124, 58, 237, 0.22);
 }
 
 .member-feed-post:first-child {
@@ -6365,6 +6373,11 @@ img.member-profile-avatar {
   background: color-mix(in srgb, var(--member-purple) 7%, var(--member-surface));
   font-size: 0.78rem;
   font-weight: 900;
+}
+
+.member-feed-notice.is-warning {
+  border-color: color-mix(in srgb, var(--member-gold) 36%, var(--member-line));
+  background: color-mix(in srgb, var(--member-gold) 10%, var(--member-surface));
 }
 
 .member-feed-empty--guided {
