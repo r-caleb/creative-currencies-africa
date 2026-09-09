@@ -8288,6 +8288,8 @@ img.member-profile-avatar {
 }
 
 .opportunities-toolbar {
+  min-width: 0;
+  max-width: 100%;
   display: grid;
   grid-template-columns: minmax(220px, 0.34fr) minmax(0, 1fr);
   gap: 10px;
@@ -9184,12 +9186,15 @@ img.member-profile-avatar {
   grid-template-columns: minmax(0, 1fr) minmax(320px, 0.42fr);
   gap: 20px;
   align-items: start;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .member-module-main,
 .member-module-side {
   display: grid;
   min-width: 0;
+  max-width: 100%;
   gap: 18px;
 }
 
@@ -11224,6 +11229,8 @@ img.member-profile-avatar {
 }
 
 .social-toolbar {
+  min-width: 0;
+  max-width: 100%;
   display: grid;
   grid-template-columns: minmax(220px, 0.3fr) minmax(0, 1fr);
   gap: 12px;
@@ -12380,10 +12387,15 @@ img.member-profile-avatar {
 }
 
 .settings-hub-card {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   padding: 8px;
 }
 
 .settings-tabs {
+  min-width: 0;
+  max-width: 100%;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
   gap: 6px;
@@ -13515,8 +13527,23 @@ img.member-profile-avatar {
   }
 
   .settings-tabs {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
+    flex-wrap: nowrap;
+    grid-template-columns: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .settings-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .settings-tabs button {
+    flex: 0 0 124px;
+    white-space: nowrap;
   }
 
   .settings-journey-status-card {
@@ -18510,6 +18537,17 @@ img.member-profile-avatar {
   .member-dashboard-home,
   .member-dashboard-grid,
   .member-dashboard-grid--feed,
+  .member-module-layout,
+  .member-module-grid,
+  .member-module-main,
+  .member-module-side,
+  .settings-module-layout,
+  .settings-module-grid,
+  .settings-hub-card,
+  .opportunities-toolbar,
+  .social-toolbar,
+  .admin-section,
+  .admin-subsection-card,
   .member-home-feed-column,
   .member-home-right-rail,
   .member-feed-card,
@@ -18568,11 +18606,14 @@ img.member-profile-avatar {
   .certificate-summary-grid {
     width: 100%;
     max-width: 100%;
+    min-width: 0;
+    contain: inline-size;
     display: flex;
     gap: 10px;
     overflow-x: auto;
     overflow-y: hidden;
     overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
     padding-bottom: 2px;
     scrollbar-width: none;
   }
@@ -18599,6 +18640,8 @@ img.member-profile-avatar {
   .settings-tabs {
     width: 100%;
     max-width: 100%;
+    min-width: 0;
+    contain: inline-size;
     display: flex;
     flex-wrap: nowrap;
     justify-content: flex-start;
@@ -18606,6 +18649,7 @@ img.member-profile-avatar {
     overflow-x: auto;
     overflow-y: hidden;
     overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
     padding-bottom: 4px;
     scrollbar-width: none;
   }
@@ -18628,7 +18672,8 @@ img.member-profile-avatar {
   }
 
   .settings-tabs button {
-    min-width: 116px;
+    min-width: 0;
+    flex-basis: min(132px, 44vw);
   }
 
   .member-module-toolbar,
