@@ -18353,3 +18353,341 @@ img.member-profile-avatar {
     grid-template-columns: 1fr;
   }
 }
+
+@media (max-width: 760px) {
+  .member-main {
+    padding: 12px;
+  }
+
+  .member-sidebar {
+    padding: 10px 12px;
+  }
+
+  .member-brand {
+    width: 132px;
+  }
+
+  .member-sidebar.is-open .member-nav {
+    grid-template-columns: 1fr;
+  }
+
+  .member-premium-card {
+    padding: 12px;
+  }
+
+  .member-topbar {
+    position: static;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin: -12px -12px 12px;
+    padding: 10px 12px;
+  }
+
+  .member-topbar > div:first-child {
+    display: none;
+  }
+
+  .member-global-search {
+    min-width: 0;
+  }
+
+  .member-search input {
+    min-height: 42px;
+    font-size: 0.86rem;
+  }
+
+  .member-actions {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .member-actions::-webkit-scrollbar {
+    display: none;
+  }
+
+  .member-actions > * {
+    flex: 0 0 auto;
+  }
+
+  .member-topbar .member-create-button {
+    min-width: 42px;
+    min-height: 42px;
+    justify-content: center;
+    padding: 0 12px;
+  }
+
+  .member-icon-button {
+    width: 42px;
+    height: 42px;
+  }
+
+  .member-profile-chip {
+    min-height: 42px;
+    padding: 3px 8px 3px 4px;
+  }
+
+  .member-card {
+    padding: 14px;
+  }
+
+  .member-card-title {
+    display: grid;
+    gap: 8px;
+    align-items: start;
+  }
+
+  .member-card-title > a,
+  .member-card-title > button {
+    justify-self: start;
+  }
+
+  .member-module-hero,
+  .creative-id-hero,
+  .training-hero,
+  .opportunities-hero,
+  .settings-hero,
+  .gallery-member-hero,
+  .gallery-detail-hero,
+  .admin-hero,
+  .publish-hero,
+  .social-hero {
+    min-height: 0;
+    padding: 16px;
+  }
+
+  .member-module-hero h1,
+  .creative-id-hero h1,
+  .training-hero h1,
+  .opportunities-hero h1,
+  .settings-hero h1,
+  .gallery-member-hero h1,
+  .gallery-detail-hero h1,
+  .admin-hero h1,
+  .publish-hero h1,
+  .social-hero h1 {
+    font-size: clamp(1.45rem, 7vw, 2rem);
+    line-height: 1.12;
+  }
+
+  .member-module-highlight-grid,
+  .opportunities-highlight-grid,
+  .member-home-insights-grid,
+  .certificate-summary-grid {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .member-module-highlight-grid article,
+  .opportunities-highlight-grid article,
+  .member-home-insights-grid article,
+  .certificate-summary-grid article {
+    flex: 0 0 150px;
+    min-height: 94px;
+  }
+
+  .member-module-filters,
+  .opportunities-filters,
+  .social-filter-row,
+  .admin-filter-pills,
+  .settings-tabs {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+
+  .member-module-filters::-webkit-scrollbar,
+  .opportunities-filters::-webkit-scrollbar,
+  .social-filter-row::-webkit-scrollbar,
+  .admin-filter-pills::-webkit-scrollbar,
+  .settings-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .member-module-filters button,
+  .opportunities-filters button,
+  .social-filter-row button,
+  .admin-filter-pills button,
+  .settings-tabs button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .settings-tabs button {
+    min-width: 116px;
+  }
+
+  .member-module-toolbar,
+  .opportunities-toolbar,
+  .social-toolbar,
+  .admin-members-toolbar,
+  .admin-dossier-filter-fields,
+  .settings-form-grid,
+  .settings-field-grid,
+  .publish-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .member-resource-list article,
+  .agenda-timeline article,
+  .certificate-list article,
+  .admin-list-item,
+  .admin-member-row,
+  .admin-reference-row,
+  .admin-reference-row:has(.admin-reference-logo),
+  .admin-reference-row.is-editing {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .resource-row-actions,
+  .agenda-row-actions,
+  .certificate-actions,
+  .admin-list-actions,
+  .admin-member-actions,
+  .admin-reference-row-actions,
+  .application-tracking-actions,
+  .social-invitation-actions,
+  .social-request-actions,
+  .social-member-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr;
+    justify-content: stretch;
+  }
+
+  .resource-row-actions a,
+  .resource-row-actions button,
+  .agenda-row-actions a,
+  .agenda-row-actions button,
+  .certificate-actions a,
+  .certificate-actions button,
+  .admin-list-actions button,
+  .admin-member-actions button,
+  .admin-reference-row-actions button,
+  .application-tracking-actions a,
+  .application-tracking-actions button,
+  .social-invitation-actions button,
+  .social-request-actions button,
+  .social-member-actions button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .gallery-member-album-grid,
+  .network-member-list,
+  .creative-creation-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .gallery-mosaic {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .gallery-mosaic-item--cover {
+    min-height: 220px;
+  }
+
+  .gallery-lightbox {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .gallery-lightbox button {
+    justify-self: center;
+  }
+
+  .gallery-lightbox img {
+    max-height: calc(100dvh - 210px);
+  }
+
+  .publish-type-grid {
+    display: flex;
+    grid-template-columns: none;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+
+  .publish-type-grid::-webkit-scrollbar {
+    display: none;
+  }
+
+  .publish-type-grid button {
+    flex: 0 0 min(220px, 78vw);
+    min-height: 104px;
+  }
+
+  .publish-attachments {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .publish-attachments label,
+  .publish-attachments button,
+  .publish-actions > * {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 520px) {
+  .member-sidebar.is-open .member-nav a {
+    min-height: 40px;
+  }
+
+  .member-topbar {
+    gap: 8px;
+  }
+
+  .member-topbar .member-create-button span {
+    display: none;
+  }
+
+  .member-profile-chip > span:not(.member-profile-avatar) {
+    display: none;
+  }
+
+  .member-module-highlight-grid article,
+  .opportunities-highlight-grid article,
+  .member-home-insights-grid article,
+  .certificate-summary-grid article {
+    flex-basis: 132px;
+  }
+
+  .member-shell .messages-shell-card {
+    height: calc(100dvh - 154px);
+    min-height: 460px;
+  }
+
+  .member-shell .messages-thread-header {
+    grid-template-columns: 38px minmax(0, 1fr);
+  }
+
+  .member-shell .messages-thread-header .message-avatar {
+    display: none;
+  }
+
+  .member-shell .messages-thread-actions,
+  .member-shell .messages-thread-header > .member-secondary-button {
+    grid-column: 1 / -1;
+  }
+
+  .member-shell .messages-thread-body {
+    padding: 10px;
+  }
+
+  .member-shell .message-bubble {
+    max-width: 96%;
+  }
+}
