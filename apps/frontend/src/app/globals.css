@@ -18445,7 +18445,8 @@ img.member-profile-avatar {
   }
 
   .member-topbar {
-    position: static;
+    position: relative;
+    z-index: 120;
     width: auto;
     max-width: 100vw;
     grid-template-columns: 1fr;
@@ -18489,13 +18490,13 @@ img.member-profile-avatar {
   }
 
   .member-topbar .member-create-button {
-    width: 42px;
-    min-width: 42px;
+    width: auto;
+    min-width: max-content;
     min-height: 42px;
     justify-content: center;
-    gap: 0;
-    padding: 0;
-    font-size: 0;
+    gap: 7px;
+    padding: 0 12px;
+    font-size: 0.9rem;
   }
 
   .member-topbar .member-create-button svg {
@@ -18518,11 +18519,11 @@ img.member-profile-avatar {
   }
 
   .member-profile-menu {
-    z-index: 70;
+    z-index: 140;
   }
 
   .member-profile-dropdown {
-    z-index: 80;
+    z-index: 150;
     right: 0;
     width: min(250px, calc(100vw - 24px));
   }
@@ -18802,10 +18803,6 @@ img.member-profile-avatar {
 
   .member-topbar {
     gap: 8px;
-  }
-
-  .member-topbar .member-create-button span {
-    display: none;
   }
 
   .member-profile-chip > span:not(.member-profile-avatar) {
