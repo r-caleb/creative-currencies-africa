@@ -16,6 +16,7 @@ import {
   Images,
   Lightbulb,
   LogOut,
+  Menu,
   MessageCircle,
   Moon,
   Network,
@@ -26,6 +27,7 @@ import {
   Sparkles,
   Sun,
   UsersRound,
+  X,
 } from "lucide-react";
 import {
   getCurrentMember,
@@ -83,6 +85,7 @@ export function MemberShell({
   const [theme, setTheme] = useState<DashboardTheme>("light");
   const [isClientReady, setIsClientReady] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
   const [messageUnreadCount, setMessageUnreadCount] = useState(0);
@@ -278,6 +281,26 @@ export function MemberShell({
     }
   }, [pathname, searchParams]);
 
+  useEffect(() => {
+    setIsSidebarOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!isSidebarOpen) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsSidebarOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isSidebarOpen]);
+
   const toggleTheme = () => {
     const nextTheme = theme === "dark" ? "light" : "dark";
     setTheme(nextTheme);
@@ -323,10 +346,20 @@ export function MemberShell({
 
   return (
     <main className="member-shell" data-dashboard-theme={theme}>
-      <aside className="member-sidebar" aria-label="Navigation espace membre">
+      <aside className={isSidebarOpen ? "member-sidebar is-open" : "member-sidebar"} aria-label="Navigation espace membre">
         <Link className="member-brand" href="/espace-membre" aria-label="Accueil espace membre Creative Currencies Africa">
           <img src="/assets/cca-logo-full-transparent-web.png" alt="Creative Currencies Africa" decoding="async" />
         </Link>
+
+        <button
+          className="member-mobile-menu-button"
+          type="button"
+          aria-expanded={isSidebarOpen}
+          aria-label={isSidebarOpen ? "Fermer le menu" : "Ouvrir le menu"}
+          onClick={() => setIsSidebarOpen((current) => !current)}
+        >
+          {isSidebarOpen ? <X aria-hidden="true" strokeWidth={1.8} /> : <Menu aria-hidden="true" strokeWidth={1.8} />}
+        </button>
 
         <nav className="member-nav">
           {visibleSidebarItems.map((item) => {
@@ -334,7 +367,7 @@ export function MemberShell({
             const badge = item.label === "Messages" ? formatBadgeCount(messageUnreadCount) : item.badge;
 
             return (
-              <Link key={item.label} className={item.label === activeItem ? "is-active" : undefined} href={item.href}>
+              <Link key={item.label} className={item.label === activeItem ? "is-active" : undefined} href={item.href} onClick={() => setIsSidebarOpen(false)}>
                 <Icon aria-hidden="true" strokeWidth={1.8} />
                 <span>{item.label}</span>
                 {badge ? <strong>{badge}</strong> : null}

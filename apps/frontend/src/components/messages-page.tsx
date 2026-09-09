@@ -4,6 +4,7 @@ import { type ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } fro
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
+  ArrowLeft,
   ArrowUp,
   Archive,
   Ban,
@@ -134,6 +135,7 @@ export function MessagesPage() {
   const typingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [query, setQuery] = useState("");
   const [manualSelectedId, setManualSelectedId] = useState<string | null>(null);
+  const [isMobileThreadOpen, setIsMobileThreadOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [attachment, setAttachment] = useState<ConversationMessage["attachment"] | null>(null);
   const [directConversations, setDirectConversations] = useState<DirectConversation[]>([]);
@@ -373,6 +375,7 @@ export function MessagesPage() {
 
       setDirectConversations((current) => mergeDirectConversation(current, conversation));
       setManualSelectedId(`direct:${conversation.id}`);
+      setIsMobileThreadOpen(true);
       setQuery("");
     } catch (startError) {
       setError(getApiErrorMessage(startError, "Impossible d'ouvrir cette conversation."));
@@ -398,6 +401,7 @@ export function MessagesPage() {
 
         setDirectConversations((current) => mergeDirectConversation(current, conversation));
         setManualSelectedId(`direct:${conversation.id}`);
+        setIsMobileThreadOpen(true);
       })
       .catch((requestError) => {
         if (isMounted) {
@@ -436,6 +440,12 @@ export function MessagesPage() {
       clearTimeout(timer);
     };
   }, [accessToken, query]);
+
+  useEffect(() => {
+    if (requestedConversationId || requestedGroupId || requestedMemberId) {
+      setIsMobileThreadOpen(true);
+    }
+  }, [requestedConversationId, requestedGroupId, requestedMemberId]);
 
   useEffect(() => {
     if (!accessToken || !selectedGroupId || !selectedConversation.isJoined || groupMessages[selectedGroupId]) {
@@ -954,6 +964,7 @@ export function MessagesPage() {
         setDirectConversations((current) => mergeDirectConversation(current, conversation));
         setDirectMessages((current) => ({ ...current, [conversation.id]: conversationMessages }));
         setManualSelectedId(`direct:${conversation.id}`);
+        setIsMobileThreadOpen(true);
         setDraft("");
         setAttachment(null);
       } catch (sendError) {
@@ -1045,6 +1056,7 @@ export function MessagesPage() {
         setDirectConversations((current) => mergeDirectConversation(current, response.conversation));
         setShowArchived(false);
         setManualSelectedId(`direct:${response.conversation.id}`);
+        setIsMobileThreadOpen(true);
         return;
       }
 
@@ -1055,6 +1067,7 @@ export function MessagesPage() {
         setArchivedDirectConversations((current) => mergeDirectConversation(current, { ...archivedConversation, archived: true }));
       }
       setManualSelectedId(null);
+      setIsMobileThreadOpen(false);
     } catch (archiveError) {
       setError(getApiErrorMessage(archiveError, "Impossible de mettre à jour cette conversation."));
     }
@@ -1100,7 +1113,7 @@ export function MessagesPage() {
 
         {error ? <p className="auth-form-error">{error}</p> : null}
 
-        <section className="member-card messages-shell-card">
+        <section className={isMobileThreadOpen ? "member-card messages-shell-card is-mobile-thread-open" : "member-card messages-shell-card"}>
           <aside className="messages-inbox">
             <div className="messages-inbox-head">
               <div>
@@ -1120,6 +1133,7 @@ export function MessagesPage() {
                 onClick={() => {
                   setShowArchived((current) => !current);
                   setManualSelectedId(null);
+                  setIsMobileThreadOpen(false);
                 }}
               >
                 <Archive aria-hidden="true" strokeWidth={1.8} />
@@ -1152,6 +1166,7 @@ export function MessagesPage() {
                         setDirectConversations((current) => mergeDirectConversation(current, result.conversation));
                       }
                       setManualSelectedId(`direct:${result.conversation.id}`);
+                      setIsMobileThreadOpen(true);
                     }}
                   >
                     <Search aria-hidden="true" strokeWidth={1.8} />
@@ -1170,7 +1185,10 @@ export function MessagesPage() {
                   key={conversation.id}
                   className={conversation.id === selectedConversation.id ? "messages-conversation is-selected" : "messages-conversation"}
                   type="button"
-                  onClick={() => setManualSelectedId(conversation.id)}
+                  onClick={() => {
+                    setManualSelectedId(conversation.id);
+                    setIsMobileThreadOpen(true);
+                  }}
                 >
                   <MessageAvatar
                     name={conversation.name}
@@ -1229,6 +1247,9 @@ export function MessagesPage() {
 
           <section className="messages-thread">
             <header className="messages-thread-header">
+              <button className="messages-back-button" type="button" onClick={() => setIsMobileThreadOpen(false)} aria-label="Retour aux conversations">
+                <ArrowLeft aria-hidden="true" strokeWidth={1.8} />
+              </button>
               <MessageAvatar
                 name={selectedConversation.name}
                 avatarUrl={selectedConversation.avatarUrl}
