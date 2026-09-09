@@ -235,7 +235,12 @@ export function MemberDashboard() {
   const [loadingReactionsPostId, setLoadingReactionsPostId] = useState("");
   const [previewMedia, setPreviewMedia] = useState<FeedMediaPreview | null>(null);
   const [publicationCapabilities, setPublicationCapabilities] = useState<PublicationCapability[]>([]);
+  const [targetPublicationId, setTargetPublicationId] = useState("");
+  const [highlightedPublicationId, setHighlightedPublicationId] = useState("");
+  const [targetPublicationNotice, setTargetPublicationNotice] = useState("");
   const feedLoadMoreRef = useRef<HTMLDivElement | null>(null);
+  const lastScrolledPublicationIdRef = useRef("");
+  const lastTargetCursorRef = useRef("");
 
   const displayName = getMemberDisplayName({ user, profile, organizationProfile, partnerProfile });
   const profileTitle = getMemberProfileTitle({ user, profile, organizationProfile, partnerProfile });
@@ -328,6 +333,32 @@ export function MemberDashboard() {
     };
   }, [previewMedia]);
 
+  useEffect(() => {
+    const readTargetPublication = () => {
+      const params = new URLSearchParams(window.location.search);
+      const queryTarget = params.get("publicationId") ?? "";
+      const hashMatch = window.location.hash.match(/^#publication-(.+)$/);
+      const hashTarget = hashMatch ? decodeURIComponent(hashMatch[1]) : "";
+      setTargetPublicationId(queryTarget || hashTarget);
+    };
+
+    readTargetPublication();
+    window.addEventListener("hashchange", readTargetPublication);
+    window.addEventListener("popstate", readTargetPublication);
+
+    return () => {
+      window.removeEventListener("hashchange", readTargetPublication);
+      window.removeEventListener("popstate", readTargetPublication);
+    };
+  }, []);
+
+  useEffect(() => {
+    lastScrolledPublicationIdRef.current = "";
+    lastTargetCursorRef.current = "";
+    setHighlightedPublicationId("");
+    setTargetPublicationNotice("");
+  }, [targetPublicationId]);
+
   const loadFeedPage = useCallback(async (cursor: string | null = null, append = false) => {
     if (!accessToken) {
       return;
@@ -398,6 +429,44 @@ export function MemberDashboard() {
       observer.disconnect();
     };
   }, [hasMoreFeed, isFeedLoading, isLoadingMoreFeed, loadFeedPage, nextFeedCursor]);
+
+  useEffect(() => {
+    if (!targetPublicationId || isFeedLoading || isLoadingMoreFeed) {
+      return;
+    }
+
+    const targetPost = feedPosts.find((post) => post.id === targetPublicationId);
+
+    if (targetPost) {
+      if (lastScrolledPublicationIdRef.current === targetPublicationId) {
+        return;
+      }
+
+      lastScrolledPublicationIdRef.current = targetPublicationId;
+      setHighlightedPublicationId(targetPublicationId);
+      setTargetPublicationNotice("");
+
+      window.setTimeout(() => {
+        document.getElementById(`publication-${targetPublicationId}`)?.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }, 80);
+
+      window.setTimeout(() => {
+        setHighlightedPublicationId((current) => current === targetPublicationId ? "" : current);
+      }, 4800);
+      return;
+    }
+
+    if (hasMoreFeed && nextFeedCursor && lastTargetCursorRef.current !== nextFeedCursor) {
+      lastTargetCursorRef.current = nextFeedCursor;
+      void loadFeedPage(nextFeedCursor, true);
+      return;
+    }
+
+    setTargetPublicationNotice("La publication ciblée n’est pas disponible dans votre fil ou n’est plus visible.");
+  }, [feedPosts, hasMoreFeed, isFeedLoading, isLoadingMoreFeed, loadFeedPage, nextFeedCursor, targetPublicationId]);
 
   async function reactToPost(post: Publication) {
     if (!accessToken || reactingPostId) {
@@ -484,7 +553,7 @@ export function MemberDashboard() {
         counts: { ...item.counts, shares: response.count },
       } : item));
 
-      const shareUrl = `${window.location.origin}${postDestinationHref(post)}`;
+      const shareUrl = `${window.location.origin}${postDeepLinkHref(post)}`;
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(shareUrl).catch(() => undefined);
       }
@@ -806,6 +875,7 @@ export function MemberDashboard() {
 
             {feedError ? <p className="auth-form-error">{feedError}</p> : null}
             {feedNotice ? <p className="member-feed-notice">{feedNotice}</p> : null}
+            {targetPublicationNotice ? <p className="member-feed-notice is-warning">{targetPublicationNotice}</p> : null}
 
             {isFeedLoading ? (
               <div className="member-feed-loading">
@@ -826,6 +896,7 @@ export function MemberDashboard() {
                     isReporting={reportingPostId === post.id}
                     isReportMenuOpen={reportMenuPostId === post.id}
                     isReported={reportedPostIds.has(post.id)}
+                    isHighlighted={highlightedPublicationId === post.id}
                     isCommentsOpen={openCommentsPostId === post.id}
                     isCommentsLoading={loadingCommentsPostId === post.id}
                     isCommentSubmitting={submittingCommentPostId === post.id}
@@ -1083,6 +1154,7 @@ function FeedPost({
   isReporting,
   isReportMenuOpen,
   isReported,
+  isHighlighted,
   isCommentsOpen,
   isCommentsLoading,
   isCommentSubmitting,
@@ -1121,6 +1193,7 @@ function FeedPost({
   isReporting: boolean;
   isReportMenuOpen: boolean;
   isReported: boolean;
+  isHighlighted: boolean;
   isCommentsOpen: boolean;
   isCommentsLoading: boolean;
   isCommentSubmitting: boolean;
@@ -1173,7 +1246,7 @@ function FeedPost({
   }, new Map());
 
   return (
-    <article className="feed-post member-feed-post">
+    <article id={`publication-${post.id}`} className={isHighlighted ? "feed-post member-feed-post is-targeted" : "feed-post member-feed-post"}>
       <header>
         <span className="feed-avatar">
           {post.author.avatarUrl ? <img src={post.author.avatarUrl} alt="" loading="lazy" decoding="async" /> : buildInitials(post.author.displayName)}
@@ -1570,6 +1643,11 @@ function postDestinationHref(post: Publication) {
   }
 
   return "/espace-membre/reseau";
+}
+
+function postDeepLinkHref(post: Pick<Publication, "id">) {
+  const publicationId = encodeURIComponent(post.id);
+  return `/espace-membre?publicationId=${publicationId}#publication-${publicationId}`;
 }
 
 function formatFeedDate(value: string) {

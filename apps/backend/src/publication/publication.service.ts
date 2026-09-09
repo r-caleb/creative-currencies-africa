@@ -603,7 +603,7 @@ export class PublicationService {
         type: NotificationType.MESSAGE,
         title: "Nouveau commentaire",
         message: `${this.displayName(user)} a commenté votre publication “${publication.title}”.`,
-        href: "/espace-membre",
+        href: this.hrefForFeedPublication(publication),
       }).catch(() => undefined);
     }
 
@@ -643,7 +643,7 @@ export class PublicationService {
         type: NotificationType.SYSTEM,
         title: "Commentaire supprimé",
         message: `Votre commentaire sous “${publication.title}” a été retiré par l'auteur de la publication.`,
-        href: "/espace-membre",
+        href: this.hrefForFeedPublication(publication),
       }).catch(() => undefined);
     }
 
@@ -701,7 +701,7 @@ export class PublicationService {
           type: NotificationType.SYSTEM,
           title: "Nouvelle réaction",
           message: `${this.displayName(user)} a réagi à votre publication “${publication.title}”.`,
-          href: "/espace-membre",
+          href: this.hrefForFeedPublication(publication),
         }).catch(() => undefined);
       }
     }
@@ -795,7 +795,7 @@ export class PublicationService {
         type: NotificationType.SYSTEM,
         title: "Publication partagée",
         message: `${this.displayName(user)} a partagé votre publication “${publication.title}”.`,
-        href: "/espace-membre",
+        href: this.hrefForFeedPublication(publication),
       }).catch(() => undefined);
     }
 
@@ -1369,7 +1369,7 @@ export class PublicationService {
       return;
     }
 
-    const href = this.hrefForPublication(publication);
+    const href = this.hrefForFeedPublication(publication);
     const authorName = this.displayName(author);
 
     await Promise.all(
@@ -1415,6 +1415,11 @@ export class PublicationService {
     }
 
     return "/espace-membre";
+  }
+
+  private hrefForFeedPublication(publication: Pick<PublicationWithRelations, "id">) {
+    const publicationId = encodeURIComponent(publication.id);
+    return `/espace-membre?publicationId=${publicationId}#publication-${publicationId}`;
   }
 
   private displayName(user: ActiveUser) {
