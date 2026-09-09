@@ -127,6 +127,7 @@ export function MessagesPage() {
   const openedMemberRef = useRef<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const composerInputRef = useRef<HTMLInputElement | null>(null);
+  const threadBodyRef = useRef<HTMLDivElement | null>(null);
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const activeRoomSocketRef = useRef<RealtimeSocket | null>(null);
@@ -479,6 +480,20 @@ export function MessagesPage() {
     setPreviewAttachment(null);
     composerInputRef.current?.focus({ preventScroll: true });
   }, [selectedConversation.id]);
+
+  useEffect(() => {
+    if (selectedConversation.id === emptyConversation.id || isLoadingThread) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      if (threadBodyRef.current) {
+        threadBodyRef.current.scrollTop = threadBodyRef.current.scrollHeight;
+      }
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [isLoadingThread, messages.length, selectedConversation.id]);
 
   useEffect(() => {
     if (!previewAttachment) {
@@ -1254,7 +1269,7 @@ export function MessagesPage() {
               )}
             </header>
 
-            <div className="messages-thread-body" aria-label="Messages de la conversation" aria-busy={isLoadingThread}>
+            <div ref={threadBodyRef} className="messages-thread-body" aria-label="Messages de la conversation" aria-busy={isLoadingThread}>
               {isLoadingThread ? (
                 <div className="messages-empty-state">
                   <LoaderCircle aria-hidden="true" className="spin-icon" />

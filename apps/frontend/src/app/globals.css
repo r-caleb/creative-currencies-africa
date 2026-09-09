@@ -14365,8 +14365,8 @@ img.member-profile-avatar {
 .member-shell .messages-shell-card {
   display: grid;
   grid-template-columns: minmax(320px, 0.36fr) minmax(0, 1fr);
-  height: min(760px, calc(100vh - 240px));
-  min-height: 620px;
+  height: clamp(420px, calc(100dvh - 340px), 760px);
+  min-height: 0;
   overflow: hidden;
   padding: 0;
 }
@@ -14391,6 +14391,8 @@ img.member-profile-avatar {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   gap: 14px;
+  min-height: 0;
+  overflow: hidden;
   border-right: 1px solid var(--member-line);
   padding: 16px;
   background: color-mix(in srgb, var(--member-bg-soft) 84%, var(--member-surface));
@@ -14619,8 +14621,11 @@ img.member-profile-avatar {
 
 .member-shell .messages-thread {
   min-width: 0;
+  min-height: 0;
+  height: 100%;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
   background: var(--member-surface);
 }
 
@@ -14651,10 +14656,11 @@ img.member-profile-avatar {
 
 .member-shell .messages-thread-body {
   display: grid;
-  align-content: end;
+  align-content: start;
   gap: 10px;
   overflow-y: auto;
   min-height: 0;
+  scrollbar-gutter: stable;
   padding: 22px;
   background:
     radial-gradient(circle at 20% 0%, color-mix(in srgb, var(--member-gold) 8%, transparent), transparent 20rem),
