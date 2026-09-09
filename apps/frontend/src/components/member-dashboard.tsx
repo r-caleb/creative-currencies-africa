@@ -43,6 +43,11 @@ type QuickPublishAction = {
   href: string;
   icon: LucideIcon;
 };
+type CommentPagination = {
+  nextCursor: string | null;
+  hasMore: boolean;
+  total: number;
+};
 type DashboardRoleConfig = {
   kicker: string;
   heroTitle: (name: string) => string;
@@ -69,6 +74,7 @@ const quickPublishActions: QuickPublishAction[] = [
   { type: "TRAINING", label: "Formation", href: "/espace-membre/publier?type=TRAINING", icon: Newspaper },
 ];
 const feedPageSize = 12;
+const commentPageSize = 8;
 const reportReasons: Array<{ value: ReportReason; label: string }> = [
   { value: "SPAM", label: "Spam ou contenu répétitif" },
   { value: "MISLEADING", label: "Information trompeuse" },
@@ -210,6 +216,7 @@ export function MemberDashboard() {
   const [connectingAuthorId, setConnectingAuthorId] = useState("");
   const [openCommentsPostId, setOpenCommentsPostId] = useState("");
   const [commentsByPostId, setCommentsByPostId] = useState<Map<string, PublicationComment[]>>(() => new Map());
+  const [commentPaginationByPostId, setCommentPaginationByPostId] = useState<Map<string, CommentPagination>>(() => new Map());
   const [commentDrafts, setCommentDrafts] = useState<Map<string, string>>(() => new Map());
   const [replyTargets, setReplyTargets] = useState<Map<string, PublicationComment>>(() => new Map());
   const [loadingCommentsPostId, setLoadingCommentsPostId] = useState("");
@@ -495,6 +502,34 @@ export function MemberDashboard() {
     }
   }
 
+  async function loadCommentsPage(postId: string, cursor?: string | null) {
+    if (!accessToken || loadingCommentsPostId) {
+      return;
+    }
+
+    setLoadingCommentsPostId(postId);
+
+    try {
+      const page = await getPublicationComments(accessToken, postId, { limit: commentPageSize, cursor: cursor ?? undefined });
+      setCommentsByPostId((current) => {
+        const next = new Map(current);
+        const currentComments = cursor ? next.get(postId) ?? [] : [];
+        const seenIds = new Set(currentComments.map((comment) => comment.id));
+        next.set(postId, [...currentComments, ...page.items.filter((comment) => !seenIds.has(comment.id))]);
+        return next;
+      });
+      setCommentPaginationByPostId((current) => new Map(current).set(postId, {
+        nextCursor: page.nextCursor,
+        hasMore: page.hasMore,
+        total: page.total,
+      }));
+    } catch (requestError) {
+      setFeedError(getApiErrorMessage(requestError, "Impossible de charger les commentaires pour le moment."));
+    } finally {
+      setLoadingCommentsPostId("");
+    }
+  }
+
   async function toggleComments(postId: string) {
     if (openCommentsPostId === postId) {
       setOpenCommentsPostId("");
@@ -507,16 +542,7 @@ export function MemberDashboard() {
       return;
     }
 
-    setLoadingCommentsPostId(postId);
-
-    try {
-      const comments = await getPublicationComments(accessToken, postId);
-      setCommentsByPostId((current) => new Map(current).set(postId, comments));
-    } catch (requestError) {
-      setFeedError(getApiErrorMessage(requestError, "Impossible de charger les commentaires pour le moment."));
-    } finally {
-      setLoadingCommentsPostId("");
-    }
+    await loadCommentsPage(postId);
   }
 
   function updateCommentDraft(postId: string, value: string) {
@@ -565,8 +591,20 @@ export function MemberDashboard() {
       const comment = await commentPublication(accessToken, post.id, content, replyTarget?.id);
       setCommentsByPostId((current) => {
         const next = new Map(current);
-        next.set(post.id, [...(next.get(post.id) ?? []), comment]);
+        const currentComments = next.get(post.id) ?? [];
+        next.set(post.id, replyTarget ? [...currentComments, comment] : [comment, ...currentComments]);
         return next;
+      });
+      setCommentPaginationByPostId((current) => {
+        const previous = current.get(post.id);
+        if (!previous) {
+          return current;
+        }
+
+        return new Map(current).set(post.id, {
+          ...previous,
+          total: previous.total + 1,
+        });
       });
       setFeedPosts((current) => current.map((item) => item.id === post.id ? {
         ...item,
@@ -613,6 +651,17 @@ export function MemberDashboard() {
           ...item,
           counts: { ...item.counts, comments: Math.max(0, item.counts.comments - removedIds.size) },
         } : item));
+        setCommentPaginationByPostId((items) => {
+          const previous = items.get(post.id);
+          if (!previous) {
+            return items;
+          }
+
+          return new Map(items).set(post.id, {
+            ...previous,
+            total: Math.max(0, previous.total - removedIds.size),
+          });
+        });
         return next;
       });
     } catch (requestError) {
@@ -753,6 +802,7 @@ export function MemberDashboard() {
                     isReactionsOpen={openReactionsPostId === post.id}
                     isReactionsLoading={loadingReactionsPostId === post.id}
                     comments={commentsByPostId.get(post.id) ?? []}
+                    commentPagination={commentPaginationByPostId.get(post.id) ?? null}
                     commentDraft={commentDrafts.get(post.id) ?? ""}
                     replyTarget={replyTargets.get(post.id) ?? null}
                     reactionUsers={reactionUsersByPostId.get(post.id) ?? []}
@@ -767,6 +817,7 @@ export function MemberDashboard() {
                     onToggleReportMenu={() => setReportMenuPostId((current) => current === post.id ? "" : post.id)}
                     onReport={(reason) => reportPost(post, reason)}
                     onToggleComments={() => toggleComments(post.id)}
+                    onLoadMoreComments={() => loadCommentsPage(post.id, commentPaginationByPostId.get(post.id)?.nextCursor)}
                     onCommentDraftChange={(value) => updateCommentDraft(post.id, value)}
                     onSubmitComment={(event) => submitComment(event, post)}
                     onReply={(comment) => selectReplyTarget(post.id, comment)}
@@ -989,6 +1040,7 @@ function FeedPost({
   isReactionsOpen,
   isReactionsLoading,
   comments,
+  commentPagination,
   commentDraft,
   replyTarget,
   reactionUsers,
@@ -1003,6 +1055,7 @@ function FeedPost({
   onToggleReportMenu,
   onReport,
   onToggleComments,
+  onLoadMoreComments,
   onCommentDraftChange,
   onSubmitComment,
   onReply,
@@ -1024,6 +1077,7 @@ function FeedPost({
   isReactionsOpen: boolean;
   isReactionsLoading: boolean;
   comments: PublicationComment[];
+  commentPagination: CommentPagination | null;
   commentDraft: string;
   replyTarget: PublicationComment | null;
   reactionUsers: PublicationReactionUser[];
@@ -1038,6 +1092,7 @@ function FeedPost({
   onToggleReportMenu: () => void;
   onReport: (reason: ReportReason) => void;
   onToggleComments: () => void;
+  onLoadMoreComments: () => void;
   onCommentDraftChange: (value: string) => void;
   onSubmitComment: (event: FormEvent<HTMLFormElement>) => void;
   onReply: (comment: PublicationComment) => void;
@@ -1189,7 +1244,7 @@ function FeedPost({
 
       {isCommentsOpen ? (
         <section className="feed-comments-panel" aria-label={`Commentaires sur ${post.title}`}>
-          {isCommentsLoading ? (
+          {isCommentsLoading && !comments.length ? (
             <div className="feed-comments-loading">
               <Loader2 aria-hidden="true" strokeWidth={1.8} />
               <span>Chargement des commentaires...</span>
@@ -1215,6 +1270,21 @@ function FeedPost({
           ) : (
             <p className="feed-comments-empty">Soyez le premier à commenter cette publication.</p>
           )}
+
+          {commentPagination?.hasMore ? (
+            <button className="feed-comments-more" type="button" disabled={isCommentsLoading} onClick={onLoadMoreComments}>
+              {isCommentsLoading ? (
+                <>
+                  <Loader2 aria-hidden="true" strokeWidth={1.8} />
+                  Chargement...
+                </>
+              ) : (
+                `Voir plus de commentaires${commentPagination.total > comments.length ? ` (${Math.max(0, commentPagination.total - comments.length)} restants)` : ""}`
+              )}
+            </button>
+          ) : comments.length && commentPagination?.total ? (
+            <span className="feed-comments-end">Tous les commentaires visibles sont chargés.</span>
+          ) : null}
 
           <form className="feed-comment-form" onSubmit={onSubmitComment}>
             {replyTarget ? (

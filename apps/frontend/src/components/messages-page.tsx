@@ -7,6 +7,9 @@ import {
   ArrowUp,
   Archive,
   Ban,
+  Download,
+  ExternalLink,
+  FileText,
   Flag,
   Hash,
   Image as ImageIcon,
@@ -17,7 +20,9 @@ import {
   Send,
   SquarePen,
   UsersRound,
+  Video,
   Wifi,
+  X,
 } from "lucide-react";
 import { MemberShell } from "@/components/member-shell";
 import { useVisibleItems } from "@/hooks/use-visible-items";
@@ -42,7 +47,7 @@ import {
   unarchiveDirectConversation,
   uploadMessageAttachment,
 } from "@/lib/api";
-import type { CommunityGroup, CommunityGroupMessage, DirectConversation, DirectConversationAttachment, DirectMessage, DirectMessageSearchResponse, NetworkMember } from "@/lib/api";
+import type { CommunityGroup, CommunityGroupMessage, DirectConversation, DirectConversationAttachment, DirectMessage, DirectMessageReportReason, DirectMessageSearchResponse, NetworkMember } from "@/lib/api";
 import { buildInitials } from "@/lib/member-display";
 import { normalizeProfileOption } from "@/lib/profile-options";
 import { connectRealtimeSocket } from "@/lib/realtime";
@@ -64,6 +69,13 @@ type ConversationMessage = {
   };
 };
 
+type MessageAttachmentPreview = {
+  url: string;
+  name: string;
+  mimeType?: string | null;
+  kind: "image" | "video" | "file";
+};
+
 type Conversation = {
   id: string;
   name: string;
@@ -81,6 +93,19 @@ type Conversation = {
   isJoined?: boolean;
   messages: ConversationMessage[];
 };
+
+type MessageReportTarget = {
+  kind: "direct" | "group";
+  messageId: string;
+};
+
+const messageReportReasons: Array<{ value: DirectMessageReportReason; label: string; description: string }> = [
+  { value: "SPAM", label: "Spam", description: "Message répétitif, publicité abusive ou tentative d'arnaque." },
+  { value: "ABUSE", label: "Abus", description: "Comportement agressif, pression ou usage malveillant." },
+  { value: "HARASSMENT", label: "Harcèlement", description: "Attaques personnelles, intimidation ou propos ciblés." },
+  { value: "INAPPROPRIATE", label: "Inapproprié", description: "Contenu déplacé ou contraire à l'esprit de la communauté." },
+  { value: "OTHER", label: "Autre", description: "Un autre problème que l'équipe CCA doit vérifier." },
+];
 
 const emptyConversation: Conversation = {
   id: "empty",
@@ -128,6 +153,11 @@ export function MessagesPage() {
   const [isBlockingUser, setIsBlockingUser] = useState(false);
   const [reportedDirectMessageIds, setReportedDirectMessageIds] = useState<Set<string>>(() => new Set());
   const [reportedGroupMessageIds, setReportedGroupMessageIds] = useState<Set<string>>(() => new Set());
+  const [reportTarget, setReportTarget] = useState<MessageReportTarget | null>(null);
+  const [reportReason, setReportReason] = useState<DirectMessageReportReason | "">("");
+  const [reportNote, setReportNote] = useState("");
+  const [reportingMessageId, setReportingMessageId] = useState("");
+  const [previewAttachment, setPreviewAttachment] = useState<MessageAttachmentPreview | null>(null);
   const [startingMemberId, setStartingMemberId] = useState<string | null>(null);
   const [error, setError] = useState("");
 
@@ -446,8 +476,30 @@ export function MessagesPage() {
       return;
     }
 
-    composerInputRef.current?.focus();
+    setPreviewAttachment(null);
+    composerInputRef.current?.focus({ preventScroll: true });
   }, [selectedConversation.id]);
+
+  useEffect(() => {
+    if (!previewAttachment) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setPreviewAttachment(null);
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [previewAttachment]);
 
   useEffect(() => {
     const shouldLoadMessages = selectedDirectConversationId && !directMessages[selectedDirectConversationId];
@@ -901,39 +953,66 @@ export function MessagesPage() {
     setError("Sélectionnez un membre ou un groupe avant d'écrire.");
   };
 
+  const openReportPanel = (target: MessageReportTarget) => {
+    setReportTarget((current) => {
+      if (current?.kind === target.kind && current.messageId === target.messageId) {
+        return null;
+      }
+
+      return target;
+    });
+    setReportReason("");
+    setReportNote("");
+    setError("");
+  };
+
+  const closeReportPanel = () => {
+    setReportTarget(null);
+    setReportReason("");
+    setReportNote("");
+  };
+
   const handleReportDirectMessage = async (message: ConversationMessage) => {
-    if (!accessToken || !selectedDirectConversationId || !message.source) {
+    if (!accessToken || !selectedDirectConversationId || !message.source || !reportReason) {
       return;
     }
 
     setError("");
+    setReportingMessageId(message.id);
 
     try {
       await reportDirectMessage(accessToken, selectedDirectConversationId, message.id, {
-        reason: "INAPPROPRIATE",
-        message: "Signalement depuis la messagerie membre.",
+        reason: reportReason,
+        message: reportNote.trim() || undefined,
       });
       setReportedDirectMessageIds((current) => new Set(current).add(message.id));
+      closeReportPanel();
     } catch (reportError) {
       setError(getApiErrorMessage(reportError, "Impossible de signaler ce message pour le moment."));
+    } finally {
+      setReportingMessageId("");
     }
   };
 
   const handleReportGroupMessage = async (message: ConversationMessage) => {
-    if (!accessToken || !selectedGroupId || !message.groupSource) {
+    if (!accessToken || !selectedGroupId || !message.groupSource || !reportReason) {
       return;
     }
 
     setError("");
+    setReportingMessageId(message.id);
 
     try {
       await reportCommunityGroupMessage(accessToken, selectedGroupId, message.id, {
-        reason: "INAPPROPRIATE",
-        message: "Signalement depuis une discussion de groupe.",
+        reason: reportReason,
+        message: reportNote.trim() || undefined,
       });
       setReportedGroupMessageIds((current) => new Set(current).add(message.id));
+      closeReportPanel();
     } catch (reportError) {
       setError(getApiErrorMessage(reportError, "Impossible de signaler ce message de groupe pour le moment."));
+    } finally {
+      setReportingMessageId("");
     }
   };
 
@@ -1186,13 +1265,14 @@ export function MessagesPage() {
                   {messages.map((message) => (
                     <article key={message.id} className={message.author === "me" ? "message-bubble is-mine" : "message-bubble"}>
                       <p>{message.body}</p>
-                      {message.attachment ? <MessageAttachment attachment={message.attachment} /> : null}
+                      {message.attachment ? <MessageAttachment attachment={message.attachment} onPreview={setPreviewAttachment} /> : null}
                       {message.author === "them" && isDirectConversation && message.source && !message.source.deletedAt ? (
                         <button
                           className="message-report-button"
                           type="button"
                           disabled={reportedDirectMessageIds.has(message.id)}
-                          onClick={() => handleReportDirectMessage(message)}
+                          aria-expanded={reportTarget?.kind === "direct" && reportTarget.messageId === message.id}
+                          onClick={() => openReportPanel({ kind: "direct", messageId: message.id })}
                         >
                           <Flag aria-hidden="true" strokeWidth={1.8} />
                           {reportedDirectMessageIds.has(message.id) ? "Signalé" : "Signaler"}
@@ -1203,11 +1283,23 @@ export function MessagesPage() {
                           className="message-report-button"
                           type="button"
                           disabled={reportedGroupMessageIds.has(message.id)}
-                          onClick={() => handleReportGroupMessage(message)}
+                          aria-expanded={reportTarget?.kind === "group" && reportTarget.messageId === message.id}
+                          onClick={() => openReportPanel({ kind: "group", messageId: message.id })}
                         >
                           <Flag aria-hidden="true" strokeWidth={1.8} />
                           {reportedGroupMessageIds.has(message.id) ? "Signalé" : "Signaler"}
                         </button>
+                      ) : null}
+                      {reportTarget?.messageId === message.id ? (
+                        <MessageReportPanel
+                          reason={reportReason}
+                          note={reportNote}
+                          isSubmitting={reportingMessageId === message.id}
+                          onReasonChange={setReportReason}
+                          onNoteChange={setReportNote}
+                          onCancel={closeReportPanel}
+                          onSubmit={() => reportTarget.kind === "direct" ? handleReportDirectMessage(message) : handleReportGroupMessage(message)}
+                        />
                       ) : null}
                       <small>
                         {message.time}
@@ -1242,19 +1334,36 @@ export function MessagesPage() {
                   <span>{conversationAttachments.length} fichier{conversationAttachments.length > 1 ? "s" : ""}</span>
                 </div>
                 <div>
-                  {conversationAttachments.slice(0, 6).map((item) => (
-                    <a key={item.id} href={item.url ?? "#"} target="_blank" rel="noreferrer">
-                      {item.kind === "image" ? <ImageIcon aria-hidden="true" /> : <Paperclip aria-hidden="true" />}
-                      <span>{item.name}</span>
-                    </a>
-                  ))}
+                  {conversationAttachments.slice(0, 6).map((item) => {
+                    if (!item.url) {
+                      return (
+                        <button key={item.id} type="button" disabled>
+                          <Paperclip aria-hidden="true" />
+                          <span>{item.name}</span>
+                        </button>
+                      );
+                    }
+
+                    const panelAttachment = toPreviewAttachment({
+                      url: item.url,
+                      name: item.name,
+                      mimeType: item.mimeType,
+                    });
+
+                    return (
+                      <button key={item.id} type="button" onClick={() => setPreviewAttachment(panelAttachment)}>
+                        {panelAttachment.kind === "image" ? <ImageIcon aria-hidden="true" /> : panelAttachment.kind === "video" ? <Video aria-hidden="true" /> : <FileText aria-hidden="true" />}
+                        <span>{item.name}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </aside>
             ) : null}
 
             {attachment ? (
               <div className="messages-attachment-preview">
-                <MessageAttachment attachment={attachment} />
+                <MessageAttachment attachment={attachment} onPreview={setPreviewAttachment} />
                 <button type="button" onClick={() => setAttachment(null)} disabled={isSending}>
                   Retirer
                 </button>
@@ -1283,7 +1392,100 @@ export function MessagesPage() {
           </section>
         </section>
       </div>
+      {previewAttachment ? (
+        <div className="message-attachment-lightbox" role="dialog" aria-modal="true" aria-label={previewAttachment.name}>
+          <button
+            className="message-attachment-lightbox-close"
+            type="button"
+            onClick={() => setPreviewAttachment(null)}
+            aria-label="Fermer l'aperçu"
+          >
+            <X aria-hidden="true" strokeWidth={1.8} />
+          </button>
+          <figure>
+            {previewAttachment.kind === "image" ? (
+              <img src={previewAttachment.url} alt={previewAttachment.name} />
+            ) : previewAttachment.kind === "video" ? (
+              <video src={previewAttachment.url} controls playsInline />
+            ) : (
+              <div className="message-attachment-file-preview">
+                <FileText aria-hidden="true" strokeWidth={1.7} />
+                <strong>{previewAttachment.name}</strong>
+                <span>Ce fichier peut être ouvert ou téléchargé dans un nouvel onglet.</span>
+              </div>
+            )}
+            <figcaption>
+              <strong>{previewAttachment.name}</strong>
+              <div>
+                <a href={previewAttachment.url} target="_blank" rel="noreferrer">
+                  <ExternalLink aria-hidden="true" strokeWidth={1.8} />
+                  Ouvrir
+                </a>
+                <a href={previewAttachment.url} download>
+                  <Download aria-hidden="true" strokeWidth={1.8} />
+                  Télécharger
+                </a>
+              </div>
+            </figcaption>
+          </figure>
+        </div>
+      ) : null}
     </MemberShell>
+  );
+}
+
+function MessageReportPanel({
+  reason,
+  note,
+  isSubmitting,
+  onReasonChange,
+  onNoteChange,
+  onCancel,
+  onSubmit,
+}: {
+  reason: DirectMessageReportReason | "";
+  note: string;
+  isSubmitting: boolean;
+  onReasonChange: (reason: DirectMessageReportReason) => void;
+  onNoteChange: (note: string) => void;
+  onCancel: () => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <section className="message-report-panel" aria-label="Choisir la raison du signalement">
+      <div>
+        <strong>Pourquoi signaler ce message ?</strong>
+        <span>L'équipe CCA vérifiera le contenu et le contexte de la discussion.</span>
+      </div>
+      <div className="message-report-reasons">
+        {messageReportReasons.map((item) => (
+          <button
+            key={item.value}
+            type="button"
+            className={reason === item.value ? "is-selected" : undefined}
+            onClick={() => onReasonChange(item.value)}
+          >
+            <strong>{item.label}</strong>
+            <span>{item.description}</span>
+          </button>
+        ))}
+      </div>
+      <textarea
+        value={note}
+        maxLength={700}
+        rows={3}
+        onChange={(event) => onNoteChange(event.target.value)}
+        placeholder="Ajouter une précision utile pour l'équipe CCA..."
+      />
+      <div className="message-report-actions">
+        <button type="button" onClick={onCancel} disabled={isSubmitting}>
+          Annuler
+        </button>
+        <button type="button" className="is-danger" disabled={!reason || isSubmitting} onClick={onSubmit}>
+          {isSubmitting ? "Envoi..." : "Envoyer le signalement"}
+        </button>
+      </div>
+    </section>
   );
 }
 
@@ -1314,19 +1516,64 @@ function MessageAvatar({
   );
 }
 
-function MessageAttachment({ attachment }: { attachment: NonNullable<ConversationMessage["attachment"]> }) {
-  const isImage = attachment.mimeType?.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(attachment.url);
+function MessageAttachment({
+  attachment,
+  onPreview,
+}: {
+  attachment: NonNullable<ConversationMessage["attachment"]>;
+  onPreview: (attachment: MessageAttachmentPreview) => void;
+}) {
+  const previewAttachment = toPreviewAttachment(attachment);
 
   return (
-    <a className={isImage ? "message-attachment is-image" : "message-attachment"} href={attachment.url} target="_blank" rel="noreferrer">
-      {isImage ? (
+    <button
+      className={previewAttachment.kind === "image" ? "message-attachment is-image" : `message-attachment is-${previewAttachment.kind}`}
+      type="button"
+      onClick={() => onPreview(previewAttachment)}
+    >
+      {previewAttachment.kind === "image" ? (
         <img src={attachment.url} alt="" loading="lazy" decoding="async" />
+      ) : previewAttachment.kind === "video" ? (
+        <span className="message-attachment-icon">
+          <Video aria-hidden="true" />
+        </span>
       ) : (
-        <Paperclip aria-hidden="true" />
+        <span className="message-attachment-icon">
+          <Paperclip aria-hidden="true" />
+        </span>
       )}
       <span>{attachment.name}</span>
-    </a>
+    </button>
   );
+}
+
+function toPreviewAttachment(attachment: NonNullable<ConversationMessage["attachment"]>): MessageAttachmentPreview {
+  return {
+    ...attachment,
+    kind: getAttachmentKind(attachment.url, attachment.mimeType),
+  };
+}
+
+function getAttachmentKind(url: string, mimeType?: string | null): MessageAttachmentPreview["kind"] {
+  const cleanUrl = stripUrlSearch(url);
+
+  if (mimeType?.startsWith("image/") || /\.(png|jpe?g|webp|gif|avif|svg)$/i.test(cleanUrl)) {
+    return "image";
+  }
+
+  if (mimeType?.startsWith("video/") || /\.(mp4|webm|mov|m4v|ogg|ogv)$/i.test(cleanUrl)) {
+    return "video";
+  }
+
+  return "file";
+}
+
+function stripUrlSearch(url: string) {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return url.split("?")[0] ?? url;
+  }
 }
 
 function versionedImageUrl(url: string, version?: string) {
