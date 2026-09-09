@@ -14725,6 +14725,9 @@ img.member-profile-avatar {
   color: inherit;
   background: color-mix(in srgb, var(--member-surface) 64%, transparent);
   text-decoration: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .member-shell .message-attachment:hover,
@@ -14757,6 +14760,147 @@ img.member-profile-avatar {
   display: block;
   border-radius: 7px;
   object-fit: cover;
+}
+
+.member-shell .message-attachment-icon {
+  width: 22px;
+  height: 22px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--member-purple) 12%, transparent);
+}
+
+.member-shell .message-attachment-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.message-attachment-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 240;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(3, 5, 12, 0.86);
+  backdrop-filter: blur(18px);
+}
+
+.message-attachment-lightbox figure {
+  width: min(980px, 100%);
+  max-height: calc(100dvh - 48px);
+  display: grid;
+  gap: 14px;
+  margin: 0;
+}
+
+.message-attachment-lightbox img,
+.message-attachment-lightbox video {
+  max-width: 100%;
+  max-height: calc(100dvh - 168px);
+  display: block;
+  margin: 0 auto;
+  border-radius: 8px;
+  background: #05070d;
+  object-fit: contain;
+  box-shadow: 0 26px 86px rgba(0, 0, 0, 0.42);
+}
+
+.message-attachment-file-preview {
+  min-height: min(420px, calc(100dvh - 196px));
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 12px;
+  padding: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  color: #fff;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+  text-align: center;
+}
+
+.message-attachment-file-preview svg {
+  width: 54px;
+  height: 54px;
+  color: var(--member-gold);
+}
+
+.message-attachment-file-preview strong {
+  max-width: min(520px, 100%);
+  overflow-wrap: anywhere;
+  font-size: 1.05rem;
+  font-weight: 950;
+}
+
+.message-attachment-file-preview span {
+  max-width: 460px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.message-attachment-lightbox figcaption {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  color: #fff;
+  text-align: center;
+}
+
+.message-attachment-lightbox figcaption > strong {
+  max-width: min(620px, 100%);
+  overflow-wrap: anywhere;
+  font-size: 0.98rem;
+  font-weight: 950;
+}
+
+.message-attachment-lightbox figcaption div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.message-attachment-lightbox figcaption a,
+.message-attachment-lightbox-close {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  text-decoration: none;
+  font-weight: 900;
+}
+
+.message-attachment-lightbox figcaption a {
+  padding: 0 15px;
+}
+
+.message-attachment-lightbox figcaption a svg {
+  width: 17px;
+  height: 17px;
+}
+
+.message-attachment-lightbox-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 46px;
+}
+
+.message-attachment-lightbox figcaption a:hover,
+.message-attachment-lightbox figcaption a:focus,
+.message-attachment-lightbox-close:hover,
+.message-attachment-lightbox-close:focus {
+  border-color: rgba(255, 255, 255, 0.46);
+  background: rgba(255, 255, 255, 0.18);
+  outline: none;
 }
 
 .member-shell .messages-typing-indicator {
@@ -14864,7 +15008,8 @@ img.member-profile-avatar {
   padding-bottom: 2px;
 }
 
-.member-shell .messages-attachments-panel a {
+.member-shell .messages-attachments-panel a,
+.member-shell .messages-attachments-panel button {
   min-width: 150px;
   max-width: 210px;
   display: grid;
@@ -14877,12 +15022,22 @@ img.member-profile-avatar {
   color: var(--member-text);
   background: var(--member-surface);
   text-decoration: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .member-shell .messages-attachments-panel a:hover,
-.member-shell .messages-attachments-panel a:focus {
+.member-shell .messages-attachments-panel a:focus,
+.member-shell .messages-attachments-panel button:hover,
+.member-shell .messages-attachments-panel button:focus {
   border-color: color-mix(in srgb, var(--member-purple) 42%, var(--member-line));
   outline: none;
+}
+
+.member-shell .messages-attachments-panel button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
 }
 
 .member-shell .messages-attachments-panel svg {
@@ -14891,7 +15046,8 @@ img.member-profile-avatar {
   color: var(--member-purple);
 }
 
-.member-shell .messages-attachments-panel a span {
+.member-shell .messages-attachments-panel a span,
+.member-shell .messages-attachments-panel button span {
   overflow: hidden;
   color: var(--member-text);
   text-overflow: ellipsis;

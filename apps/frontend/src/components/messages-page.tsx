@@ -7,6 +7,9 @@ import {
   ArrowUp,
   Archive,
   Ban,
+  Download,
+  ExternalLink,
+  FileText,
   Flag,
   Hash,
   Image as ImageIcon,
@@ -17,7 +20,9 @@ import {
   Send,
   SquarePen,
   UsersRound,
+  Video,
   Wifi,
+  X,
 } from "lucide-react";
 import { MemberShell } from "@/components/member-shell";
 import { useVisibleItems } from "@/hooks/use-visible-items";
@@ -62,6 +67,13 @@ type ConversationMessage = {
     name: string;
     mimeType?: string | null;
   };
+};
+
+type MessageAttachmentPreview = {
+  url: string;
+  name: string;
+  mimeType?: string | null;
+  kind: "image" | "video" | "file";
 };
 
 type Conversation = {
@@ -145,6 +157,7 @@ export function MessagesPage() {
   const [reportReason, setReportReason] = useState<DirectMessageReportReason | "">("");
   const [reportNote, setReportNote] = useState("");
   const [reportingMessageId, setReportingMessageId] = useState("");
+  const [previewAttachment, setPreviewAttachment] = useState<MessageAttachmentPreview | null>(null);
   const [startingMemberId, setStartingMemberId] = useState<string | null>(null);
   const [error, setError] = useState("");
 
@@ -463,8 +476,30 @@ export function MessagesPage() {
       return;
     }
 
-    composerInputRef.current?.focus();
+    setPreviewAttachment(null);
+    composerInputRef.current?.focus({ preventScroll: true });
   }, [selectedConversation.id]);
+
+  useEffect(() => {
+    if (!previewAttachment) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setPreviewAttachment(null);
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [previewAttachment]);
 
   useEffect(() => {
     const shouldLoadMessages = selectedDirectConversationId && !directMessages[selectedDirectConversationId];
@@ -1230,7 +1265,7 @@ export function MessagesPage() {
                   {messages.map((message) => (
                     <article key={message.id} className={message.author === "me" ? "message-bubble is-mine" : "message-bubble"}>
                       <p>{message.body}</p>
-                      {message.attachment ? <MessageAttachment attachment={message.attachment} /> : null}
+                      {message.attachment ? <MessageAttachment attachment={message.attachment} onPreview={setPreviewAttachment} /> : null}
                       {message.author === "them" && isDirectConversation && message.source && !message.source.deletedAt ? (
                         <button
                           className="message-report-button"
@@ -1299,19 +1334,36 @@ export function MessagesPage() {
                   <span>{conversationAttachments.length} fichier{conversationAttachments.length > 1 ? "s" : ""}</span>
                 </div>
                 <div>
-                  {conversationAttachments.slice(0, 6).map((item) => (
-                    <a key={item.id} href={item.url ?? "#"} target="_blank" rel="noreferrer">
-                      {item.kind === "image" ? <ImageIcon aria-hidden="true" /> : <Paperclip aria-hidden="true" />}
-                      <span>{item.name}</span>
-                    </a>
-                  ))}
+                  {conversationAttachments.slice(0, 6).map((item) => {
+                    if (!item.url) {
+                      return (
+                        <button key={item.id} type="button" disabled>
+                          <Paperclip aria-hidden="true" />
+                          <span>{item.name}</span>
+                        </button>
+                      );
+                    }
+
+                    const panelAttachment = toPreviewAttachment({
+                      url: item.url,
+                      name: item.name,
+                      mimeType: item.mimeType,
+                    });
+
+                    return (
+                      <button key={item.id} type="button" onClick={() => setPreviewAttachment(panelAttachment)}>
+                        {panelAttachment.kind === "image" ? <ImageIcon aria-hidden="true" /> : panelAttachment.kind === "video" ? <Video aria-hidden="true" /> : <FileText aria-hidden="true" />}
+                        <span>{item.name}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </aside>
             ) : null}
 
             {attachment ? (
               <div className="messages-attachment-preview">
-                <MessageAttachment attachment={attachment} />
+                <MessageAttachment attachment={attachment} onPreview={setPreviewAttachment} />
                 <button type="button" onClick={() => setAttachment(null)} disabled={isSending}>
                   Retirer
                 </button>
@@ -1340,6 +1392,44 @@ export function MessagesPage() {
           </section>
         </section>
       </div>
+      {previewAttachment ? (
+        <div className="message-attachment-lightbox" role="dialog" aria-modal="true" aria-label={previewAttachment.name}>
+          <button
+            className="message-attachment-lightbox-close"
+            type="button"
+            onClick={() => setPreviewAttachment(null)}
+            aria-label="Fermer l'aperçu"
+          >
+            <X aria-hidden="true" strokeWidth={1.8} />
+          </button>
+          <figure>
+            {previewAttachment.kind === "image" ? (
+              <img src={previewAttachment.url} alt={previewAttachment.name} />
+            ) : previewAttachment.kind === "video" ? (
+              <video src={previewAttachment.url} controls playsInline />
+            ) : (
+              <div className="message-attachment-file-preview">
+                <FileText aria-hidden="true" strokeWidth={1.7} />
+                <strong>{previewAttachment.name}</strong>
+                <span>Ce fichier peut être ouvert ou téléchargé dans un nouvel onglet.</span>
+              </div>
+            )}
+            <figcaption>
+              <strong>{previewAttachment.name}</strong>
+              <div>
+                <a href={previewAttachment.url} target="_blank" rel="noreferrer">
+                  <ExternalLink aria-hidden="true" strokeWidth={1.8} />
+                  Ouvrir
+                </a>
+                <a href={previewAttachment.url} download>
+                  <Download aria-hidden="true" strokeWidth={1.8} />
+                  Télécharger
+                </a>
+              </div>
+            </figcaption>
+          </figure>
+        </div>
+      ) : null}
     </MemberShell>
   );
 }
@@ -1426,19 +1516,64 @@ function MessageAvatar({
   );
 }
 
-function MessageAttachment({ attachment }: { attachment: NonNullable<ConversationMessage["attachment"]> }) {
-  const isImage = attachment.mimeType?.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(attachment.url);
+function MessageAttachment({
+  attachment,
+  onPreview,
+}: {
+  attachment: NonNullable<ConversationMessage["attachment"]>;
+  onPreview: (attachment: MessageAttachmentPreview) => void;
+}) {
+  const previewAttachment = toPreviewAttachment(attachment);
 
   return (
-    <a className={isImage ? "message-attachment is-image" : "message-attachment"} href={attachment.url} target="_blank" rel="noreferrer">
-      {isImage ? (
+    <button
+      className={previewAttachment.kind === "image" ? "message-attachment is-image" : `message-attachment is-${previewAttachment.kind}`}
+      type="button"
+      onClick={() => onPreview(previewAttachment)}
+    >
+      {previewAttachment.kind === "image" ? (
         <img src={attachment.url} alt="" loading="lazy" decoding="async" />
+      ) : previewAttachment.kind === "video" ? (
+        <span className="message-attachment-icon">
+          <Video aria-hidden="true" />
+        </span>
       ) : (
-        <Paperclip aria-hidden="true" />
+        <span className="message-attachment-icon">
+          <Paperclip aria-hidden="true" />
+        </span>
       )}
       <span>{attachment.name}</span>
-    </a>
+    </button>
   );
+}
+
+function toPreviewAttachment(attachment: NonNullable<ConversationMessage["attachment"]>): MessageAttachmentPreview {
+  return {
+    ...attachment,
+    kind: getAttachmentKind(attachment.url, attachment.mimeType),
+  };
+}
+
+function getAttachmentKind(url: string, mimeType?: string | null): MessageAttachmentPreview["kind"] {
+  const cleanUrl = stripUrlSearch(url);
+
+  if (mimeType?.startsWith("image/") || /\.(png|jpe?g|webp|gif|avif|svg)$/i.test(cleanUrl)) {
+    return "image";
+  }
+
+  if (mimeType?.startsWith("video/") || /\.(mp4|webm|mov|m4v|ogg|ogv)$/i.test(cleanUrl)) {
+    return "video";
+  }
+
+  return "file";
+}
+
+function stripUrlSearch(url: string) {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return url.split("?")[0] ?? url;
+  }
 }
 
 function versionedImageUrl(url: string, version?: string) {
