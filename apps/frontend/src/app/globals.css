@@ -9689,12 +9689,23 @@ img.member-profile-avatar {
 }
 
 .gallery-lightbox figure {
+  grid-column: 2;
+  width: min(1180px, 100%);
   display: grid;
   gap: 14px;
   min-width: 0;
   max-width: min(1180px, 100%);
   max-height: calc(100dvh - 48px);
   margin: 0 auto;
+}
+
+.feed-media-lightbox {
+  grid-template-columns: minmax(0, 1fr);
+  place-items: center;
+}
+
+.feed-media-lightbox figure {
+  grid-column: 1;
 }
 
 .gallery-lightbox img {
@@ -9829,6 +9840,11 @@ img.member-profile-avatar {
     padding: 14px;
   }
 
+  .gallery-lightbox figure {
+    grid-column: 1;
+    width: 100%;
+  }
+
   .gallery-lightbox-nav {
     position: absolute;
     top: 50%;
@@ -9855,10 +9871,13 @@ img.member-profile-avatar {
   }
 
   .gallery-lightbox img {
+    width: 100%;
     max-height: calc(100dvh - 150px);
   }
 
-  .creative-creation-lightbox video {
+  .creative-creation-lightbox video,
+  .feed-media-lightbox video {
+    width: 100%;
     max-height: calc(100dvh - 150px);
   }
 }
@@ -18689,5 +18708,24 @@ img.member-profile-avatar {
 
   .member-shell .message-bubble {
     max-width: 96%;
+  }
+
+  .message-attachment-lightbox {
+    padding: 12px;
+  }
+
+  .message-attachment-lightbox figure {
+    width: 100%;
+  }
+
+  .message-attachment-lightbox img,
+  .message-attachment-lightbox video {
+    width: 100%;
+    max-height: calc(100dvh - 184px);
+  }
+
+  .message-attachment-lightbox-close {
+    top: 12px;
+    right: 12px;
   }
 }
