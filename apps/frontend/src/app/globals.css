@@ -18387,7 +18387,17 @@ img.member-profile-avatar {
 }
 
 @media (max-width: 760px) {
+  .member-shell {
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
   .member-main {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
     padding: 12px;
   }
 
@@ -18409,8 +18419,11 @@ img.member-profile-avatar {
 
   .member-topbar {
     position: static;
+    width: auto;
+    max-width: 100vw;
     grid-template-columns: 1fr;
     gap: 10px;
+    overflow-x: hidden;
     margin: -12px -12px 12px;
     padding: 10px 12px;
   }
@@ -18429,6 +18442,8 @@ img.member-profile-avatar {
   }
 
   .member-actions {
+    min-width: 0;
+    max-width: 100%;
     display: flex;
     flex-wrap: nowrap;
     gap: 8px;
@@ -18463,7 +18478,26 @@ img.member-profile-avatar {
   }
 
   .member-card {
+    max-width: 100%;
+    min-width: 0;
     padding: 14px;
+    overflow-wrap: anywhere;
+  }
+
+  .member-dashboard-home,
+  .member-dashboard-grid,
+  .member-dashboard-grid--feed,
+  .member-home-feed-column,
+  .member-home-right-rail,
+  .member-feed-card,
+  .member-feed-list,
+  .member-feed-post,
+  .member-hero-card,
+  .member-home-hero,
+  .member-home-role-card {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
   }
 
   .member-card-title {
@@ -18509,10 +18543,22 @@ img.member-profile-avatar {
   .opportunities-highlight-grid,
   .member-home-insights-grid,
   .certificate-summary-grid {
+    width: 100%;
+    max-width: 100%;
     display: flex;
     gap: 10px;
     overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
     padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .member-module-highlight-grid::-webkit-scrollbar,
+  .opportunities-highlight-grid::-webkit-scrollbar,
+  .member-home-insights-grid::-webkit-scrollbar,
+  .certificate-summary-grid::-webkit-scrollbar {
+    display: none;
   }
 
   .member-module-highlight-grid article,
@@ -18528,11 +18574,15 @@ img.member-profile-avatar {
   .social-filter-row,
   .admin-filter-pills,
   .settings-tabs {
+    width: 100%;
+    max-width: 100%;
     display: flex;
     flex-wrap: nowrap;
     justify-content: flex-start;
     gap: 8px;
     overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
     padding-bottom: 4px;
     scrollbar-width: none;
   }
@@ -18644,9 +18694,13 @@ img.member-profile-avatar {
   }
 
   .publish-type-grid {
+    width: 100%;
+    max-width: 100%;
     display: flex;
     grid-template-columns: none;
     overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
     padding-bottom: 4px;
     scrollbar-width: none;
   }
