@@ -141,6 +141,8 @@ export function CreativeIdPage() {
     () => (origin && memberNumber ? `${origin}/creative-id/${encodeURIComponent(memberNumber)}` : ""),
     [memberNumber, origin],
   );
+  const isPublicCreativeId = visibility === "PUBLIC";
+  const activePublicUrl = isPublicCreativeId ? publicUrl : "";
   const profileFields = [
     { label: "Nom public", value: displayName },
     { label: "Discipline", value: profileTitle },
@@ -184,12 +186,12 @@ export function CreativeIdPage() {
     let isActive = true;
 
     const timeoutId = window.setTimeout(() => {
-      if (!publicUrl) {
+      if (!activePublicUrl) {
         setQrDataUrl("");
         return;
       }
 
-      QRCode.toDataURL(publicUrl, {
+      QRCode.toDataURL(activePublicUrl, {
         errorCorrectionLevel: "M",
         margin: 1,
         scale: 7,
@@ -214,7 +216,7 @@ export function CreativeIdPage() {
       isActive = false;
       window.clearTimeout(timeoutId);
     };
-  }, [publicUrl]);
+  }, [activePublicUrl]);
 
   useEffect(() => {
     if (!accessToken) {
@@ -313,12 +315,13 @@ export function CreativeIdPage() {
   }, [accessToken]);
 
   async function copyPublicLink() {
-    if (!publicUrl) {
+    if (!activePublicUrl) {
+      setCopyMessage("Passez la visibilité en Public pour activer le lien.");
       return;
     }
 
     try {
-      await navigator.clipboard.writeText(publicUrl);
+      await navigator.clipboard.writeText(activePublicUrl);
       setCopyMessage("Lien copié.");
     } catch {
       setCopyMessage("Copie impossible depuis ce navigateur.");
@@ -567,14 +570,17 @@ export function CreativeIdPage() {
             <p>{visibilityState.description}</p>
             <div className="creative-public-link">
               <Link2 aria-hidden="true" strokeWidth={1.8} />
-              <span>{publicUrl || "Lien disponible après génération du numéro membre"}</span>
+              <span>
+                {activePublicUrl ||
+                  (publicUrl ? "Lien prêt, activez la visibilité Public pour le publier" : "Lien disponible après génération du numéro membre")}
+              </span>
             </div>
             <div className="creative-id-actions">
-              <button className="member-create-button" type="button" onClick={copyPublicLink} disabled={!publicUrl}>
+              <button className="member-create-button" type="button" onClick={copyPublicLink} disabled={!activePublicUrl}>
                 <Copy aria-hidden="true" strokeWidth={1.8} />
                 Copier
               </button>
-              <a className="member-secondary-button" href={publicUrl || "#"} aria-disabled={!publicUrl}>
+              <a className="member-secondary-button" href={activePublicUrl || "#"} aria-disabled={!activePublicUrl}>
                 <ExternalLink aria-hidden="true" strokeWidth={1.8} />
                 Ouvrir
               </a>
