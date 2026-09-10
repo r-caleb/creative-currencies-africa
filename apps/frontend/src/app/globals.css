@@ -9759,6 +9759,7 @@ img.member-profile-avatar {
 }
 
 .creative-creation-lightbox video,
+.network-creation-lightbox video,
 .feed-media-lightbox video {
   max-width: 100%;
   max-height: calc(100dvh - 170px);
@@ -10827,9 +10828,29 @@ img.member-profile-avatar {
   background: var(--member-bg-soft);
 }
 
-.network-profile-creation-gallery article > img,
-.network-profile-creation-gallery article > video,
-.network-profile-creation-gallery article > span {
+.network-profile-creation-card {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: zoom-in;
+  text-align: left;
+}
+
+.network-profile-creation-card:disabled {
+  cursor: default;
+}
+
+.network-profile-creation-card:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--member-purple) 58%, transparent);
+  outline-offset: -3px;
+}
+
+.network-profile-creation-card > img,
+.network-profile-creation-card > video,
+.network-profile-creation-card > span {
   width: 100%;
   height: 100%;
   min-height: 245px;
@@ -10842,12 +10863,12 @@ img.member-profile-avatar {
     linear-gradient(135deg, #7c3aed, #b87816);
 }
 
-.network-profile-creation-gallery article > span svg {
+.network-profile-creation-card > span svg {
   width: 42px;
   height: 42px;
 }
 
-.network-profile-creation-gallery article > div {
+.network-profile-creation-card > div {
   position: absolute;
   inset: auto 0 0;
   display: grid;
