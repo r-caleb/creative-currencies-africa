@@ -8638,6 +8638,14 @@ img.member-profile-avatar {
   font-size: 1.08rem;
 }
 
+.opportunity-detail-cover {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--member-bg-soft);
+}
+
 .opportunity-detail-card p {
   margin: 0;
   color: var(--member-muted);

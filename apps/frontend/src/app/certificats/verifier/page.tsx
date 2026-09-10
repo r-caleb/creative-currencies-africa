@@ -1,4 +1,5 @@
 import { BadgeCheck, FileBadge, ShieldCheck, XCircle } from "lucide-react";
+import { API_URL } from "@/lib/api-url";
 
 export const dynamic = "force-dynamic";
 
@@ -13,8 +14,6 @@ type CertificateVerification = {
   memberNumber: string | null;
   trainingTitle: string | null;
 };
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
 
 export default async function CertificateVerificationPage({
   searchParams,

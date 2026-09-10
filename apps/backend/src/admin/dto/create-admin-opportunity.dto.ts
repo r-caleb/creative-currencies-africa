@@ -37,8 +37,18 @@ export class CreateAdminOpportunityDto {
   @IsString({ message: "Le lien de candidature doit être un texte." })
   eligibilityUrl?: string;
 
+  @ApiPropertyOptional({ example: "/uploads/admin/opportunity/residence-creative.jpg" })
+  @IsOptional()
+  @IsString({ message: "L'image doit être un chemin ou une URL valide." })
+  coverImageUrl?: string;
+
   @ApiPropertyOptional({ example: true })
   @IsOptional()
   @IsBoolean({ message: "Le statut publié doit être vrai ou faux." })
   published?: boolean;
+
+  @ApiPropertyOptional({ example: false })
+  @IsOptional()
+  @IsBoolean({ message: "Le champ fil d'actualité doit être vrai ou faux." })
+  showInFeed?: boolean;
 }

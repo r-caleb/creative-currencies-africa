@@ -65,4 +65,9 @@ export class CreateAdminTrainingDto {
   @IsOptional()
   @IsBoolean({ message: "Le champ accueil doit être vrai ou faux." })
   featuredOnLanding?: boolean;
+
+  @ApiPropertyOptional({ example: false })
+  @IsOptional()
+  @IsBoolean({ message: "Le champ fil d'actualité doit être vrai ou faux." })
+  showInFeed?: boolean;
 }

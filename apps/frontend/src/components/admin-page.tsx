@@ -403,6 +403,7 @@ export function AdminPage() {
     status: "DRAFT",
     certificateEnabled: true,
     featuredOnLanding: false,
+    showInFeed: false,
   });
   const [eventForm, setEventForm] = useState<EventFormState>({
     title: "",
@@ -417,6 +418,7 @@ export function AdminPage() {
     facebookEventUrl: "",
     published: false,
     featuredOnLanding: false,
+    showInFeed: false,
   });
   const [resourceForm, setResourceForm] = useState<ResourceFormState>({
     title: "",
@@ -425,6 +427,7 @@ export function AdminPage() {
     url: "",
     accessLevel: "MEMBERS",
     published: false,
+    showInFeed: false,
     trainingId: "",
   });
   const [opportunityForm, setOpportunityForm] = useState<OpportunityFormState>({
@@ -435,7 +438,9 @@ export function AdminPage() {
     deadline: "",
     location: "",
     eligibilityUrl: "",
+    coverImageUrl: "",
     published: false,
+    showInFeed: false,
   });
   const [galleryAlbumForm, setGalleryAlbumForm] = useState<GalleryAlbumFormState>({
     title: "",
@@ -976,6 +981,7 @@ export function AdminPage() {
         status: "DRAFT",
         certificateEnabled: true,
         featuredOnLanding: false,
+        showInFeed: false,
       });
       setNotice("Formation ajoutée.");
     } catch (requestError) {
@@ -1082,6 +1088,7 @@ export function AdminPage() {
         facebookEventUrl: "",
         published: false,
         featuredOnLanding: false,
+        showInFeed: false,
       });
       setNotice("Événement ajouté.");
     } catch (requestError) {
@@ -1162,6 +1169,7 @@ export function AdminPage() {
         url: "",
         accessLevel: "MEMBERS",
         published: false,
+        showInFeed: false,
         trainingId: "",
       });
       setNotice("Ressource ajoutée.");
@@ -1244,7 +1252,9 @@ export function AdminPage() {
         deadline: "",
         location: "",
         eligibilityUrl: "",
+        coverImageUrl: "",
         published: false,
+        showInFeed: false,
       });
       setNotice("Opportunité ajoutée.");
     } catch (requestError) {
@@ -1972,6 +1982,10 @@ function ContentAdminPanel({
             <input type="checkbox" checked={trainingForm.featuredOnLanding} onChange={(event) => onChangeTrainingForm((current) => ({ ...current, featuredOnLanding: event.target.checked, status: event.target.checked ? "PUBLISHED" : current.status }))} />
             <span>Mis en avant sur l'accueil</span>
           </label>
+          <label className="admin-reference-toggle">
+            <input type="checkbox" checked={trainingForm.showInFeed ?? false} onChange={(event) => onChangeTrainingForm((current) => ({ ...current, showInFeed: event.target.checked, status: event.target.checked ? "PUBLISHED" : current.status }))} />
+            <span>Publier aussi dans le fil d'actualité</span>
+          </label>
           <label className="admin-reference-textarea">
             <span>Description</span>
             <textarea value={trainingForm.description} onChange={(event) => onChangeTrainingForm((current) => ({ ...current, description: event.target.value }))} placeholder="Objectif, public cible, contenu et bénéfices pour les créatifs." />
@@ -2076,6 +2090,10 @@ function ContentAdminPanel({
           <label className="admin-reference-toggle">
             <input type="checkbox" checked={eventForm.featuredOnLanding} onChange={(event) => onChangeEventForm((current) => ({ ...current, featuredOnLanding: event.target.checked, published: event.target.checked ? true : current.published }))} />
             <span>Mis en avant sur l'accueil</span>
+          </label>
+          <label className="admin-reference-toggle">
+            <input type="checkbox" checked={eventForm.showInFeed ?? false} onChange={(event) => onChangeEventForm((current) => ({ ...current, showInFeed: event.target.checked, published: event.target.checked ? true : current.published }))} />
+            <span>Publier aussi dans le fil d'actualité</span>
           </label>
           <label className="admin-reference-textarea">
             <span>Description</span>
@@ -2270,6 +2288,10 @@ function ContentAdminPanel({
             <input type="checkbox" checked={resourceForm.published} onChange={(event) => onChangeResourceForm((current) => ({ ...current, published: event.target.checked }))} />
             <span>Visible dans la bibliothèque</span>
           </label>
+          <label className="admin-reference-toggle">
+            <input type="checkbox" checked={resourceForm.showInFeed ?? false} onChange={(event) => onChangeResourceForm((current) => ({ ...current, showInFeed: event.target.checked, published: event.target.checked ? true : current.published }))} />
+            <span>Publier aussi dans le fil d'actualité</span>
+          </label>
           <label className="admin-reference-textarea">
             <span>Description</span>
             <textarea value={resourceForm.description} onChange={(event) => onChangeResourceForm((current) => ({ ...current, description: event.target.value }))} placeholder="Expliquez à quoi sert cette ressource et pour qui elle est utile." />
@@ -2384,9 +2406,23 @@ function ContentAdminPanel({
             <span>Lien de candidature</span>
             <input value={opportunityForm.eligibilityUrl} onChange={(event) => onChangeOpportunityForm((current) => ({ ...current, eligibilityUrl: event.target.value }))} placeholder="https://..." />
           </label>
+          <AdminUploadField
+            label="Image"
+            value={opportunityForm.coverImageUrl ?? ""}
+            purpose="opportunity"
+            uploadKey="opportunity-cover"
+            uploadingKey={uploadingKey}
+            accept="image/*"
+            onChange={(value) => onChangeOpportunityForm((current) => ({ ...current, coverImageUrl: value }))}
+            onUpload={onUpload}
+          />
           <label className="admin-reference-toggle">
             <input type="checkbox" checked={opportunityForm.published} onChange={(event) => onChangeOpportunityForm((current) => ({ ...current, published: event.target.checked, status: event.target.checked ? "OPEN" : current.status }))} />
             <span>Visible dans les opportunités</span>
+          </label>
+          <label className="admin-reference-toggle">
+            <input type="checkbox" checked={opportunityForm.showInFeed ?? false} onChange={(event) => onChangeOpportunityForm((current) => ({ ...current, showInFeed: event.target.checked, published: event.target.checked ? true : current.published, status: event.target.checked ? "OPEN" : current.status }))} />
+            <span>Publier aussi dans le fil d'actualité</span>
           </label>
           <label className="admin-reference-textarea">
             <span>Description</span>
@@ -2412,11 +2448,13 @@ function ContentAdminPanel({
               key={opportunity.id}
               opportunity={opportunity}
               busyKey={busyKey}
+              uploadingKey={uploadingKey}
               isEditing={editingReferenceKey === `opportunity-${opportunity.id}`}
               onEdit={() => onChangeEditingReferenceKey(`opportunity-${opportunity.id}`)}
               onCancel={() => onChangeEditingReferenceKey(null)}
               onUpdate={onUpdateOpportunity}
               onDelete={onDeleteOpportunity}
+              onUpload={onUpload}
             />
           ))}
           {!opportunities.length ? <EmptyAdminState title="Aucune opportunité" text="Ajoutez un premier appel à projets, concours ou financement." /> : null}
@@ -2826,6 +2864,7 @@ function TrainingContentRow({
     status: training.status,
     certificateEnabled: training.certificateEnabled,
     featuredOnLanding: training.featuredOnLanding,
+    showInFeed: training.showInFeed,
   });
 
   useEffect(() => {
@@ -2842,6 +2881,7 @@ function TrainingContentRow({
       status: training.status,
       certificateEnabled: training.certificateEnabled,
       featuredOnLanding: training.featuredOnLanding,
+      showInFeed: training.showInFeed,
     });
   }, [training]);
 
@@ -2893,6 +2933,10 @@ function TrainingContentRow({
             <input type="checkbox" checked={form.featuredOnLanding} onChange={(event) => setForm((current) => ({ ...current, featuredOnLanding: event.target.checked, status: event.target.checked ? "PUBLISHED" : current.status }))} />
             <span>Accueil</span>
           </label>
+          <label className="admin-reference-toggle">
+            <input type="checkbox" checked={form.showInFeed ?? false} onChange={(event) => setForm((current) => ({ ...current, showInFeed: event.target.checked, status: event.target.checked ? "PUBLISHED" : current.status }))} />
+            <span>Fil d'actualité</span>
+          </label>
           <label className="admin-reference-textarea">
             <span>Description</span>
             <textarea value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} />
@@ -2917,7 +2961,7 @@ function TrainingContentRow({
       </div>
       <div className="admin-reference-row-main">
         <strong>{training.title}</strong>
-        <span>{[training.location, formatDateRange(training.startsAt, training.endsAt), training.certificateEnabled ? "certificat" : null, training.featuredOnLanding ? "accueil" : null].filter(Boolean).join(" · ")}</span>
+        <span>{[training.location, formatDateRange(training.startsAt, training.endsAt), training.certificateEnabled ? "certificat" : null, training.featuredOnLanding ? "accueil" : null, training.showInFeed ? "fil d'actualité" : null].filter(Boolean).join(" · ")}</span>
         <small>{training.counts.enrollments} inscrits · {training.counts.modules} modules · {training.counts.resources} ressources</small>
       </div>
       <StatusPill status={training.status} label={trainingStatusLabels[training.status]} />
@@ -2926,7 +2970,11 @@ function TrainingContentRow({
           <Sparkles aria-hidden="true" />
           {training.featuredOnLanding ? "Retirer accueil" : "Mettre accueil"}
         </button>
-        <button type="button" onClick={() => onUpdate(training, { status: training.status === "PUBLISHED" ? "DRAFT" : "PUBLISHED" })} disabled={busyKey === `training-${training.id}`}>
+        <button type="button" onClick={() => onUpdate(training, { showInFeed: !training.showInFeed, status: !training.showInFeed ? "PUBLISHED" : training.status })} disabled={busyKey === `training-${training.id}`}>
+          <Megaphone aria-hidden="true" />
+          {training.showInFeed ? "Retirer du fil" : "Mettre dans le fil"}
+        </button>
+        <button type="button" onClick={() => onUpdate(training, training.status === "PUBLISHED" ? { status: "DRAFT", showInFeed: false } : { status: "PUBLISHED" })} disabled={busyKey === `training-${training.id}`}>
           {training.status === "PUBLISHED" ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
           {training.status === "PUBLISHED" ? "Masquer" : "Publier"}
         </button>
@@ -2975,6 +3023,7 @@ function EventContentRow({
     facebookEventUrl: event.facebookEventUrl ?? "",
     published: event.published,
     featuredOnLanding: event.featuredOnLanding,
+    showInFeed: event.showInFeed,
   });
 
   useEffect(() => {
@@ -2991,6 +3040,7 @@ function EventContentRow({
       facebookEventUrl: event.facebookEventUrl ?? "",
       published: event.published,
       featuredOnLanding: event.featuredOnLanding,
+      showInFeed: event.showInFeed,
     });
   }, [event]);
 
@@ -3044,6 +3094,10 @@ function EventContentRow({
             <input type="checkbox" checked={form.featuredOnLanding} onChange={(inputEvent) => setForm((current) => ({ ...current, featuredOnLanding: inputEvent.target.checked, published: inputEvent.target.checked ? true : current.published }))} />
             <span>Accueil</span>
           </label>
+          <label className="admin-reference-toggle">
+            <input type="checkbox" checked={form.showInFeed ?? false} onChange={(inputEvent) => setForm((current) => ({ ...current, showInFeed: inputEvent.target.checked, published: inputEvent.target.checked ? true : current.published }))} />
+            <span>Fil d'actualité</span>
+          </label>
           <label className="admin-reference-textarea">
             <span>Description</span>
             <textarea value={form.description} onChange={(inputEvent) => setForm((current) => ({ ...current, description: inputEvent.target.value }))} />
@@ -3068,7 +3122,7 @@ function EventContentRow({
       </div>
       <div className="admin-reference-row-main">
         <strong>{event.title}</strong>
-        <span>{[formatEventTypes(event), event.location, formatDateRange(event.startsAt, event.endsAt), event.featuredOnLanding ? "accueil" : null].filter(Boolean).join(" · ")}</span>
+        <span>{[formatEventTypes(event), event.location, formatDateRange(event.startsAt, event.endsAt), event.featuredOnLanding ? "accueil" : null, event.showInFeed ? "fil d'actualité" : null].filter(Boolean).join(" · ")}</span>
         <small>{event.counts.registrations} réservations · {event.whatsappUrl ? "WhatsApp" : "sans WhatsApp"} · {event.facebookEventUrl ? "Facebook" : "sans Facebook"}</small>
       </div>
       <StatusPill status={event.published ? "PUBLISHED" : "DRAFT"} label={event.published ? "Publié" : "Masqué"} />
@@ -3077,7 +3131,11 @@ function EventContentRow({
           <Sparkles aria-hidden="true" />
           {event.featuredOnLanding ? "Retirer accueil" : "Mettre accueil"}
         </button>
-        <button type="button" onClick={() => onUpdate(event, { published: !event.published })} disabled={busyKey === `event-${event.id}`}>
+        <button type="button" onClick={() => onUpdate(event, { showInFeed: !event.showInFeed, published: !event.showInFeed ? true : event.published })} disabled={busyKey === `event-${event.id}`}>
+          <Megaphone aria-hidden="true" />
+          {event.showInFeed ? "Retirer du fil" : "Mettre dans le fil"}
+        </button>
+        <button type="button" onClick={() => onUpdate(event, event.published ? { published: false, showInFeed: false } : { published: true })} disabled={busyKey === `event-${event.id}`}>
           {event.published ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
           {event.published ? "Masquer" : "Publier"}
         </button>
@@ -3152,6 +3210,7 @@ function ResourceContentRow({
     url: resource.url,
     accessLevel: resource.accessLevel,
     published: resource.published,
+    showInFeed: resource.showInFeed,
     trainingId: resource.training?.id ?? "",
   });
 
@@ -3163,6 +3222,7 @@ function ResourceContentRow({
       url: resource.url,
       accessLevel: resource.accessLevel,
       published: resource.published,
+      showInFeed: resource.showInFeed,
       trainingId: resource.training?.id ?? "",
     });
   }, [resource]);
@@ -3209,6 +3269,10 @@ function ResourceContentRow({
             <input type="checkbox" checked={form.published} onChange={(event) => setForm((current) => ({ ...current, published: event.target.checked }))} />
             <span>Visible</span>
           </label>
+          <label className="admin-reference-toggle">
+            <input type="checkbox" checked={form.showInFeed ?? false} onChange={(event) => setForm((current) => ({ ...current, showInFeed: event.target.checked, published: event.target.checked ? true : current.published }))} />
+            <span>Fil d'actualité</span>
+          </label>
           <label className="admin-reference-textarea">
             <span>Description</span>
             <textarea value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} />
@@ -3233,15 +3297,19 @@ function ResourceContentRow({
       </div>
       <div className="admin-reference-row-main">
         <strong>{resource.title}</strong>
-        <span>{[resourceTypeLabels[resource.type], resourceAccessLabels[resource.accessLevel], resource.training?.title].filter(Boolean).join(" · ")}</span>
+        <span>{[resourceTypeLabels[resource.type], resourceAccessLabels[resource.accessLevel], resource.training?.title, resource.showInFeed ? "fil d'actualité" : null].filter(Boolean).join(" · ")}</span>
         <small>{resource.description ?? resource.url}</small>
         <small>{resource.counts.views} vues · {resource.counts.downloads} téléchargements · {resource.counts.usefulMarks} utiles</small>
       </div>
       <StatusPill status={resource.published ? "PUBLISHED" : "DRAFT"} label={resource.published ? "Publiée" : "Masquée"} />
       <div className="admin-reference-row-actions">
-        <button type="button" onClick={() => onUpdate(resource, { published: !resource.published })} disabled={busyKey === `resource-${resource.id}`}>
+        <button type="button" onClick={() => onUpdate(resource, resource.published ? { published: false, showInFeed: false } : { published: true })} disabled={busyKey === `resource-${resource.id}`}>
           {resource.published ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
           {resource.published ? "Masquer" : "Publier"}
+        </button>
+        <button type="button" onClick={() => onUpdate(resource, { showInFeed: !resource.showInFeed, published: !resource.showInFeed ? true : resource.published })} disabled={busyKey === `resource-${resource.id}`}>
+          <Megaphone aria-hidden="true" />
+          {resource.showInFeed ? "Retirer du fil" : "Mettre dans le fil"}
         </button>
         <button type="button" onClick={onEdit}>
           <Edit3 aria-hidden="true" /> Modifier
@@ -3401,19 +3469,23 @@ function GalleryAlbumRow({
 function OpportunityContentRow({
   opportunity,
   busyKey,
+  uploadingKey,
   isEditing,
   onEdit,
   onCancel,
   onUpdate,
   onDelete,
+  onUpload,
 }: {
   opportunity: AdminOpportunity;
   busyKey: string | null;
+  uploadingKey: string | null;
   isEditing: boolean;
   onEdit: () => void;
   onCancel: () => void;
   onUpdate: (opportunity: AdminOpportunity, input: Partial<OpportunityPayload>) => void;
   onDelete: (opportunity: AdminOpportunity) => void;
+  onUpload: (purpose: AdminUploadPurpose, file: File, key: string) => Promise<string>;
 }) {
   const [form, setForm] = useState<OpportunityFormState>({
     title: opportunity.title,
@@ -3423,7 +3495,9 @@ function OpportunityContentRow({
     deadline: toDateTimeInputValue(opportunity.deadline),
     location: opportunity.location ?? "",
     eligibilityUrl: opportunity.eligibilityUrl ?? "",
+    coverImageUrl: opportunity.coverImageUrl ?? "",
     published: opportunity.published,
+    showInFeed: opportunity.showInFeed,
   });
 
   useEffect(() => {
@@ -3435,7 +3509,9 @@ function OpportunityContentRow({
       deadline: toDateTimeInputValue(opportunity.deadline),
       location: opportunity.location ?? "",
       eligibilityUrl: opportunity.eligibilityUrl ?? "",
+      coverImageUrl: opportunity.coverImageUrl ?? "",
       published: opportunity.published,
+      showInFeed: opportunity.showInFeed,
     });
   }, [opportunity]);
 
@@ -3471,9 +3547,23 @@ function OpportunityContentRow({
             <span>Lien de candidature</span>
             <input value={form.eligibilityUrl} onChange={(event) => setForm((current) => ({ ...current, eligibilityUrl: event.target.value }))} />
           </label>
+          <AdminUploadField
+            label="Image"
+            value={form.coverImageUrl ?? ""}
+            purpose="opportunity"
+            uploadKey={`opportunity-${opportunity.id}-cover`}
+            uploadingKey={uploadingKey}
+            accept="image/*"
+            onChange={(value) => setForm((current) => ({ ...current, coverImageUrl: value }))}
+            onUpload={onUpload}
+          />
           <label className="admin-reference-toggle">
             <input type="checkbox" checked={form.published} onChange={(event) => setForm((current) => ({ ...current, published: event.target.checked, status: event.target.checked ? "OPEN" : current.status }))} />
             <span>Visible</span>
+          </label>
+          <label className="admin-reference-toggle">
+            <input type="checkbox" checked={form.showInFeed ?? false} onChange={(event) => setForm((current) => ({ ...current, showInFeed: event.target.checked, published: event.target.checked ? true : current.published, status: event.target.checked ? "OPEN" : current.status }))} />
+            <span>Fil d'actualité</span>
           </label>
           <label className="admin-reference-textarea">
             <span>Description</span>
@@ -3495,18 +3585,22 @@ function OpportunityContentRow({
   return (
     <article className="admin-reference-row admin-content-row">
       <div className="admin-reference-logo">
-        <ClipboardList aria-hidden="true" />
+        {opportunity.coverImageUrl ? <img src={opportunity.coverImageUrl} alt="" loading="lazy" decoding="async" /> : <ClipboardList aria-hidden="true" />}
       </div>
       <div className="admin-reference-row-main">
         <strong>{opportunity.title}</strong>
-        <span>{[opportunityTypeLabels[opportunity.type], opportunity.location, opportunity.deadline ? `limite ${formatDate(opportunity.deadline)}` : null].filter(Boolean).join(" · ")}</span>
+        <span>{[opportunityTypeLabels[opportunity.type], opportunity.location, opportunity.deadline ? `limite ${formatDate(opportunity.deadline)}` : null, opportunity.showInFeed ? "fil d'actualité" : null].filter(Boolean).join(" · ")}</span>
         <small>{opportunity.counts.applications} candidatures · {opportunity.description}</small>
       </div>
       <StatusPill status={opportunity.status} label={opportunityStatusLabels[opportunity.status]} />
       <div className="admin-reference-row-actions">
-        <button type="button" onClick={() => onUpdate(opportunity, { published: !opportunity.published })} disabled={busyKey === `opportunity-${opportunity.id}`}>
+        <button type="button" onClick={() => onUpdate(opportunity, opportunity.published ? { published: false, showInFeed: false } : { published: true, status: "OPEN" })} disabled={busyKey === `opportunity-${opportunity.id}`}>
           {opportunity.published ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
           {opportunity.published ? "Masquer" : "Publier"}
+        </button>
+        <button type="button" onClick={() => onUpdate(opportunity, { showInFeed: !opportunity.showInFeed, published: !opportunity.showInFeed ? true : opportunity.published, status: !opportunity.showInFeed ? "OPEN" : opportunity.status })} disabled={busyKey === `opportunity-${opportunity.id}`}>
+          <Megaphone aria-hidden="true" />
+          {opportunity.showInFeed ? "Retirer du fil" : "Mettre dans le fil"}
         </button>
         <button type="button" onClick={onEdit}>
           <Edit3 aria-hidden="true" /> Modifier

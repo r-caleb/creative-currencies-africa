@@ -260,6 +260,10 @@ type AdminTraining = Prisma.TrainingGetPayload<{ include: typeof adminTrainingIn
 type AdminEvent = Prisma.EventGetPayload<{ include: typeof adminEventInclude }>;
 type AdminResource = Prisma.ResourceGetPayload<{ include: typeof adminResourceInclude }>;
 type AdminOpportunity = Prisma.OpportunityGetPayload<{ include: typeof adminOpportunityInclude }>;
+type OfficialPublicationData = Omit<
+  Prisma.PublicationUncheckedCreateInput,
+  "id" | "authorId" | "createdAt" | "updatedAt" | "publishedAt" | "attachments" | "comments" | "reactions" | "shares" | "reports" | "mentions"
+>;
 type AdminDossierUser = Prisma.UserGetPayload<{ select: typeof adminDossierUserSelect }>;
 type AdminOpportunityApplication = Prisma.OpportunityApplicationGetPayload<{ include: typeof adminOpportunityApplicationInclude }>;
 type AdminTrainingEnrollment = Prisma.TrainingEnrollmentGetPayload<{ include: typeof adminTrainingEnrollmentInclude }>;
@@ -1297,13 +1301,13 @@ export class AdminService {
   }
 
   async createTraining(authUser: AuthUser, input: CreateAdminTrainingDto) {
-    await this.ensureAdmin(authUser);
+    const admin = await this.ensureAdmin(authUser);
 
     const title = this.requiredText(input.title, "Le titre de la formation est requis.");
     const startsAt = this.parseOptionalDate(input.startsAt, "La date de début de la formation est invalide.");
     const endsAt = this.parseOptionalDate(input.endsAt, "La date de fin de la formation est invalide.");
     this.ensureDateOrder(startsAt, endsAt);
-    const status = input.featuredOnLanding ? TrainingStatus.PUBLISHED : input.status ?? TrainingStatus.DRAFT;
+    const status = input.featuredOnLanding || input.showInFeed ? TrainingStatus.PUBLISHED : input.status ?? TrainingStatus.DRAFT;
 
     try {
       const training = await this.prisma.$transaction(async (tx) => {
@@ -1329,10 +1333,13 @@ export class AdminService {
             status,
             certificateEnabled: input.certificateEnabled ?? true,
             featuredOnLanding: input.featuredOnLanding ?? false,
+            showInFeed: input.showInFeed ?? false,
           },
           include: adminTrainingInclude,
         });
       });
+
+      await this.syncTrainingPublication(admin, training);
 
       return this.serializeTraining(training);
     } catch (error) {
@@ -1345,7 +1352,7 @@ export class AdminService {
   }
 
   async updateTraining(authUser: AuthUser, id: string, input: UpdateAdminTrainingDto) {
-    await this.ensureAdmin(authUser);
+    const admin = await this.ensureAdmin(authUser);
 
     if (!Object.keys(input).length) {
       throw new BadRequestException("Aucune information à mettre à jour.");
@@ -1415,6 +1422,18 @@ export class AdminService {
       }
     }
 
+    if (input.showInFeed !== undefined) {
+      data.showInFeed = input.showInFeed;
+
+      if (input.showInFeed) {
+        data.status = TrainingStatus.PUBLISHED;
+      }
+    }
+
+    if (data.status !== undefined && data.status !== TrainingStatus.PUBLISHED) {
+      data.showInFeed = false;
+    }
+
     const training = await this.prisma.$transaction(async (tx) => {
       if (input.featuredOnLanding) {
         await tx.training.updateMany({
@@ -1430,13 +1449,27 @@ export class AdminService {
       });
     });
 
+    await this.syncTrainingPublication(admin, training);
+
     return this.serializeTraining(training);
   }
 
   async deleteTraining(authUser: AuthUser, id: string) {
     await this.ensureAdmin(authUser);
 
-    await this.prisma.training.delete({ where: { id } }).catch((error) => {
+    const training = await this.prisma.training.findUnique({
+      where: { id },
+      select: { publicationId: true },
+    });
+
+    if (!training) {
+      throw new NotFoundException("Cette formation est introuvable.");
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.training.delete({ where: { id } }),
+      ...(training.publicationId ? [this.prisma.publication.deleteMany({ where: { id: training.publicationId } })] : []),
+    ]).catch((error) => {
       if (this.isNotFound(error)) {
         throw new NotFoundException("Cette formation est introuvable.");
       }
@@ -1601,13 +1634,13 @@ export class AdminService {
   }
 
   async createEvent(authUser: AuthUser, input: CreateAdminEventDto) {
-    await this.ensureAdmin(authUser);
+    const admin = await this.ensureAdmin(authUser);
 
     const title = this.requiredText(input.title, "Le titre de l'événement est requis.");
     const startsAt = this.parseRequiredDate(input.startsAt, "La date de début de l'événement est requise.");
     const endsAt = this.parseRequiredDate(input.endsAt, "La date de fin de l'événement est requise.");
     this.ensureDateOrder(startsAt, endsAt);
-    const published = input.featuredOnLanding ? true : input.published ?? false;
+    const published = input.featuredOnLanding || input.showInFeed ? true : input.published ?? false;
     const types = this.normalizeEventTypes(input.types, input.type);
 
     try {
@@ -1634,10 +1667,13 @@ export class AdminService {
             facebookEventUrl: this.optionalText(input.facebookEventUrl),
             published,
             featuredOnLanding: input.featuredOnLanding ?? false,
+            showInFeed: input.showInFeed ?? false,
           },
           include: adminEventInclude,
         });
       });
+
+      await this.syncEventPublication(admin, event);
 
       return this.serializeEvent(event);
     } catch (error) {
@@ -1650,7 +1686,7 @@ export class AdminService {
   }
 
   async updateEvent(authUser: AuthUser, id: string, input: UpdateAdminEventDto) {
-    await this.ensureAdmin(authUser);
+    const admin = await this.ensureAdmin(authUser);
 
     if (!Object.keys(input).length) {
       throw new BadRequestException("Aucune information à mettre à jour.");
@@ -1726,6 +1762,18 @@ export class AdminService {
       }
     }
 
+    if (input.showInFeed !== undefined) {
+      data.showInFeed = input.showInFeed;
+
+      if (input.showInFeed) {
+        data.published = true;
+      }
+    }
+
+    if (data.published === false) {
+      data.showInFeed = false;
+    }
+
     const event = await this.prisma.$transaction(async (tx) => {
       if (input.featuredOnLanding) {
         await tx.event.updateMany({
@@ -1741,13 +1789,27 @@ export class AdminService {
       });
     });
 
+    await this.syncEventPublication(admin, event);
+
     return this.serializeEvent(event);
   }
 
   async deleteEvent(authUser: AuthUser, id: string) {
     await this.ensureAdmin(authUser);
 
-    await this.prisma.event.delete({ where: { id } }).catch((error) => {
+    const event = await this.prisma.event.findUnique({
+      where: { id },
+      select: { publicationId: true },
+    });
+
+    if (!event) {
+      throw new NotFoundException("Cet événement est introuvable.");
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.event.delete({ where: { id } }),
+      ...(event.publicationId ? [this.prisma.publication.deleteMany({ where: { id: event.publicationId } })] : []),
+    ]).catch((error) => {
       if (this.isNotFound(error)) {
         throw new NotFoundException("Cet événement est introuvable.");
       }
@@ -1808,18 +1870,21 @@ export class AdminService {
         type: input.type,
         url,
         accessLevel: input.accessLevel ?? ResourceAccessLevel.MEMBERS,
-        published: input.published ?? false,
+        published: input.showInFeed ? true : input.published ?? false,
+        showInFeed: input.showInFeed ?? false,
         trainingId: this.optionalText(input.trainingId),
         uploadedById: admin.id,
       },
       include: adminResourceInclude,
     });
 
+    await this.syncResourcePublication(admin, resource);
+
     return this.serializeResource(resource);
   }
 
   async updateResource(authUser: AuthUser, id: string, input: UpdateAdminResourceDto) {
-    await this.ensureAdmin(authUser);
+    const admin = await this.ensureAdmin(authUser);
 
     if (!Object.keys(input).length) {
       throw new BadRequestException("Aucune information à mettre à jour.");
@@ -1851,6 +1916,18 @@ export class AdminService {
       data.published = input.published;
     }
 
+    if (input.showInFeed !== undefined) {
+      data.showInFeed = input.showInFeed;
+
+      if (input.showInFeed) {
+        data.published = true;
+      }
+    }
+
+    if (data.published === false) {
+      data.showInFeed = false;
+    }
+
     if (input.trainingId !== undefined) {
       const trainingId = this.optionalText(input.trainingId);
       data.training = trainingId ? { connect: { id: trainingId } } : { disconnect: true };
@@ -1868,13 +1945,27 @@ export class AdminService {
       throw error;
     });
 
+    await this.syncResourcePublication(admin, resource);
+
     return this.serializeResource(resource);
   }
 
   async deleteResource(authUser: AuthUser, id: string) {
     await this.ensureAdmin(authUser);
 
-    await this.prisma.resource.delete({ where: { id } }).catch((error) => {
+    const resource = await this.prisma.resource.findUnique({
+      where: { id },
+      select: { publicationId: true },
+    });
+
+    if (!resource) {
+      throw new NotFoundException("Cette ressource est introuvable.");
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.resource.delete({ where: { id } }),
+      ...(resource.publicationId ? [this.prisma.publication.deleteMany({ where: { id: resource.publicationId } })] : []),
+    ]).catch((error) => {
       if (this.isNotFound(error)) {
         throw new NotFoundException("Cette ressource est introuvable.");
       }
@@ -1922,10 +2013,10 @@ export class AdminService {
   }
 
   async createOpportunity(authUser: AuthUser, input: CreateAdminOpportunityDto) {
-    await this.ensureAdmin(authUser);
+    const admin = await this.ensureAdmin(authUser);
 
     const title = this.requiredText(input.title, "Le titre de l'opportunité est requis.");
-    const status = input.published ? OpportunityStatus.OPEN : input.status ?? OpportunityStatus.DRAFT;
+    const status = input.published || input.showInFeed ? OpportunityStatus.OPEN : input.status ?? OpportunityStatus.DRAFT;
 
     try {
       const opportunity = await this.prisma.opportunity.create({
@@ -1938,10 +2029,14 @@ export class AdminService {
           deadline: this.parseOptionalDate(input.deadline, "La date limite de l'opportunité est invalide."),
           location: this.optionalText(input.location),
           eligibilityUrl: this.optionalText(input.eligibilityUrl),
-          published: input.published ?? status === OpportunityStatus.OPEN,
+          coverImageUrl: this.optionalText(input.coverImageUrl),
+          showInFeed: input.showInFeed ?? false,
+          published: input.showInFeed ? true : input.published ?? status === OpportunityStatus.OPEN,
         },
         include: adminOpportunityInclude,
       });
+
+      await this.syncOpportunityPublication(admin, opportunity);
 
       return this.serializeOpportunity(opportunity);
     } catch (error) {
@@ -1954,7 +2049,7 @@ export class AdminService {
   }
 
   async updateOpportunity(authUser: AuthUser, id: string, input: UpdateAdminOpportunityDto) {
-    await this.ensureAdmin(authUser);
+    const admin = await this.ensureAdmin(authUser);
 
     if (!Object.keys(input).length) {
       throw new BadRequestException("Aucune information à mettre à jour.");
@@ -1990,12 +2085,29 @@ export class AdminService {
       data.eligibilityUrl = this.optionalText(input.eligibilityUrl);
     }
 
+    if (input.coverImageUrl !== undefined) {
+      data.coverImageUrl = this.optionalText(input.coverImageUrl);
+    }
+
     if (input.published !== undefined) {
       data.published = input.published;
 
       if (input.published) {
         data.status = OpportunityStatus.OPEN;
       }
+    }
+
+    if (input.showInFeed !== undefined) {
+      data.showInFeed = input.showInFeed;
+
+      if (input.showInFeed) {
+        data.published = true;
+        data.status = OpportunityStatus.OPEN;
+      }
+    }
+
+    if (data.published === false || (data.status !== undefined && data.status !== OpportunityStatus.OPEN)) {
+      data.showInFeed = false;
     }
 
     const opportunity = await this.prisma.opportunity.update({
@@ -2014,13 +2126,27 @@ export class AdminService {
       throw error;
     });
 
+    await this.syncOpportunityPublication(admin, opportunity);
+
     return this.serializeOpportunity(opportunity);
   }
 
   async deleteOpportunity(authUser: AuthUser, id: string) {
     await this.ensureAdmin(authUser);
 
-    await this.prisma.opportunity.delete({ where: { id } }).catch((error) => {
+    const opportunity = await this.prisma.opportunity.findUnique({
+      where: { id },
+      select: { publicationId: true },
+    });
+
+    if (!opportunity) {
+      throw new NotFoundException("Cette opportunité est introuvable.");
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.opportunity.delete({ where: { id } }),
+      ...(opportunity.publicationId ? [this.prisma.publication.deleteMany({ where: { id: opportunity.publicationId } })] : []),
+    ]).catch((error) => {
       if (this.isNotFound(error)) {
         throw new NotFoundException("Cette opportunité est introuvable.");
       }
@@ -2805,6 +2931,7 @@ export class AdminService {
       status: training.status,
       certificateEnabled: training.certificateEnabled,
       featuredOnLanding: training.featuredOnLanding,
+      showInFeed: training.showInFeed,
       createdAt: training.createdAt,
       updatedAt: training.updatedAt,
       counts: {
@@ -2834,6 +2961,7 @@ export class AdminService {
       facebookEventUrl: event.facebookEventUrl,
       published: event.published,
       featuredOnLanding: event.featuredOnLanding,
+      showInFeed: event.showInFeed,
       createdAt: event.createdAt,
       updatedAt: event.updatedAt,
       counts: {
@@ -2857,6 +2985,7 @@ export class AdminService {
       url: resource.url,
       accessLevel: resource.accessLevel,
       published: resource.published,
+      showInFeed: resource.showInFeed,
       training: resource.training,
       counts: {
         views: resource._count.views,
@@ -2921,6 +3050,8 @@ export class AdminService {
       deadline: opportunity.deadline,
       location: opportunity.location,
       eligibilityUrl: opportunity.eligibilityUrl,
+      coverImageUrl: opportunity.coverImageUrl,
+      showInFeed: opportunity.showInFeed,
       published: opportunity.published,
       createdAt: opportunity.createdAt,
       updatedAt: opportunity.updatedAt,
@@ -3225,8 +3356,8 @@ export class AdminService {
   private adminUploadPurpose(value: string | undefined) {
     const normalized = value?.trim().toLowerCase();
 
-    if (["training", "event", "gallery", "resource", "partner", "certificate"].includes(normalized ?? "")) {
-      return normalized as "training" | "event" | "gallery" | "resource" | "partner" | "certificate";
+    if (["training", "event", "gallery", "resource", "opportunity", "partner", "certificate"].includes(normalized ?? "")) {
+      return normalized as "training" | "event" | "gallery" | "resource" | "opportunity" | "partner" | "certificate";
     }
 
     return "resource";
@@ -3365,6 +3496,267 @@ export class AdminService {
     const existingSlugs = new Set(existingOpportunities.map((opportunity) => opportunity.slug));
 
     return this.resolveUniqueSlug(baseSlug, existingSlugs);
+  }
+
+  private async syncTrainingPublication(admin: AdminUser, training: AdminTraining) {
+    const shouldPublish = training.showInFeed && training.status === TrainingStatus.PUBLISHED;
+
+    if (!shouldPublish) {
+      await this.archiveOfficialPublication(training.publicationId);
+      return;
+    }
+
+    const publicationData = {
+      type: PublicationType.TRAINING,
+      status: PublicationStatus.PUBLISHED,
+      audience: PublicationAudience.PUBLIC,
+      title: training.title,
+      content: training.description,
+      excerpt: this.buildExcerpt(training.description),
+      category: "Formation officielle CCA",
+      discipline: null,
+      country: null,
+      city: training.location,
+      tags: ["formation", "cca"],
+      routingDestinations: ["trainings", "network"],
+      linkUrl: null,
+      coverImageUrl: training.coverImageUrl,
+      opportunityDeadline: training.startsAt,
+      opportunityLocation: training.location,
+      budgetRange: training.priceCents && training.priceCents > 0 ? `${training.priceCents} ${training.currency}` : null,
+      contactEmail: null,
+      expiresAt: training.endsAt,
+    };
+
+    const publicationId = await this.upsertOfficialPublication(admin, training.publicationId, publicationData, training.createdAt, training.updatedAt);
+
+    if (publicationId !== training.publicationId) {
+      await this.prisma.training.update({
+        where: { id: training.id },
+        data: { publicationId },
+        select: { id: true },
+      });
+    }
+  }
+
+  private async syncEventPublication(admin: AdminUser, event: AdminEvent) {
+    const shouldPublish = event.showInFeed && event.published;
+
+    if (!shouldPublish) {
+      await this.archiveOfficialPublication(event.publicationId);
+      return;
+    }
+
+    const eventTypes = event.types.length ? event.types : [event.type];
+    const publicationData = {
+      type: PublicationType.EVENT,
+      status: PublicationStatus.PUBLISHED,
+      audience: PublicationAudience.PUBLIC,
+      title: event.title,
+      content: event.description,
+      excerpt: this.buildExcerpt(event.description),
+      category: eventTypes.map((type) => this.eventTypeLabel(type)).join(", "),
+      discipline: null,
+      country: null,
+      city: event.location,
+      tags: ["événement", "cca", ...eventTypes.map((type) => this.eventTypeLabel(type).toLowerCase())],
+      routingDestinations: ["agenda", "network"],
+      linkUrl: event.facebookEventUrl ?? event.whatsappUrl,
+      coverImageUrl: event.coverImageUrl,
+      opportunityDeadline: event.startsAt,
+      opportunityLocation: event.location,
+      budgetRange: null,
+      contactEmail: null,
+      expiresAt: event.endsAt,
+    };
+
+    const publicationId = await this.upsertOfficialPublication(admin, event.publicationId, publicationData, event.createdAt, event.updatedAt);
+
+    if (publicationId !== event.publicationId) {
+      await this.prisma.event.update({
+        where: { id: event.id },
+        data: { publicationId },
+        select: { id: true },
+      });
+    }
+  }
+
+  private async syncResourcePublication(admin: AdminUser, resource: AdminResource) {
+    const shouldPublish = resource.showInFeed && resource.published;
+
+    if (!shouldPublish) {
+      await this.archiveOfficialPublication(resource.publicationId);
+      return;
+    }
+
+    const resourceTypeLabel = this.resourceTypeLabel(resource.type);
+    const publicationData = {
+      type: PublicationType.RESOURCE,
+      status: PublicationStatus.PUBLISHED,
+      audience: resource.accessLevel === ResourceAccessLevel.PUBLIC ? PublicationAudience.PUBLIC : PublicationAudience.MEMBERS,
+      title: resource.title,
+      content: resource.description ?? `Nouvelle ressource CCA disponible : ${resource.title}.`,
+      excerpt: this.buildExcerpt(resource.description ?? `Nouvelle ressource CCA disponible : ${resource.title}.`),
+      category: resourceTypeLabel,
+      discipline: null,
+      country: null,
+      city: null,
+      tags: ["ressource", "cca", resourceTypeLabel.toLowerCase()],
+      routingDestinations: ["resources", "network"],
+      linkUrl: resource.url,
+      coverImageUrl: null,
+      opportunityDeadline: null,
+      opportunityLocation: null,
+      budgetRange: null,
+      contactEmail: null,
+      expiresAt: null,
+    };
+
+    const publicationId = await this.upsertOfficialPublication(admin, resource.publicationId, publicationData, resource.createdAt, resource.updatedAt);
+
+    if (publicationId !== resource.publicationId) {
+      await this.prisma.resource.update({
+        where: { id: resource.id },
+        data: { publicationId },
+        select: { id: true },
+      });
+    }
+  }
+
+  private async syncOpportunityPublication(admin: AdminUser, opportunity: AdminOpportunity) {
+    const shouldPublish = opportunity.showInFeed && opportunity.published && opportunity.status === OpportunityStatus.OPEN;
+
+    if (!shouldPublish) {
+      await this.archiveOfficialPublication(opportunity.publicationId);
+      return;
+    }
+
+    const publicationData = {
+      type: PublicationType.OPPORTUNITY,
+      status: PublicationStatus.PUBLISHED,
+      audience: PublicationAudience.PUBLIC,
+      title: opportunity.title,
+      content: opportunity.description,
+      excerpt: this.buildExcerpt(opportunity.description),
+      category: this.opportunityTypeLabel(opportunity.type),
+      discipline: null,
+      country: null,
+      city: opportunity.location,
+      tags: ["opportunité", "cca", this.opportunityTypeLabel(opportunity.type).toLowerCase()],
+      routingDestinations: ["opportunities", "network"],
+      linkUrl: opportunity.eligibilityUrl,
+      coverImageUrl: opportunity.coverImageUrl,
+      opportunityDeadline: opportunity.deadline,
+      opportunityLocation: opportunity.location,
+      budgetRange: null,
+      contactEmail: null,
+      expiresAt: opportunity.deadline,
+    };
+
+    const publicationId = await this.upsertOfficialPublication(admin, opportunity.publicationId, publicationData, opportunity.createdAt, opportunity.updatedAt);
+
+    if (publicationId !== opportunity.publicationId) {
+      await this.prisma.opportunity.update({
+        where: { id: opportunity.id },
+        data: { publicationId },
+        select: { id: true },
+      });
+    }
+  }
+
+  private async archiveOfficialPublication(publicationId?: string | null) {
+    if (!publicationId) {
+      return;
+    }
+
+    await this.prisma.publication.updateMany({
+      where: { id: publicationId },
+      data: { status: PublicationStatus.ARCHIVED },
+    });
+  }
+
+  private async upsertOfficialPublication(
+    admin: AdminUser,
+    publicationId: string | null | undefined,
+    data: OfficialPublicationData,
+    createdAt: Date,
+    updatedAt: Date,
+  ) {
+    if (publicationId) {
+      const updateResult = await this.prisma.publication.updateMany({
+        where: { id: publicationId },
+        data,
+      });
+
+      if (updateResult.count > 0) {
+        return publicationId;
+      }
+    }
+
+    const publication = await this.prisma.publication.create({
+      data: {
+        ...data,
+        authorId: admin.id,
+        publishedAt: new Date(),
+        createdAt,
+        updatedAt,
+      },
+      select: { id: true },
+    });
+
+    return publication.id;
+  }
+
+  private eventTypeLabel(type: EventType) {
+    const labels: Record<EventType, string> = {
+      [EventType.WORKSHOP]: "Workshop",
+      [EventType.MASTERCLASS]: "Masterclass",
+      [EventType.CONFERENCE]: "Conférence",
+      [EventType.PANEL]: "Panel",
+      [EventType.NETWORKING]: "Networking",
+      [EventType.ACTIVATION]: "Activation",
+      [EventType.VISIT]: "Visite",
+      [EventType.FESTIVAL]: "Festival",
+    };
+
+    return labels[type];
+  }
+
+  private resourceTypeLabel(type: ResourceType) {
+    const labels: Record<ResourceType, string> = {
+      [ResourceType.PDF]: "PDF",
+      [ResourceType.TEMPLATE]: "Modèle",
+      [ResourceType.CONTRACT]: "Contrat",
+      [ResourceType.GUIDE]: "Guide",
+      [ResourceType.VIDEO]: "Vidéo",
+      [ResourceType.PODCAST]: "Podcast",
+    };
+
+    return labels[type];
+  }
+
+  private opportunityTypeLabel(type: OpportunityType) {
+    const labels: Record<OpportunityType, string> = {
+      [OpportunityType.CONTEST]: "Concours",
+      [OpportunityType.RESIDENCY]: "Résidence",
+      [OpportunityType.MISSION]: "Mission",
+      [OpportunityType.FUNDING]: "Financement",
+      [OpportunityType.CASTING]: "Casting",
+      [OpportunityType.FESTIVAL]: "Festival",
+      [OpportunityType.TRAINING]: "Formation",
+    };
+
+    return labels[type];
+  }
+
+  private buildExcerpt(content: string) {
+    const normalized = content.trim().replace(/\s+/g, " ");
+
+    if (normalized.length <= 180) {
+      return normalized;
+    }
+
+    return `${normalized.slice(0, 177)}...`;
   }
 
   private async buildUniqueGalleryAlbumSlug(title: string) {

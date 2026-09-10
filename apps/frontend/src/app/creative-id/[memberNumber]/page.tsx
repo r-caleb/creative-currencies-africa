@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
+import { API_URL } from "@/lib/api-url";
 import { accountTypeLabel, buildInitials } from "@/lib/member-display";
 
 export const dynamic = "force-dynamic";
@@ -60,7 +61,6 @@ type PublicCreativeId = {
   }[];
 };
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
 const CCA_CONTACT_EMAIL = process.env.NEXT_PUBLIC_CCA_CONTACT_EMAIL ?? "contact@creativecurrencies.africa";
 
 export default async function PublicCreativeIdPage({ params }: { params: Promise<{ memberNumber: string }> }) {

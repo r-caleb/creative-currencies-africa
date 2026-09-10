@@ -1,6 +1,5 @@
 import { io, type Socket } from "socket.io-client";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
+import { API_URL } from "@/lib/api-url";
 
 export type RealtimeSocket = Socket;
 

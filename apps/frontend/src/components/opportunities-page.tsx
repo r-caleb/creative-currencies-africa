@@ -482,6 +482,15 @@ export function OpportunitiesPage() {
             {selectedOpportunity ? (
               <section id="opportunite-detail" className="member-card opportunity-detail-card">
                 <span className="member-kicker">Détail</span>
+                {selectedOpportunity.coverImageUrl ? (
+                  <img
+                    className="opportunity-detail-cover"
+                    src={selectedOpportunity.coverImageUrl}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                  />
+                ) : null}
                 <strong>{selectedOpportunity.title}</strong>
                 <p>{selectedOpportunity.description}</p>
                 <div className="opportunity-detail-meta">

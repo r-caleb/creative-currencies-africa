@@ -31,6 +31,11 @@ export class CreateAdminResourceDto {
   @IsBoolean({ message: "Le statut publié doit être vrai ou faux." })
   published?: boolean;
 
+  @ApiPropertyOptional({ example: false })
+  @IsOptional()
+  @IsBoolean({ message: "Le champ fil d'actualité doit être vrai ou faux." })
+  showInFeed?: boolean;
+
   @ApiPropertyOptional({ example: "clx-training-id" })
   @IsOptional()
   @IsString({ message: "La formation liée doit être un identifiant valide." })
