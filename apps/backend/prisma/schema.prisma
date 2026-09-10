@@ -564,11 +564,14 @@ model Training {
   status             TrainingStatus @default(DRAFT)
   certificateEnabled Boolean        @default(true)
   featuredOnLanding  Boolean        @default(false)
+  showInFeed         Boolean        @default(false)
+  publicationId      String?        @unique
 
   modules      TrainingModule[]
   enrollments  TrainingEnrollment[]
   resources    Resource[]
   certificates Certificate[]
+  publication  Publication?         @relation(fields: [publicationId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -576,6 +579,8 @@ model Training {
   @@index([status])
   @@index([startsAt])
   @@index([featuredOnLanding])
+  @@index([showInFeed])
+  @@index([publicationId])
 }
 
 model TrainingModule {
@@ -617,18 +622,21 @@ model TrainingEnrollment {
 }
 
 model Resource {
-  id           String              @id @default(cuid())
-  title        String
-  description  String?
-  type         ResourceType
-  url          String
-  accessLevel  ResourceAccessLevel @default(MEMBERS)
-  published    Boolean             @default(false)
-  trainingId   String?
-  uploadedById String?
+  id            String              @id @default(cuid())
+  title         String
+  description   String?
+  type          ResourceType
+  url           String
+  accessLevel   ResourceAccessLevel @default(MEMBERS)
+  published     Boolean             @default(false)
+  showInFeed    Boolean             @default(false)
+  publicationId String?             @unique
+  trainingId    String?
+  uploadedById  String?
 
   training    Training?            @relation(fields: [trainingId], references: [id], onDelete: SetNull)
   uploadedBy  User?                @relation("ResourceUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  publication Publication?         @relation(fields: [publicationId], references: [id], onDelete: SetNull)
   views       ResourceView[]
   downloads   ResourceDownload[]
   usefulMarks ResourceUsefulMark[]
@@ -639,6 +647,8 @@ model Resource {
   @@index([type])
   @@index([accessLevel])
   @@index([published])
+  @@index([showInFeed])
+  @@index([publicationId])
   @@index([trainingId])
 }
 
@@ -695,9 +705,13 @@ model Opportunity {
   deadline       DateTime?
   location       String?
   eligibilityUrl String?
+  coverImageUrl  String?
+  showInFeed     Boolean           @default(false)
+  publicationId  String?           @unique
   published      Boolean           @default(false)
 
   applications OpportunityApplication[]
+  publication  Publication?             @relation(fields: [publicationId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -706,6 +720,8 @@ model Opportunity {
   @@index([status])
   @@index([deadline])
   @@index([published])
+  @@index([showInFeed])
+  @@index([publicationId])
 }
 
 model OpportunityApplication {
@@ -738,11 +754,11 @@ model OpportunityApplication {
 }
 
 model Event {
-  id                String    @id @default(cuid())
+  id                String      @id @default(cuid())
   title             String
-  slug              String    @unique
+  slug              String      @unique
   description       String
-  type              EventType @default(WORKSHOP)
+  type              EventType   @default(WORKSHOP)
   types             EventType[] @default([])
   startsAt          DateTime
   endsAt            DateTime
@@ -750,10 +766,13 @@ model Event {
   coverImageUrl     String?
   whatsappUrl       String?
   facebookEventUrl  String?
-  published         Boolean   @default(false)
-  featuredOnLanding Boolean   @default(false)
+  published         Boolean     @default(false)
+  featuredOnLanding Boolean     @default(false)
+  showInFeed        Boolean     @default(false)
+  publicationId     String?     @unique
 
   registrations EventRegistration[]
+  publication   Publication?        @relation(fields: [publicationId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -762,6 +781,8 @@ model Event {
   @@index([startsAt])
   @@index([published])
   @@index([featuredOnLanding])
+  @@index([showInFeed])
+  @@index([publicationId])
 }
 
 model EventRegistration {
@@ -1074,13 +1095,17 @@ model Publication {
   publishedAt DateTime?
   expiresAt   DateTime?
 
-  author      User                    @relation("PublicationAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-  attachments PublicationAttachment[]
-  comments    PublicationComment[]
-  reactions   PublicationReaction[]
-  shares      PublicationShare[]
-  reports     PublicationReport[]
-  mentions    PublicationMention[]
+  author              User                    @relation("PublicationAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  attachments         PublicationAttachment[]
+  comments            PublicationComment[]
+  reactions           PublicationReaction[]
+  shares              PublicationShare[]
+  reports             PublicationReport[]
+  mentions            PublicationMention[]
+  officialOpportunity Opportunity?
+  officialTraining    Training?
+  officialEvent       Event?
+  officialResource    Resource?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

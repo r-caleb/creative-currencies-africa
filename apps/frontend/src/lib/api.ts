@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
+import { API_URL } from "@/lib/api-url";
 
 export type AuthUser = {
   id: string;
@@ -775,6 +775,7 @@ export type AdminTraining = {
   status: AdminTrainingStatus;
   certificateEnabled: boolean;
   featuredOnLanding: boolean;
+  showInFeed: boolean;
   createdAt: string;
   updatedAt: string;
   counts: {
@@ -800,6 +801,7 @@ export type AdminEvent = {
   facebookEventUrl: string | null;
   published: boolean;
   featuredOnLanding: boolean;
+  showInFeed: boolean;
   createdAt: string;
   updatedAt: string;
   counts: {
@@ -815,6 +817,7 @@ export type AdminResource = {
   url: string;
   accessLevel: AdminResourceAccessLevel;
   published: boolean;
+  showInFeed: boolean;
   training: { id: string; title: string; slug: string } | null;
   counts: {
     views: number;
@@ -835,7 +838,9 @@ export type AdminOpportunity = {
   deadline: string | null;
   location: string | null;
   eligibilityUrl: string | null;
+  coverImageUrl: string | null;
   published: boolean;
+  showInFeed: boolean;
   createdAt: string;
   updatedAt: string;
   counts: {
@@ -1016,6 +1021,7 @@ export type TrainingPayload = {
   status?: AdminTrainingStatus;
   certificateEnabled?: boolean;
   featuredOnLanding?: boolean;
+  showInFeed?: boolean;
 };
 
 export type EventPayload = {
@@ -1031,6 +1037,7 @@ export type EventPayload = {
   facebookEventUrl?: string;
   published?: boolean;
   featuredOnLanding?: boolean;
+  showInFeed?: boolean;
 };
 
 export type ResourcePayload = {
@@ -1040,6 +1047,7 @@ export type ResourcePayload = {
   url: string;
   accessLevel?: AdminResourceAccessLevel;
   published?: boolean;
+  showInFeed?: boolean;
   trainingId?: string;
 };
 
@@ -1051,7 +1059,9 @@ export type OpportunityPayload = {
   deadline?: string;
   location?: string;
   eligibilityUrl?: string;
+  coverImageUrl?: string;
   published?: boolean;
+  showInFeed?: boolean;
 };
 
 export type GalleryPhotoPayload = {
@@ -1074,7 +1084,7 @@ export type GalleryAlbumPayload = {
   photos?: GalleryPhotoPayload[];
 };
 
-export type AdminUploadPurpose = "training" | "event" | "gallery" | "resource" | "partner" | "certificate";
+export type AdminUploadPurpose = "training" | "event" | "gallery" | "resource" | "opportunity" | "partner" | "certificate";
 
 export type AdminUploadResponse = {
   url: string;
@@ -1184,6 +1194,7 @@ export type MemberOpportunity = {
   disciplines: string[];
   official: boolean;
   linkUrl: string | null;
+  coverImageUrl: string | null;
   canApply: boolean;
   canManage: boolean;
   application: MemberOpportunityApplication | null;

@@ -2884,6 +2884,7 @@ export class MemberService {
     deadline: Date | null;
     location: string | null;
     eligibilityUrl: string | null;
+    coverImageUrl: string | null;
     published: boolean;
     applications: Array<{
       id: string;
@@ -2925,6 +2926,7 @@ export class MemberService {
       disciplines: this.opportunityDisciplines(opportunity.type, user),
       official,
       linkUrl: opportunity.eligibilityUrl,
+      coverImageUrl: opportunity.coverImageUrl,
       canApply: true,
       canManage: false,
       application: application
