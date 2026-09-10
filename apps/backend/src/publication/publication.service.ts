@@ -97,6 +97,10 @@ const publicationAuthorSelect = {
 } satisfies Prisma.UserSelect;
 
 type PublicationAuthor = Prisma.UserGetPayload<{ select: typeof publicationAuthorSelect }>;
+type OfficialAuthorProfile = {
+  displayName: string;
+  logoUrl: string;
+};
 
 const publicationInclude = {
   author: {
@@ -341,7 +345,7 @@ export class PublicationService {
       ]);
     }
 
-    return this.serializePublication(publication, user.id);
+    return this.serializePublication(publication, user.id, null, await this.loadOfficialAuthorProfile());
   }
 
   async uploadPublicationAttachment(authUser: AuthUser, file?: Express.Multer.File) {
@@ -372,7 +376,8 @@ export class PublicationService {
     const pageItems = query.paginated ? publications.slice(0, limit) : publications;
     const rankedItems = this.rankPublicationsForUser(pageItems, user);
     const viewerReactions = await this.loadViewerReactions(rankedItems.map((publication) => publication.id), user.id);
-    const serializedItems = rankedItems.map((publication) => this.serializePublication(publication, user.id, viewerReactions.get(publication.id) ?? null));
+    const officialProfile = await this.loadOfficialAuthorProfile();
+    const serializedItems = rankedItems.map((publication) => this.serializePublication(publication, user.id, viewerReactions.get(publication.id) ?? null, officialProfile));
 
     if (query.paginated) {
       return {
@@ -395,7 +400,7 @@ export class PublicationService {
 
     this.ensureCanRead(user, publication);
 
-    return this.serializePublication(publication, user.id, await this.loadViewerReaction(publication.id, user.id));
+    return this.serializePublication(publication, user.id, await this.loadViewerReaction(publication.id, user.id), await this.loadOfficialAuthorProfile());
   }
 
   async listComments(authUser: AuthUser, publicationId: string, query: PublicationCommentsQueryDto = {}) {
@@ -434,9 +439,10 @@ export class PublicationService {
     }, new Map());
     const comments = pageRoots.flatMap((comment) => [comment, ...(repliesByParentId.get(comment.id) ?? [])]);
     const total = await this.prisma.publicationComment.count({ where: { publicationId } });
+    const officialProfile = await this.loadOfficialAuthorProfile();
 
     return {
-      items: comments.map((comment) => this.serializePublicationComment(comment, user.id, publication.authorId)),
+      items: comments.map((comment) => this.serializePublicationComment(comment, user.id, publication.authorId, officialProfile)),
       nextCursor: rootComments.length > limit && pageRoots.length ? this.encodeCommentCursor(pageRoots[pageRoots.length - 1]) : null,
       hasMore: rootComments.length > limit,
       total,
@@ -524,7 +530,7 @@ export class PublicationService {
       ]);
     }
 
-    return this.serializePublication(updated, user.id);
+    return this.serializePublication(updated, user.id, null, await this.loadOfficialAuthorProfile());
   }
 
   async publishPublication(authUser: AuthUser, id: string) {
@@ -553,7 +559,7 @@ export class PublicationService {
       this.notifyPublicationMentions(updated, user).catch(() => undefined),
     ]);
 
-    return this.serializePublication(updated, user.id);
+    return this.serializePublication(updated, user.id, null, await this.loadOfficialAuthorProfile());
   }
 
   async archivePublication(authUser: AuthUser, id: string) {
@@ -567,7 +573,7 @@ export class PublicationService {
       include: publicationInclude,
     });
 
-    return this.serializePublication(updated, user.id);
+    return this.serializePublication(updated, user.id, null, await this.loadOfficialAuthorProfile());
   }
 
   async addComment(authUser: AuthUser, publicationId: string, input: CreatePublicationCommentDto) {
@@ -607,7 +613,7 @@ export class PublicationService {
       }).catch(() => undefined);
     }
 
-    return this.serializePublicationComment(comment, user.id, publication.authorId);
+    return this.serializePublicationComment(comment, user.id, publication.authorId, await this.loadOfficialAuthorProfile());
   }
 
   async deleteComment(authUser: AuthUser, publicationId: string, commentId: string) {
@@ -748,10 +754,12 @@ export class PublicationService {
       }),
     ]);
 
+    const officialProfile = await this.loadOfficialAuthorProfile();
+
     return {
       count,
       items: reactions.map((reaction) => ({
-        ...this.serializeAuthor(reaction.user),
+        ...this.serializeAuthor(reaction.user, officialProfile),
         reactionType: reaction.type,
         reactedAt: reaction.createdAt,
       })),
@@ -887,9 +895,10 @@ export class PublicationService {
       }),
       this.prisma.publicationReport.count({ where }),
     ]);
+    const officialProfile = await this.loadOfficialAuthorProfile();
 
     return {
-      reports: reports.map((report) => this.serializePublicationReport(report, user.id)),
+      reports: reports.map((report) => this.serializePublicationReport(report, user.id, officialProfile)),
       total,
       pending: reports.filter((report) => report.status === PublicationReportStatus.PENDING).length,
     };
@@ -953,7 +962,7 @@ export class PublicationService {
 
     return {
       success: true,
-      report: report ? this.serializePublicationReport(report, user.id) : null,
+      report: report ? this.serializePublicationReport(report, user.id, await this.loadOfficialAuthorProfile()) : null,
     };
   }
 
@@ -1554,7 +1563,22 @@ export class PublicationService {
     return normalized || "fichier";
   }
 
-  private serializePublication(publication: PublicationWithRelations, currentUserId: string, viewerReaction: PublicationReactionType | null = null) {
+  private async loadOfficialAuthorProfile(): Promise<OfficialAuthorProfile | null> {
+    return this.prisma.platformProfile.findUnique({
+      where: { id: "official-cca" },
+      select: {
+        displayName: true,
+        logoUrl: true,
+      },
+    });
+  }
+
+  private serializePublication(
+    publication: PublicationWithRelations,
+    currentUserId: string,
+    viewerReaction: PublicationReactionType | null = null,
+    officialProfile: OfficialAuthorProfile | null = null,
+  ) {
     return {
       id: publication.id,
       type: publication.type,
@@ -1581,9 +1605,9 @@ export class PublicationService {
       expiresAt: publication.expiresAt,
       createdAt: publication.createdAt,
       updatedAt: publication.updatedAt,
-      author: this.serializeAuthor(publication.author),
+      author: this.serializeAuthor(publication.author, officialProfile),
       attachments: publication.attachments,
-      mentions: publication.mentions.map((mention) => this.serializeAuthor(mention.user)),
+      mentions: publication.mentions.map((mention) => this.serializeAuthor(mention.user, officialProfile)),
       counts: {
         comments: publication._count.comments,
         reactions: publication._count.reactions,
@@ -1625,7 +1649,12 @@ export class PublicationService {
     return new Map(reactions.map((reaction) => [reaction.publicationId, reaction.type]));
   }
 
-  private serializePublicationComment(comment: PublicationCommentWithAuthor, currentUserId: string, publicationAuthorId?: string) {
+  private serializePublicationComment(
+    comment: PublicationCommentWithAuthor,
+    currentUserId: string,
+    publicationAuthorId?: string,
+    officialProfile: OfficialAuthorProfile | null = null,
+  ) {
     return {
       id: comment.id,
       publicationId: comment.publicationId,
@@ -1633,7 +1662,7 @@ export class PublicationService {
       content: comment.content,
       createdAt: comment.createdAt,
       updatedAt: comment.updatedAt,
-      author: this.serializeAuthor(comment.author),
+      author: this.serializeAuthor(comment.author, officialProfile),
       permissions: {
         canEdit: comment.authorId === currentUserId,
         canDelete: comment.authorId === currentUserId || publicationAuthorId === currentUserId,
@@ -1641,7 +1670,7 @@ export class PublicationService {
     };
   }
 
-  private serializePublicationReport(report: PublicationReportWithRelations, currentUserId: string) {
+  private serializePublicationReport(report: PublicationReportWithRelations, currentUserId: string, officialProfile: OfficialAuthorProfile | null = null) {
     return {
       id: report.id,
       reason: report.reason,
@@ -1650,18 +1679,18 @@ export class PublicationService {
       reviewedAt: report.reviewedAt,
       createdAt: report.createdAt,
       updatedAt: report.updatedAt,
-      reporter: this.serializeAuthor(report.reporter),
-      publication: this.serializePublication(report.publication, currentUserId),
+      reporter: this.serializeAuthor(report.reporter, officialProfile),
+      publication: this.serializePublication(report.publication, currentUserId, null, officialProfile),
     };
   }
 
-  private serializeAuthor(author: PublicationAuthor | ActiveUser) {
+  private serializeAuthor(author: PublicationAuthor | ActiveUser, officialProfile: OfficialAuthorProfile | null = null) {
     if (author.type === AccountType.ADMIN) {
       return {
         id: author.id,
         accountType: author.type,
-        displayName: "Creative Currencies Africa",
-        avatarUrl: "/assets/cca-mask-gold-transparent.png",
+        displayName: officialProfile?.displayName ?? "Creative Currencies Africa",
+        avatarUrl: officialProfile?.logoUrl ?? "/assets/cca-mask-gold-transparent.png",
         memberNumber: null,
         discipline: "Compte officiel",
         country: null,

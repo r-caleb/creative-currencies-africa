@@ -277,6 +277,7 @@ model User {
   firstName       String
   lastName        String
   phone           String?
+  avatarUrl       String?
   type            AccountType   @default(LEARNER)
   status          AccountStatus @default(PENDING)
   emailVerifiedAt DateTime?
@@ -332,6 +333,24 @@ model User {
   @@index([type])
   @@index([status])
   @@index([createdAt])
+}
+
+model PlatformProfile {
+  id           String  @id @default("official-cca")
+  displayName  String  @default("Creative Currencies Africa")
+  logoUrl      String  @default("/assets/cca-mask-gold-transparent.png")
+  publicEmail  String?
+  phone        String?
+  whatsappUrl  String?
+  websiteUrl   String?
+  facebookUrl  String?
+  instagramUrl String?
+  linkedinUrl  String?
+  youtubeUrl   String?
+  shortBio     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model AccountEvolutionRequest {

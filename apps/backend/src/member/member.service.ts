@@ -1897,8 +1897,10 @@ export class MemberService {
 
     const uploadsToDelete: string[] = [];
 
-    if (user.profile && input.avatarUrl !== undefined && input.avatarUrl !== user.profile.avatarUrl && user.profile.avatarUrl) {
-      uploadsToDelete.push(user.profile.avatarUrl);
+    const currentAvatarUrl = user.type === AccountType.ADMIN ? user.avatarUrl : user.profile?.avatarUrl;
+
+    if (input.avatarUrl !== undefined && input.avatarUrl !== currentAvatarUrl && currentAvatarUrl) {
+      uploadsToDelete.push(currentAvatarUrl);
     }
 
     if (user.profile && input.cvUrl !== undefined && input.cvUrl !== user.profile.cvUrl && user.profile.cvUrl) {
@@ -1918,6 +1920,7 @@ export class MemberService {
         firstName: this.requiredText(input.firstName ?? user.firstName, "Le prénom est requis"),
         lastName: this.requiredText(input.lastName ?? user.lastName, "Le nom est requis"),
         phone: this.nextOptionalText(input.phone, user.phone),
+        ...(user.type === AccountType.ADMIN && input.avatarUrl !== undefined ? { avatarUrl: this.optionalText(input.avatarUrl) } : {}),
       };
 
       await tx.user.update({
@@ -2038,20 +2041,29 @@ export class MemberService {
     const storedFile = await this.storeUploadedFile(user.id, uploadKind, file);
     const updatedUser = await this.prisma.$transaction(async (tx) => {
       if (uploadKind === "AVATAR") {
-        if (!user.profile) {
-          throw new BadRequestException("Aucun profil Creative ID n'est associé à ce compte.");
+        if (user.type === AccountType.ADMIN) {
+          await tx.user.update({
+            where: { id: user.id },
+            data: { avatarUrl: storedFile.url },
+          });
         }
 
-        await tx.creativeProfile.update({
-          where: { userId: user.id },
-          data: {
-            avatarUrl: storedFile.url,
-            profileCompletion: this.calculateCreativeProfileCompletion({
-              ...user.profile,
+        if (!user.profile) {
+          if (user.type !== AccountType.ADMIN) {
+            throw new BadRequestException("Aucun profil Creative ID n'est associé à ce compte.");
+          }
+        } else {
+          await tx.creativeProfile.update({
+            where: { userId: user.id },
+            data: {
               avatarUrl: storedFile.url,
-            }),
-          },
-        });
+              profileCompletion: this.calculateCreativeProfileCompletion({
+                ...user.profile,
+                avatarUrl: storedFile.url,
+              }),
+            },
+          });
+        }
       }
 
       if (uploadKind === "CV") {
@@ -2191,8 +2203,12 @@ export class MemberService {
   private validateUploadTarget(accountType: AccountType, kind: ProfileUploadKind) {
     const isCreativeProfile = accountType === AccountType.CREATOR || accountType === AccountType.LEARNER;
 
-    if ((kind === "AVATAR" || kind === "CV") && !isCreativeProfile) {
+    if (kind === "AVATAR" && !isCreativeProfile && accountType !== AccountType.ADMIN) {
       throw new BadRequestException("Ce type de fichier est réservé aux profils créatifs et apprenants.");
+    }
+
+    if (kind === "CV" && !isCreativeProfile) {
+      throw new BadRequestException("Le CV est réservé aux profils créatifs et apprenants.");
     }
 
     if (kind === "LOGO" && accountType !== AccountType.ORGANIZATION && accountType !== AccountType.PARTNER) {
@@ -2241,6 +2257,7 @@ export class MemberService {
   private previousUploadUrl(
     user: {
       type: AccountType;
+      avatarUrl: string | null;
       profile: { avatarUrl: string | null; cvUrl: string | null } | null;
       organizationProfile: { logoUrl: string | null } | null;
       partnerProfile: { logoUrl: string | null } | null;
@@ -2248,7 +2265,7 @@ export class MemberService {
     kind: ProfileUploadKind,
   ) {
     if (kind === "AVATAR") {
-      return user.profile?.avatarUrl ?? null;
+      return user.type === AccountType.ADMIN ? user.avatarUrl : user.profile?.avatarUrl ?? null;
     }
 
     if (kind === "CV") {
@@ -3857,6 +3874,7 @@ export class MemberService {
     firstName: string;
     lastName: string;
     phone: string | null;
+    avatarUrl: string | null;
     type: AccountType;
     status: AccountStatus;
     emailVerifiedAt: Date | null;
@@ -3878,6 +3896,7 @@ export class MemberService {
     firstName: string;
     lastName: string;
     phone: string | null;
+    avatarUrl: string | null;
     type: AccountType;
     status: AccountStatus;
     emailVerifiedAt: Date | null;
@@ -3889,6 +3908,7 @@ export class MemberService {
       firstName: user.firstName,
       lastName: user.lastName,
       phone: user.phone,
+      avatarUrl: user.avatarUrl,
       type: user.type,
       status: user.status,
       emailVerified: !!user.emailVerifiedAt,
