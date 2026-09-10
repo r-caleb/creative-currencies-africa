@@ -12472,6 +12472,14 @@ img.member-profile-avatar {
   font-weight: 950;
 }
 
+.settings-summary-avatar img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
 .settings-profile-summary-card > div:not(.settings-summary-avatar) {
   display: grid;
   gap: 3px;
@@ -17090,6 +17098,97 @@ img.member-profile-avatar {
   align-items: stretch;
 }
 
+.admin-platform-layout {
+  margin-bottom: 22px;
+}
+
+.admin-platform-preview {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid color-mix(in srgb, var(--member-gold) 32%, var(--member-border));
+  border-radius: 8px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--member-gold) 8%, var(--member-card)), var(--member-card));
+}
+
+.admin-platform-logo {
+  width: 72px;
+  height: 72px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--member-gold) 36%, var(--member-border));
+  border-radius: 8px;
+  background: #fff;
+}
+
+.admin-platform-logo img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
+
+.admin-platform-logo svg {
+  width: 26px;
+  height: 26px;
+  color: var(--member-gold);
+}
+
+.admin-platform-preview h3,
+.admin-platform-preview p {
+  margin: 0;
+}
+
+.admin-platform-preview h3 {
+  color: var(--member-text);
+  font-size: 1.08rem;
+  font-weight: 950;
+}
+
+.admin-platform-preview p,
+.admin-platform-preview small {
+  color: var(--member-muted);
+  font-size: 0.84rem;
+  font-weight: 760;
+  line-height: 1.45;
+}
+
+.admin-platform-preview dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.admin-platform-preview dl > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--member-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--member-card) 82%, transparent);
+}
+
+.admin-platform-preview dt {
+  color: var(--member-muted);
+  font-size: 0.7rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.admin-platform-preview dd {
+  overflow: hidden;
+  margin: 0;
+  color: var(--member-text);
+  font-size: 0.82rem;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .admin-reference-copy,
 .admin-reference-list {
   border: 1px solid var(--member-border);
@@ -17143,6 +17242,16 @@ img.member-profile-avatar {
 
 .admin-reference-form--discipline {
   grid-template-columns: minmax(220px, 1fr) 140px auto;
+}
+
+.admin-platform-form {
+  grid-template-columns: repeat(3, minmax(160px, 1fr));
+}
+
+.admin-platform-form .admin-upload-field,
+.admin-platform-form .admin-reference-textarea,
+.admin-platform-form .member-primary-button {
+  grid-column: 1 / -1;
 }
 
 .admin-reference-form label {

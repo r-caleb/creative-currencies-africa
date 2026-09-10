@@ -7,6 +7,7 @@ export type AuthUser = {
   firstName: string;
   lastName: string;
   phone: string | null;
+  avatarUrl: string | null;
   type: string;
   status: string;
   emailVerified: boolean;
@@ -740,6 +741,37 @@ export type AdminPartnersResponse = {
   total: number;
 };
 
+export type PlatformProfile = {
+  id: string;
+  displayName: string;
+  logoUrl: string;
+  publicEmail: string | null;
+  phone: string | null;
+  whatsappUrl: string | null;
+  websiteUrl: string | null;
+  facebookUrl: string | null;
+  instagramUrl: string | null;
+  linkedinUrl: string | null;
+  youtubeUrl: string | null;
+  shortBio: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PlatformProfilePayload = {
+  displayName?: string;
+  logoUrl?: string;
+  publicEmail?: string;
+  phone?: string;
+  whatsappUrl?: string;
+  websiteUrl?: string;
+  facebookUrl?: string;
+  instagramUrl?: string;
+  linkedinUrl?: string;
+  youtubeUrl?: string;
+  shortBio?: string;
+};
+
 export type PartnerPayload = {
   name: string;
   type?: string;
@@ -1084,7 +1116,7 @@ export type GalleryAlbumPayload = {
   photos?: GalleryPhotoPayload[];
 };
 
-export type AdminUploadPurpose = "training" | "event" | "gallery" | "resource" | "opportunity" | "partner" | "certificate";
+export type AdminUploadPurpose = "training" | "event" | "gallery" | "resource" | "opportunity" | "partner" | "certificate" | "platform";
 
 export type AdminUploadResponse = {
   url: string;
@@ -2612,6 +2644,19 @@ export function getAdminAuditLogs(
 export function getAdminRiskUsers(accessToken?: string | null) {
   return authenticatedApiRequest<AdminRiskUsersResponse>("/admin/risk-users", {
     method: "GET",
+  }, accessToken);
+}
+
+export function getAdminPlatformProfile(accessToken?: string | null) {
+  return authenticatedApiRequest<PlatformProfile>("/admin/platform-profile", {
+    method: "GET",
+  }, accessToken);
+}
+
+export function updateAdminPlatformProfile(accessToken: string | null | undefined, body: PlatformProfilePayload) {
+  return authenticatedApiRequest<PlatformProfile>("/admin/platform-profile", {
+    method: "PATCH",
+    body: JSON.stringify(body),
   }, accessToken);
 }
 

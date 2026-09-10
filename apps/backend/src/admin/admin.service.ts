@@ -27,6 +27,7 @@ import {
   ResourceAccessLevel,
   ResourceType,
   TrainingStatus,
+  type PlatformProfile,
 } from "@prisma/client";
 import type { AuthUser } from "../auth/auth.types";
 import { NotificationService } from "../notification/notification.service";
@@ -54,6 +55,7 @@ import { UpdateAdminEventDto } from "./dto/update-admin-event.dto";
 import { UpdateAdminOpportunityDto } from "./dto/update-admin-opportunity.dto";
 import { UpdateAdminResourceDto } from "./dto/update-admin-resource.dto";
 import { UpdateAdminTrainingDto } from "./dto/update-admin-training.dto";
+import { UpdatePlatformProfileDto } from "./dto/update-platform-profile.dto";
 import { UpdateAdminMessageReportDto } from "./dto/update-admin-message-report.dto";
 import { UpdateGalleryAlbumDto } from "./dto/update-gallery-album.dto";
 import { UpdateGalleryPhotoDto } from "./dto/update-gallery-photo.dto";
@@ -260,6 +262,7 @@ type AdminTraining = Prisma.TrainingGetPayload<{ include: typeof adminTrainingIn
 type AdminEvent = Prisma.EventGetPayload<{ include: typeof adminEventInclude }>;
 type AdminResource = Prisma.ResourceGetPayload<{ include: typeof adminResourceInclude }>;
 type AdminOpportunity = Prisma.OpportunityGetPayload<{ include: typeof adminOpportunityInclude }>;
+type AdminPlatformProfile = PlatformProfile;
 type OfficialPublicationData = Omit<
   Prisma.PublicationUncheckedCreateInput,
   "id" | "authorId" | "createdAt" | "updatedAt" | "publishedAt" | "attachments" | "comments" | "reactions" | "shares" | "reports" | "mentions"
@@ -278,6 +281,49 @@ export class AdminService {
     private readonly realtime: RealtimeGateway,
     private readonly storage: StorageService,
   ) {}
+
+  async getPlatformProfile(authUser: AuthUser) {
+    await this.ensureAdmin(authUser);
+
+    return this.serializePlatformProfile(await this.ensurePlatformProfile());
+  }
+
+  async updatePlatformProfile(authUser: AuthUser, input: UpdatePlatformProfileDto) {
+    await this.ensureAdmin(authUser);
+
+    const profile = await this.prisma.platformProfile.upsert({
+      where: { id: "official-cca" },
+      create: {
+        id: "official-cca",
+        displayName: this.requiredText(input.displayName ?? "Creative Currencies Africa", "Le nom officiel est requis."),
+        logoUrl: this.optionalText(input.logoUrl) ?? "/assets/cca-mask-gold-transparent.png",
+        publicEmail: this.optionalText(input.publicEmail),
+        phone: this.optionalText(input.phone),
+        whatsappUrl: this.optionalText(input.whatsappUrl),
+        websiteUrl: this.optionalText(input.websiteUrl),
+        facebookUrl: this.optionalText(input.facebookUrl),
+        instagramUrl: this.optionalText(input.instagramUrl),
+        linkedinUrl: this.optionalText(input.linkedinUrl),
+        youtubeUrl: this.optionalText(input.youtubeUrl),
+        shortBio: this.optionalText(input.shortBio),
+      },
+      update: {
+        ...(input.displayName !== undefined ? { displayName: this.requiredText(input.displayName, "Le nom officiel est requis.") } : {}),
+        ...(input.logoUrl !== undefined ? { logoUrl: this.optionalText(input.logoUrl) ?? "/assets/cca-mask-gold-transparent.png" } : {}),
+        ...(input.publicEmail !== undefined ? { publicEmail: this.optionalText(input.publicEmail) } : {}),
+        ...(input.phone !== undefined ? { phone: this.optionalText(input.phone) } : {}),
+        ...(input.whatsappUrl !== undefined ? { whatsappUrl: this.optionalText(input.whatsappUrl) } : {}),
+        ...(input.websiteUrl !== undefined ? { websiteUrl: this.optionalText(input.websiteUrl) } : {}),
+        ...(input.facebookUrl !== undefined ? { facebookUrl: this.optionalText(input.facebookUrl) } : {}),
+        ...(input.instagramUrl !== undefined ? { instagramUrl: this.optionalText(input.instagramUrl) } : {}),
+        ...(input.linkedinUrl !== undefined ? { linkedinUrl: this.optionalText(input.linkedinUrl) } : {}),
+        ...(input.youtubeUrl !== undefined ? { youtubeUrl: this.optionalText(input.youtubeUrl) } : {}),
+        ...(input.shortBio !== undefined ? { shortBio: this.optionalText(input.shortBio) } : {}),
+      },
+    });
+
+    return this.serializePlatformProfile(profile);
+  }
 
   async overview(authUser: AuthUser) {
     await this.ensureAdmin(authUser);
@@ -2738,7 +2784,7 @@ export class AdminService {
       firstName: user.firstName,
       lastName: user.lastName,
       displayName: this.displayName(user),
-      avatarUrl: user.profile?.avatarUrl ?? user.organizationProfile?.logoUrl ?? user.partnerProfile?.logoUrl ?? null,
+      avatarUrl: user.profile?.avatarUrl ?? user.organizationProfile?.logoUrl ?? user.partnerProfile?.logoUrl ?? user.avatarUrl ?? null,
       type: user.type,
       status: user.status,
       phone: user.phone,
@@ -3356,8 +3402,8 @@ export class AdminService {
   private adminUploadPurpose(value: string | undefined) {
     const normalized = value?.trim().toLowerCase();
 
-    if (["training", "event", "gallery", "resource", "opportunity", "partner", "certificate"].includes(normalized ?? "")) {
-      return normalized as "training" | "event" | "gallery" | "resource" | "opportunity" | "partner" | "certificate";
+    if (["training", "event", "gallery", "resource", "opportunity", "partner", "certificate", "platform"].includes(normalized ?? "")) {
+      return normalized as "training" | "event" | "gallery" | "resource" | "opportunity" | "partner" | "certificate" | "platform";
     }
 
     return "resource";
@@ -3496,6 +3542,38 @@ export class AdminService {
     const existingSlugs = new Set(existingOpportunities.map((opportunity) => opportunity.slug));
 
     return this.resolveUniqueSlug(baseSlug, existingSlugs);
+  }
+
+  private async ensurePlatformProfile() {
+    return this.prisma.platformProfile.upsert({
+      where: { id: "official-cca" },
+      create: {
+        id: "official-cca",
+        displayName: "Creative Currencies Africa",
+        logoUrl: "/assets/cca-mask-gold-transparent.png",
+        shortBio: "Plateforme communautaire dédiée aux industries culturelles et créatives africaines.",
+      },
+      update: {},
+    });
+  }
+
+  private serializePlatformProfile(profile: AdminPlatformProfile) {
+    return {
+      id: profile.id,
+      displayName: profile.displayName,
+      logoUrl: profile.logoUrl,
+      publicEmail: profile.publicEmail,
+      phone: profile.phone,
+      whatsappUrl: profile.whatsappUrl,
+      websiteUrl: profile.websiteUrl,
+      facebookUrl: profile.facebookUrl,
+      instagramUrl: profile.instagramUrl,
+      linkedinUrl: profile.linkedinUrl,
+      youtubeUrl: profile.youtubeUrl,
+      shortBio: profile.shortBio,
+      createdAt: profile.createdAt,
+      updatedAt: profile.updatedAt,
+    };
   }
 
   private async syncTrainingPublication(admin: AdminUser, training: AdminTraining) {

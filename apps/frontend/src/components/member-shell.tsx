@@ -100,7 +100,7 @@ export function MemberShell({
   const displayName = getMemberDisplayName({ user, profile, organizationProfile, partnerProfile });
   const displayHandle = user?.email ? `@${user.email.split("@")[0]}` : "@creative";
   const initials = buildInitials(displayName);
-  const headerAvatarUrl = profile?.avatarUrl ?? organizationProfile?.logoUrl ?? partnerProfile?.logoUrl ?? null;
+  const headerAvatarUrl = profile?.avatarUrl ?? organizationProfile?.logoUrl ?? partnerProfile?.logoUrl ?? user?.avatarUrl ?? null;
   const shouldShowCreativeIdPrompt = !!profile && profile.profileCompletion < 100;
   const visibleSidebarItems = sidebarItems.filter((item) => {
     if (item.label === "Certificats") {

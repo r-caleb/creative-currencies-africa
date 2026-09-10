@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   AlertTriangle,
   Archive,
+  AtSign,
   BadgeCheck,
   BookOpen,
   CalendarDays,
@@ -24,8 +25,10 @@ import {
   Loader2,
   Megaphone,
   MessageSquare,
+  Phone,
   Plus,
   RefreshCw,
+  Save,
   Search,
   ShieldCheck,
   Sparkles,
@@ -63,6 +66,7 @@ import {
   getAdminOpportunityApplications,
   getAdminOpportunities,
   getAdminPartners,
+  getAdminPlatformProfile,
   getAdminPublications,
   getAdminReports,
   getAdminResources,
@@ -83,6 +87,7 @@ import {
   updateAdminOpportunityApplication,
   updateAdminOpportunity,
   updateAdminPartner,
+  updateAdminPlatformProfile,
   updateAdminPublicationStatus,
   updateAdminReport,
   updateAdminResource,
@@ -109,6 +114,8 @@ import type {
   AdminOpportunityType,
   AdminOverviewResponse,
   AdminPartner,
+  PlatformProfile,
+  PlatformProfilePayload,
   AdminPublication,
   AdminReport,
   AdminResource,
@@ -153,6 +160,19 @@ type EventFormState = EventPayload;
 type ResourceFormState = ResourcePayload;
 type OpportunityFormState = OpportunityPayload;
 type GalleryAlbumFormState = GalleryAlbumPayload & { photosText?: string };
+type PlatformProfileFormState = {
+  displayName: string;
+  logoUrl: string;
+  publicEmail: string;
+  phone: string;
+  whatsappUrl: string;
+  websiteUrl: string;
+  facebookUrl: string;
+  instagramUrl: string;
+  linkedinUrl: string;
+  youtubeUrl: string;
+  shortBio: string;
+};
 
 const tabs: Array<{ value: AdminTab; label: string }> = [
   { value: "overview", label: "Vue d'ensemble" },
@@ -163,6 +183,20 @@ const tabs: Array<{ value: AdminTab; label: string }> = [
   { value: "certificates", label: "Certificats" },
   { value: "references", label: "Références" },
 ];
+
+const defaultPlatformProfileForm: PlatformProfileFormState = {
+  displayName: "Creative Currencies Africa",
+  logoUrl: "/assets/cca-mask-gold-transparent.png",
+  publicEmail: "",
+  phone: "",
+  whatsappUrl: "",
+  websiteUrl: "",
+  facebookUrl: "",
+  instagramUrl: "",
+  linkedinUrl: "",
+  youtubeUrl: "",
+  shortBio: "Plateforme communautaire dédiée aux industries culturelles et créatives africaines.",
+};
 
 const publicationTypeLabels: Record<PublicationType, string> = {
   PROJECT: "Projet",
@@ -455,6 +489,8 @@ export function AdminPage() {
   });
   const [disciplines, setDisciplines] = useState<AdminDiscipline[]>([]);
   const [partners, setPartners] = useState<AdminPartner[]>([]);
+  const [platformProfile, setPlatformProfile] = useState<PlatformProfile | null>(null);
+  const [platformProfileForm, setPlatformProfileForm] = useState<PlatformProfileFormState>(defaultPlatformProfileForm);
   const [disciplineName, setDisciplineName] = useState("");
   const [disciplineNumber, setDisciplineNumber] = useState(1);
   const [partnerForm, setPartnerForm] = useState<PartnerPayload>({
@@ -514,6 +550,7 @@ export function AdminPage() {
         riskUserResponse,
         publicationResponse,
         memberResponse,
+        platformProfileResponse,
         accountEvolutionResponse,
         trainingResponse,
         eventResponse,
@@ -533,6 +570,7 @@ export function AdminPage() {
         getAdminRiskUsers(accessToken),
         getAdminPublications(accessToken, { limit: 40 }),
         getAdminMembers(accessToken, { limit: 40 }),
+        getAdminPlatformProfile(accessToken),
         getAdminAccountEvolutionRequests(accessToken, { limit: 40 }),
         getAdminTrainings(accessToken),
         getAdminEvents(accessToken),
@@ -553,6 +591,8 @@ export function AdminPage() {
       setRiskUsers(riskUserResponse.users);
       setPublications(publicationResponse.publications);
       setMembers(memberResponse.members);
+      setPlatformProfile(platformProfileResponse);
+      setPlatformProfileForm(platformProfileToForm(platformProfileResponse));
       setAccountEvolutionRequests(accountEvolutionResponse.requests);
       setTrainings(trainingResponse.trainings);
       setEvents(eventResponse.events);
@@ -847,6 +887,29 @@ export function AdminPage() {
       setNotice("Discipline supprimée.");
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, "La discipline n'a pas pu être supprimée."));
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  async function handleUpdatePlatformProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!accessToken || !platformProfileForm.displayName.trim()) {
+      return;
+    }
+
+    setBusyKey("platform-profile");
+    setNotice(null);
+    setError(null);
+
+    try {
+      const response = await updateAdminPlatformProfile(accessToken, normalizePlatformProfilePayload(platformProfileForm));
+      setPlatformProfile(response);
+      setPlatformProfileForm(platformProfileToForm(response));
+      setNotice("Profil officiel CCA mis à jour.");
+    } catch (requestError) {
+      setError(getApiErrorMessage(requestError, "Le profil officiel CCA n'a pas pu être mis à jour."));
     } finally {
       setBusyKey(null);
     }
@@ -1671,6 +1734,8 @@ export function AdminPage() {
               <ReferencesPanel
                 disciplines={disciplines}
                 partners={partners}
+                platformProfile={platformProfile}
+                platformProfileForm={platformProfileForm}
                 disciplineName={disciplineName}
                 disciplineNumber={disciplineNumber}
                 partnerForm={partnerForm}
@@ -1679,8 +1744,10 @@ export function AdminPage() {
                 editingReferenceKey={editingReferenceKey}
                 onChangeDisciplineName={setDisciplineName}
                 onChangeDisciplineNumber={setDisciplineNumber}
+                onChangePlatformProfileForm={setPlatformProfileForm}
                 onChangePartnerForm={setPartnerForm}
                 onChangeEditingReferenceKey={setEditingReferenceKey}
+                onUpdatePlatformProfile={handleUpdatePlatformProfile}
                 onCreateDiscipline={handleCreateDiscipline}
                 onUpdateDiscipline={handleUpdateDiscipline}
                 onDeleteDiscipline={handleDeleteDiscipline}
@@ -4409,9 +4476,196 @@ function CertificatesAdminPanel({
   );
 }
 
+function PlatformProfilePanel({
+  profile,
+  form,
+  busyKey,
+  uploadingKey,
+  onChange,
+  onSubmit,
+  onUpload,
+}: {
+  profile: PlatformProfile | null;
+  form: PlatformProfileFormState;
+  busyKey: string | null;
+  uploadingKey: string | null;
+  onChange: Dispatch<SetStateAction<PlatformProfileFormState>>;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onUpload: (purpose: AdminUploadPurpose, file: File, key: string) => Promise<string>;
+}) {
+  return (
+    <>
+      <ReferenceBlockHeader
+        eyebrow="Identité officielle"
+        title="Profil officiel CCA"
+        text="Cette identité publique est utilisée pour les annonces, posts officiels, contenus CCA et communications visibles par la communauté."
+      />
+
+      <div className="admin-reference-layout admin-platform-layout">
+        <div className="admin-platform-preview">
+          <div className="admin-platform-logo">
+            {form.logoUrl ? <img src={form.logoUrl} alt="" loading="lazy" decoding="async" /> : <ImageIcon aria-hidden="true" />}
+          </div>
+          <div>
+            <h3>{form.displayName || "Creative Currencies Africa"}</h3>
+            <p>{form.shortBio || "Identité officielle de la plateforme communautaire CCA."}</p>
+          </div>
+          <dl>
+            <div>
+              <dt>E-mail public</dt>
+              <dd>{form.publicEmail || "À compléter"}</dd>
+            </div>
+            <div>
+              <dt>Téléphone / WhatsApp</dt>
+              <dd>{form.phone || form.whatsappUrl || "À compléter"}</dd>
+            </div>
+            <div>
+              <dt>Site web</dt>
+              <dd>{form.websiteUrl || "À compléter"}</dd>
+            </div>
+          </dl>
+          <small>Dernière mise à jour : {profile ? formatDate(profile.updatedAt) : "non synchronisée"}</small>
+        </div>
+
+        <form className="admin-reference-form admin-platform-form" onSubmit={onSubmit}>
+          <AdminUploadField
+            label="Logo officiel"
+            value={form.logoUrl}
+            placeholder="/assets/cca-mask-gold-transparent.png"
+            purpose="platform"
+            uploadKey="platform-logo"
+            uploadingKey={uploadingKey}
+            accept="image/*"
+            onChange={(value) => onChange((current) => ({ ...current, logoUrl: value }))}
+            onUpload={onUpload}
+          />
+          <label>
+            <span>Nom affiché</span>
+            <div>
+              <Handshake aria-hidden="true" />
+              <input
+                value={form.displayName}
+                onChange={(event) => onChange((current) => ({ ...current, displayName: event.target.value }))}
+                placeholder="Creative Currencies Africa"
+              />
+            </div>
+          </label>
+          <label>
+            <span>E-mail public</span>
+            <div>
+              <AtSign aria-hidden="true" />
+              <input
+                type="email"
+                value={form.publicEmail}
+                onChange={(event) => onChange((current) => ({ ...current, publicEmail: event.target.value }))}
+                placeholder="contact@creativecurrencies.africa"
+              />
+            </div>
+          </label>
+          <label>
+            <span>Téléphone</span>
+            <div>
+              <Phone aria-hidden="true" />
+              <input
+                value={form.phone}
+                onChange={(event) => onChange((current) => ({ ...current, phone: event.target.value }))}
+                placeholder="+243 ..."
+              />
+            </div>
+          </label>
+          <label>
+            <span>WhatsApp</span>
+            <div>
+              <MessageSquare aria-hidden="true" />
+              <input
+                value={form.whatsappUrl}
+                onChange={(event) => onChange((current) => ({ ...current, whatsappUrl: event.target.value }))}
+                placeholder="https://wa.me/..."
+              />
+            </div>
+          </label>
+          <label>
+            <span>Site web</span>
+            <div>
+              <Globe2 aria-hidden="true" />
+              <input
+                value={form.websiteUrl}
+                onChange={(event) => onChange((current) => ({ ...current, websiteUrl: event.target.value }))}
+                placeholder="https://..."
+              />
+            </div>
+          </label>
+          <label>
+            <span>Facebook</span>
+            <div>
+              <LinkIcon />
+              <input
+                value={form.facebookUrl}
+                onChange={(event) => onChange((current) => ({ ...current, facebookUrl: event.target.value }))}
+                placeholder="https://facebook.com/..."
+              />
+            </div>
+          </label>
+          <label>
+            <span>Instagram</span>
+            <div>
+              <LinkIcon />
+              <input
+                value={form.instagramUrl}
+                onChange={(event) => onChange((current) => ({ ...current, instagramUrl: event.target.value }))}
+                placeholder="https://instagram.com/..."
+              />
+            </div>
+          </label>
+          <label>
+            <span>LinkedIn</span>
+            <div>
+              <LinkIcon />
+              <input
+                value={form.linkedinUrl}
+                onChange={(event) => onChange((current) => ({ ...current, linkedinUrl: event.target.value }))}
+                placeholder="https://linkedin.com/company/..."
+              />
+            </div>
+          </label>
+          <label>
+            <span>YouTube</span>
+            <div>
+              <LinkIcon />
+              <input
+                value={form.youtubeUrl}
+                onChange={(event) => onChange((current) => ({ ...current, youtubeUrl: event.target.value }))}
+                placeholder="https://youtube.com/..."
+              />
+            </div>
+          </label>
+          <label className="admin-reference-textarea">
+            <span>Texte court institutionnel</span>
+            <textarea
+              value={form.shortBio}
+              onChange={(event) => onChange((current) => ({ ...current, shortBio: event.target.value }))}
+              placeholder="Présentez brièvement la mission de CCA."
+            />
+          </label>
+          <button type="submit" className="member-primary-button" disabled={!form.displayName.trim() || busyKey === "platform-profile"}>
+            <Save aria-hidden="true" />
+            {busyKey === "platform-profile" ? "Enregistrement..." : "Enregistrer le profil officiel"}
+          </button>
+        </form>
+      </div>
+    </>
+  );
+}
+
+function LinkIcon() {
+  return <Globe2 aria-hidden="true" />;
+}
+
 function ReferencesPanel({
   disciplines,
   partners,
+  platformProfile,
+  platformProfileForm,
   disciplineName,
   disciplineNumber,
   partnerForm,
@@ -4420,8 +4674,10 @@ function ReferencesPanel({
   editingReferenceKey,
   onChangeDisciplineName,
   onChangeDisciplineNumber,
+  onChangePlatformProfileForm,
   onChangePartnerForm,
   onChangeEditingReferenceKey,
+  onUpdatePlatformProfile,
   onCreateDiscipline,
   onUpdateDiscipline,
   onDeleteDiscipline,
@@ -4432,6 +4688,8 @@ function ReferencesPanel({
 }: {
   disciplines: AdminDiscipline[];
   partners: AdminPartner[];
+  platformProfile: PlatformProfile | null;
+  platformProfileForm: PlatformProfileFormState;
   disciplineName: string;
   disciplineNumber: number;
   partnerForm: PartnerPayload;
@@ -4440,8 +4698,10 @@ function ReferencesPanel({
   editingReferenceKey: string | null;
   onChangeDisciplineName: (value: string) => void;
   onChangeDisciplineNumber: (value: number) => void;
+  onChangePlatformProfileForm: Dispatch<SetStateAction<PlatformProfileFormState>>;
   onChangePartnerForm: Dispatch<SetStateAction<PartnerPayload>>;
   onChangeEditingReferenceKey: (value: string | null) => void;
+  onUpdatePlatformProfile: (event: FormEvent<HTMLFormElement>) => void;
   onCreateDiscipline: () => void;
   onUpdateDiscipline: (discipline: AdminDiscipline, input: { name?: string; sortOrder?: number; isActive?: boolean }) => void;
   onDeleteDiscipline: (discipline: AdminDiscipline) => void;
@@ -4469,6 +4729,16 @@ function ReferencesPanel({
   return (
     <section className="member-card admin-section admin-reference-section">
       <SectionTitle icon={BookOpen} title="Références" subtitle="Données administrables utilisées par le site public, les formulaires et l'espace membre." />
+
+      <PlatformProfilePanel
+        profile={platformProfile}
+        form={platformProfileForm}
+        busyKey={busyKey}
+        uploadingKey={uploadingKey}
+        onChange={onChangePlatformProfileForm}
+        onSubmit={onUpdatePlatformProfile}
+        onUpload={onUpload}
+      />
 
       <ReferenceBlockHeader
         eyebrow="Vitrine publique"
@@ -5064,6 +5334,26 @@ function readableUploadValue(value: string) {
   }
 }
 
+function platformProfileToForm(profile: PlatformProfile | null): PlatformProfileFormState {
+  if (!profile) {
+    return defaultPlatformProfileForm;
+  }
+
+  return {
+    displayName: profile.displayName,
+    logoUrl: profile.logoUrl,
+    publicEmail: profile.publicEmail ?? "",
+    phone: profile.phone ?? "",
+    whatsappUrl: profile.whatsappUrl ?? "",
+    websiteUrl: profile.websiteUrl ?? "",
+    facebookUrl: profile.facebookUrl ?? "",
+    instagramUrl: profile.instagramUrl ?? "",
+    linkedinUrl: profile.linkedinUrl ?? "",
+    youtubeUrl: profile.youtubeUrl ?? "",
+    shortBio: profile.shortBio ?? "",
+  };
+}
+
 function ReferencePagination({
   label,
   page,
@@ -5258,6 +5548,10 @@ function normalizePartnerPayload(input: Partial<PartnerPayload>) {
       .map(([key, value]) => [key, typeof value === "string" ? value.trim() : value])
       .filter(([, value]) => value !== ""),
   ) as Partial<PartnerPayload>;
+}
+
+function normalizePlatformProfilePayload(input: PlatformProfileFormState): PlatformProfilePayload {
+  return normalizeContentPayload(input) as PlatformProfilePayload;
 }
 
 function normalizePartnerCreatePayload(input: PartnerPayload) {

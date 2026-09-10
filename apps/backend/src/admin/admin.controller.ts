@@ -28,6 +28,7 @@ import { UpdateAdminMessageReportDto } from "./dto/update-admin-message-report.d
 import { UpdateAdminOpportunityDto } from "./dto/update-admin-opportunity.dto";
 import { UpdateAdminResourceDto } from "./dto/update-admin-resource.dto";
 import { UpdateAdminTrainingDto } from "./dto/update-admin-training.dto";
+import { UpdatePlatformProfileDto } from "./dto/update-platform-profile.dto";
 import { UpdateGalleryAlbumDto } from "./dto/update-gallery-album.dto";
 import { UpdateGalleryPhotoDto } from "./dto/update-gallery-photo.dto";
 import { UpdateAccountEvolutionRequestDto } from "./dto/update-account-evolution-request.dto";
@@ -62,7 +63,7 @@ export class AdminController {
       properties: {
         purpose: {
           type: "string",
-          enum: ["training", "event", "gallery", "resource", "partner", "certificate"],
+          enum: ["training", "event", "gallery", "resource", "opportunity", "partner", "certificate", "platform"],
           default: "resource",
         },
         file: { type: "string", format: "binary" },
@@ -73,6 +74,21 @@ export class AdminController {
   @ApiCreatedResponse({ description: "Fichier uploadé et prêt à être utilisé dans un formulaire admin" })
   upload(@Req() req: AuthedRequest, @Body("purpose") purpose: string | undefined, @UploadedFile() file?: Express.Multer.File) {
     return this.adminService.uploadAdminAsset(req.user, purpose, file);
+  }
+
+  @Get("platform-profile")
+  @ApiOperation({ summary: "Afficher le profil officiel public CCA" })
+  @ApiOkResponse({ description: "Identité publique utilisée par les contenus officiels CCA" })
+  platformProfile(@Req() req: AuthedRequest) {
+    return this.adminService.getPlatformProfile(req.user);
+  }
+
+  @Patch("platform-profile")
+  @ApiOperation({ summary: "Modifier le profil officiel public CCA" })
+  @ApiBody({ type: UpdatePlatformProfileDto })
+  @ApiOkResponse({ description: "Profil officiel CCA mis à jour" })
+  updatePlatformProfile(@Req() req: AuthedRequest, @Body() body: UpdatePlatformProfileDto) {
+    return this.adminService.updatePlatformProfile(req.user, body);
   }
 
   @Get("members")

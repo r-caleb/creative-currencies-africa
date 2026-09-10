@@ -156,6 +156,7 @@ export function SettingsPage() {
   const formKey = JSON.stringify(initialForm);
   const activeTabLabel = settingsTabs.find((tab) => tab.id === activeTab)?.label ?? "Profil";
   const initials = buildInitials(displayName);
+  const accountAvatarUrl = profile?.avatarUrl ?? organizationProfile?.logoUrl ?? partnerProfile?.logoUrl ?? user?.avatarUrl ?? "";
   const profileCompletion = profile?.profileCompletion ?? 0;
 
   const openPasswordSection = () => {
@@ -227,7 +228,9 @@ export function SettingsPage() {
 
           <aside className="member-module-side settings-module-side">
             <section className="member-card settings-profile-summary-card">
-              <div className="settings-summary-avatar">{initials}</div>
+              <div className="settings-summary-avatar">
+                {accountAvatarUrl ? <img src={accountAvatarUrl} alt="" loading="lazy" decoding="async" /> : initials}
+              </div>
               <div>
                 <span>Connecté en tant que</span>
                 <strong>{displayName}</strong>
@@ -897,6 +900,7 @@ function SettingsProfileEditor({
   const isCreativeProfile = !!profile;
   const isOrganizationProfile = !!organizationProfile;
   const isPartnerProfile = !!partnerProfile;
+  const isAdminProfile = user?.type === "ADMIN";
   const disciplineOptions = useReferenceDisciplines();
 
   async function submitProfile(event: FormEvent<HTMLFormElement>) {
@@ -1030,7 +1034,9 @@ function SettingsProfileEditor({
         ? { label: "Logo", value: form.organizationLogoUrl, kind: "LOGO" as const }
         : isPartnerProfile
           ? { label: "Logo", value: form.partnerLogoUrl, kind: "LOGO" as const }
-          : null;
+          : isAdminProfile
+            ? { label: "Photo du compte admin", value: form.avatarUrl, kind: "AVATAR" as const }
+            : null;
 
   return (
     <form className="member-card settings-profile-form" onSubmit={submitProfile}>
@@ -1415,7 +1421,7 @@ function buildSettingsForm({
     bio: profile?.bio ?? "",
     portfolioUrl: profile?.portfolioUrl ?? "",
     websiteUrl: profile?.websiteUrl ?? organizationProfile?.websiteUrl ?? partnerProfile?.websiteUrl ?? "",
-    avatarUrl: profile?.avatarUrl ?? "",
+    avatarUrl: profile?.avatarUrl ?? user?.avatarUrl ?? "",
     cvUrl: profile?.cvUrl ?? "",
     organizationLogoUrl: organizationProfile?.logoUrl ?? "",
     partnerLogoUrl: partnerProfile?.logoUrl ?? "",

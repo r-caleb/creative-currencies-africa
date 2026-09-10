@@ -609,6 +609,7 @@ export class AuthService {
     firstName: string;
     lastName: string;
     phone: string | null;
+    avatarUrl: string | null;
     type: AccountType;
     status: AccountStatus;
     emailVerifiedAt: Date | null;
@@ -620,6 +621,7 @@ export class AuthService {
       firstName: user.firstName,
       lastName: user.lastName,
       phone: user.phone,
+      avatarUrl: user.avatarUrl,
       type: user.type,
       status: user.status,
       emailVerified: !!user.emailVerifiedAt,
