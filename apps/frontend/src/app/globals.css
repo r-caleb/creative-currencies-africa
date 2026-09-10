@@ -7515,6 +7515,20 @@ img.member-profile-avatar {
   box-shadow: var(--shadow);
 }
 
+.public-creative-id-page--empty {
+  align-content: center;
+}
+
+.public-creative-id-empty-card {
+  width: min(100%, 760px);
+}
+
+.public-creative-id-empty-card .public-creative-id-section h1 {
+  margin: 0;
+  font-size: clamp(1.7rem, 4vw, 2.4rem);
+  line-height: 1.1;
+}
+
 .public-creative-id-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(260px, 0.32fr);
