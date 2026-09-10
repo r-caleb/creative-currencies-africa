@@ -7,6 +7,8 @@ import {
   BadgeCheck,
   BriefcaseBusiness,
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   ExternalLink,
   FileText,
   Globe2,
@@ -21,6 +23,7 @@ import {
   Sparkles,
   UserRound,
   UsersRound,
+  X,
 } from "lucide-react";
 import { MemberShell } from "@/components/member-shell";
 import {
@@ -40,6 +43,7 @@ export function NetworkMemberProfilePage({ memberNumber }: { memberNumber: strin
   const [error, setError] = useState("");
   const [actionStatus, setActionStatus] = useState("");
   const [isUpdatingConnection, setIsUpdatingConnection] = useState(false);
+  const [activeCreationIndex, setActiveCreationIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (!accessToken) {
@@ -89,6 +93,36 @@ export function NetworkMemberProfilePage({ memberNumber }: { memberNumber: strin
   );
   const recentPublications = data?.publications.slice(0, 8) ?? [];
   const showCreationShowcase = !!profile && (profile.accountType === "CREATOR" || creationPublications.length > 0);
+  const activeCreation = activeCreationIndex === null ? null : creationPublications[activeCreationIndex] ?? null;
+  const activeCreationMedia = activeCreation ? getPublicationMedia(activeCreation) : null;
+
+  useEffect(() => {
+    if (!activeCreationMedia) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setActiveCreationIndex(null);
+      }
+
+      if (event.key === "ArrowLeft") {
+        setActiveCreationIndex((current) => getPreviousIndex(current, creationPublications.length));
+      }
+
+      if (event.key === "ArrowRight") {
+        setActiveCreationIndex((current) => getNextIndex(current, creationPublications.length));
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [activeCreationMedia, creationPublications.length]);
 
   async function toggleNetworkConnection() {
     if (!accessToken || !profile || profile.isCurrentMember || isUpdatingConnection) {
@@ -213,7 +247,11 @@ export function NetworkMemberProfilePage({ memberNumber }: { memberNumber: strin
                         </Link>
                       ) : null}
                     </div>
-                    <ProfileCreationGallery publications={creationPublications} isCurrentMember={profile.isCurrentMember} />
+                    <ProfileCreationGallery
+                      publications={creationPublications}
+                      isCurrentMember={profile.isCurrentMember}
+                      onPreview={(index) => setActiveCreationIndex(index)}
+                    />
                   </section>
                 ) : null}
 
@@ -364,6 +402,30 @@ export function NetworkMemberProfilePage({ memberNumber }: { memberNumber: strin
           </>
         )}
       </div>
+      {activeCreation && activeCreationMedia ? (
+        <div className="gallery-lightbox network-creation-lightbox" role="dialog" aria-modal="true" aria-label={activeCreation.title}>
+          <button className="gallery-lightbox-close" type="button" onClick={() => setActiveCreationIndex(null)} aria-label="Fermer l'aperçu">
+            <X aria-hidden="true" strokeWidth={1.8} />
+          </button>
+          <button className="gallery-lightbox-nav gallery-lightbox-nav--prev" type="button" onClick={() => setActiveCreationIndex((current) => getPreviousIndex(current, creationPublications.length))} aria-label="Création précédente">
+            <ChevronLeft aria-hidden="true" strokeWidth={1.8} />
+          </button>
+          <figure>
+            {activeCreationMedia.type === "video" ? (
+              <video src={activeCreationMedia.url} controls autoPlay playsInline />
+            ) : (
+              <img src={activeCreationMedia.url} alt={activeCreation.title} />
+            )}
+            <figcaption>
+              <strong>{activeCreation.title}</strong>
+              <p>{[activeCreation.category || "Création", activeCreation.excerpt].filter(Boolean).join(" · ")}</p>
+            </figcaption>
+          </figure>
+          <button className="gallery-lightbox-nav gallery-lightbox-nav--next" type="button" onClick={() => setActiveCreationIndex((current) => getNextIndex(current, creationPublications.length))} aria-label="Création suivante">
+            <ChevronRight aria-hidden="true" strokeWidth={1.8} />
+          </button>
+        </div>
+      ) : null}
     </MemberShell>
   );
 }
@@ -379,9 +441,11 @@ function NetworkProfileAvatar({ profile }: { profile: NetworkMember }) {
 function ProfileCreationGallery({
   publications,
   isCurrentMember,
+  onPreview,
 }: {
   publications: NetworkMemberProfile["publications"];
   isCurrentMember: boolean;
+  onPreview: (index: number) => void;
 }) {
   if (!publications.length) {
     return (
@@ -411,15 +475,23 @@ function ProfileCreationGallery({
 
   return (
     <div className="network-profile-creation-gallery">
-      {publications.map((publication) => (
+      {publications.map((publication, index) => (
         <article key={publication.id}>
-          <PublicationMedia publication={publication} />
-          <div>
-            <small>{publication.category || "Création"}</small>
-            <strong>{publication.title}</strong>
-            {publication.excerpt ? <p>{publication.excerpt}</p> : null}
-            <span>{publication.counts.reactions} réaction{publication.counts.reactions > 1 ? "s" : ""} · {publication.counts.comments} commentaire{publication.counts.comments > 1 ? "s" : ""}</span>
-          </div>
+          <button
+            className="network-profile-creation-card"
+            type="button"
+            disabled={!getPublicationMedia(publication)}
+            onClick={() => onPreview(index)}
+            aria-label={`Visualiser ${publication.title}`}
+          >
+            <PublicationMedia publication={publication} />
+            <div>
+              <small>{publication.category || "Création"}</small>
+              <strong>{publication.title}</strong>
+              {publication.excerpt ? <p>{publication.excerpt}</p> : null}
+              <span>{publication.counts.reactions} réaction{publication.counts.reactions > 1 ? "s" : ""} · {publication.counts.comments} commentaire{publication.counts.comments > 1 ? "s" : ""}</span>
+            </div>
+          </button>
         </article>
       ))}
     </div>
@@ -487,6 +559,22 @@ function getPublicationMedia(publication: NetworkMemberProfile["publications"][n
   }
 
   return null;
+}
+
+function getPreviousIndex(current: number | null, total: number) {
+  if (!total) {
+    return null;
+  }
+
+  return current === null || current <= 0 ? total - 1 : current - 1;
+}
+
+function getNextIndex(current: number | null, total: number) {
+  if (!total) {
+    return null;
+  }
+
+  return current === null || current >= total - 1 ? 0 : current + 1;
 }
 
 function ProfileExternalLink({ label, url, icon }: { label: string; url: string | null; icon: "file" | "globe" | "link" }) {
