@@ -11667,15 +11667,16 @@ img.member-profile-avatar {
   place-items: center;
   border: 1px solid transparent;
   border-radius: 999px;
-  color: color-mix(in srgb, currentColor 66%, transparent);
+  color: var(--member-muted);
   background: transparent;
   cursor: pointer;
 }
 
 .message-actions-trigger:hover,
 .message-actions-trigger:focus-visible {
-  border-color: color-mix(in srgb, currentColor 20%, transparent);
-  background: color-mix(in srgb, currentColor 8%, transparent);
+  border-color: color-mix(in srgb, var(--member-muted) 22%, transparent);
+  color: var(--member-text);
+  background: color-mix(in srgb, var(--member-muted) 9%, transparent);
 }
 
 .message-actions-menu {
