@@ -11632,7 +11632,7 @@ img.member-profile-avatar {
   gap: 6px;
   border: 1px solid var(--member-line);
   border-radius: 8px;
-  padding: 11px 38px 11px 12px;
+  padding: 11px 12px;
   background: var(--member-bg-soft);
 }
 
@@ -11651,8 +11651,13 @@ img.member-profile-avatar {
 .message-actions {
   position: absolute;
   top: 6px;
-  right: 6px;
+  right: -34px;
   z-index: 3;
+}
+
+.message-bubble.is-mine .message-actions {
+  right: auto;
+  left: -34px;
 }
 
 .message-actions-trigger {
@@ -11685,6 +11690,11 @@ img.member-profile-avatar {
   color: var(--member-text);
   background: var(--member-surface);
   box-shadow: 0 18px 38px rgba(15, 23, 42, 0.16);
+}
+
+.message-bubble.is-mine .message-actions-menu {
+  right: auto;
+  left: 0;
 }
 
 .message-actions-menu button {
