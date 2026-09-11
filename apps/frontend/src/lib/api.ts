@@ -3300,6 +3300,12 @@ export function createDirectMessage(accessToken: string | null | undefined, conv
   }, accessToken);
 }
 
+export function deleteDirectMessage(accessToken: string | null | undefined, conversationId: string, messageId: string) {
+  return authenticatedApiRequest<DirectMessage>(`/messages/conversations/${conversationId}/messages/${messageId}`, {
+    method: "DELETE",
+  }, accessToken);
+}
+
 export function reportDirectMessage(
   accessToken: string | null | undefined,
   conversationId: string,

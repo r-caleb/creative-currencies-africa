@@ -940,7 +940,9 @@ export class GroupService {
     });
     await this.emitUnreadCount(user.id);
 
-    return messages.map((message) => this.serializeMessage(message, user.id));
+    const canManageGroup = this.canManageGroup(user, group);
+
+    return messages.map((message) => this.serializeMessage(message, user.id, canManageGroup));
   }
 
   async createMessage(authUser: AuthUser, groupId: string, input: CreateGroupMessageDto) {
@@ -966,7 +968,7 @@ export class GroupService {
       data: { updatedAt: new Date() },
     });
 
-    const serialized = this.serializeMessage(message, user.id);
+    const serialized = this.serializeMessage(message, user.id, this.canManageGroup(user, group));
     this.realtime.emitToGroup(groupId, "group.message.created", {
       groupId,
       message: serialized,
@@ -1023,7 +1025,7 @@ export class GroupService {
       include: messageInclude,
     });
 
-    const serialized = this.serializeMessage(updated, user.id);
+    const serialized = this.serializeMessage(updated, user.id, this.canManageGroup(user, group));
     this.realtime.emitToGroup(groupId, "group.message.updated", {
       groupId,
       message: serialized,
@@ -1062,7 +1064,7 @@ export class GroupService {
       include: messageInclude,
     });
 
-    const serialized = this.serializeMessage(deleted, user.id);
+    const serialized = this.serializeMessage(deleted, user.id, this.canManageGroup(user, group));
     this.realtime.emitToGroup(groupId, "group.message.deleted", {
       groupId,
       message: serialized,
@@ -1358,7 +1360,7 @@ export class GroupService {
     };
   }
 
-  private serializeMessage(message: GroupMessageWithAuthor, currentUserId: string) {
+  private serializeMessage(message: GroupMessageWithAuthor, currentUserId: string, canManageMessageGroup = false) {
     const deleted = Boolean(message.deletedAt);
 
     return {
@@ -1380,7 +1382,7 @@ export class GroupService {
       },
       permissions: {
         canEdit: !deleted && message.authorId === currentUserId,
-        canDelete: !deleted && message.authorId === currentUserId,
+        canDelete: !deleted && (message.authorId === currentUserId || canManageMessageGroup),
       },
     };
   }
