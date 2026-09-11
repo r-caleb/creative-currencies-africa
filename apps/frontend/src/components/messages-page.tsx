@@ -16,10 +16,12 @@ import {
   Image as ImageIcon,
   LoaderCircle,
   MessageCircle,
+  MoreVertical,
   Paperclip,
   Search,
   Send,
   SquarePen,
+  Trash2,
   UsersRound,
   Video,
   Wifi,
@@ -32,6 +34,8 @@ import {
   createCommunityGroupMessage,
   createDirectConversation,
   createDirectMessage,
+  deleteCommunityGroupMessage,
+  deleteDirectMessage,
   blockDirectMessageUser,
   getApiErrorMessage,
   getArchivedDirectConversations,
@@ -160,6 +164,8 @@ export function MessagesPage() {
   const [reportReason, setReportReason] = useState<DirectMessageReportReason | "">("");
   const [reportNote, setReportNote] = useState("");
   const [reportingMessageId, setReportingMessageId] = useState("");
+  const [openMessageMenuId, setOpenMessageMenuId] = useState<string | null>(null);
+  const [deletingMessageId, setDeletingMessageId] = useState("");
   const [previewAttachment, setPreviewAttachment] = useState<MessageAttachmentPreview | null>(null);
   const [startingMemberId, setStartingMemberId] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -348,6 +354,7 @@ export function MessagesPage() {
     conversations[0] ??
     emptyConversation;
   const selectedGroupId = selectedConversation.groupId;
+  const selectedGroup = selectedGroupId ? groups.find((group) => group.id === selectedGroupId) : undefined;
   const selectedDirectConversationId = selectedConversation.directConversationId;
   const isGroupConversation = selectedConversation.kind === "group" && Boolean(selectedGroupId);
   const isDirectConversation = selectedConversation.kind === "direct" && Boolean(selectedDirectConversationId);
@@ -980,6 +987,7 @@ export function MessagesPage() {
   };
 
   const openReportPanel = (target: MessageReportTarget) => {
+    setOpenMessageMenuId(null);
     setReportTarget((current) => {
       if (current?.kind === target.kind && current.messageId === target.messageId) {
         return null;
@@ -996,6 +1004,60 @@ export function MessagesPage() {
     setReportTarget(null);
     setReportReason("");
     setReportNote("");
+  };
+
+  const handleDeleteDirectMessage = async (message: ConversationMessage) => {
+    if (!accessToken || !selectedDirectConversationId || !message.source?.permissions.canDelete) {
+      return;
+    }
+
+    setError("");
+    setOpenMessageMenuId(null);
+    setDeletingMessageId(message.id);
+
+    try {
+      const deleted = await deleteDirectMessage(accessToken, selectedDirectConversationId, message.id);
+      setDirectMessages((current) => ({
+        ...current,
+        [selectedDirectConversationId]: mergeDirectMessage(current[selectedDirectConversationId] ?? [], deleted),
+      }));
+      if (reportTarget?.messageId === message.id) {
+        closeReportPanel();
+      }
+    } catch (deleteError) {
+      setError(getApiErrorMessage(deleteError, "Impossible de supprimer ce message pour le moment."));
+    } finally {
+      setDeletingMessageId("");
+    }
+  };
+
+  const handleDeleteGroupMessage = async (message: ConversationMessage) => {
+    if (!accessToken || !selectedGroupId || !message.groupSource) {
+      return;
+    }
+
+    if (message.author !== "me" && !selectedGroup?.canManage) {
+      return;
+    }
+
+    setError("");
+    setOpenMessageMenuId(null);
+    setDeletingMessageId(message.id);
+
+    try {
+      const deleted = await deleteCommunityGroupMessage(accessToken, selectedGroupId, message.id);
+      setGroupMessages((current) => ({
+        ...current,
+        [selectedGroupId]: mergeGroupMessage(current[selectedGroupId] ?? [], deleted),
+      }));
+      if (reportTarget?.messageId === message.id) {
+        closeReportPanel();
+      }
+    } catch (deleteError) {
+      setError(getApiErrorMessage(deleteError, "Impossible de supprimer ce message de groupe pour le moment."));
+    } finally {
+      setDeletingMessageId("");
+    }
   };
 
   const handleReportDirectMessage = async (message: ConversationMessage) => {
@@ -1298,53 +1360,81 @@ export function MessagesPage() {
                 </div>
               ) : messages.length ? (
                 <>
-                  {messages.map((message) => (
-                    <article key={message.id} className={message.author === "me" ? "message-bubble is-mine" : "message-bubble"}>
-                      <p>{message.body}</p>
-                      {message.attachment ? <MessageAttachment attachment={message.attachment} onPreview={setPreviewAttachment} /> : null}
-                      {message.author === "them" && isDirectConversation && message.source && !message.source.deletedAt ? (
-                        <button
-                          className="message-report-button"
-                          type="button"
-                          disabled={reportedDirectMessageIds.has(message.id)}
-                          aria-expanded={reportTarget?.kind === "direct" && reportTarget.messageId === message.id}
-                          onClick={() => openReportPanel({ kind: "direct", messageId: message.id })}
-                        >
-                          <Flag aria-hidden="true" strokeWidth={1.8} />
-                          {reportedDirectMessageIds.has(message.id) ? "Signalé" : "Signaler"}
-                        </button>
-                      ) : null}
-                      {message.author === "them" && isGroupConversation && message.groupSource && !message.groupSource.deletedAt ? (
-                        <button
-                          className="message-report-button"
-                          type="button"
-                          disabled={reportedGroupMessageIds.has(message.id)}
-                          aria-expanded={reportTarget?.kind === "group" && reportTarget.messageId === message.id}
-                          onClick={() => openReportPanel({ kind: "group", messageId: message.id })}
-                        >
-                          <Flag aria-hidden="true" strokeWidth={1.8} />
-                          {reportedGroupMessageIds.has(message.id) ? "Signalé" : "Signaler"}
-                        </button>
-                      ) : null}
-                      {reportTarget?.messageId === message.id ? (
-                        <MessageReportPanel
-                          reason={reportReason}
-                          note={reportNote}
-                          isSubmitting={reportingMessageId === message.id}
-                          onReasonChange={setReportReason}
-                          onNoteChange={setReportNote}
-                          onCancel={closeReportPanel}
-                          onSubmit={() => reportTarget.kind === "direct" ? handleReportDirectMessage(message) : handleReportGroupMessage(message)}
-                        />
-                      ) : null}
-                      <small>
-                        {message.time}
-                        {message.author === "me" && isDirectConversation ? (
-                          <em>{message.readAt ? "Vu" : "Envoyé"}</em>
+                  {messages.map((message) => {
+                    const deleted = Boolean(message.source?.deletedAt || message.groupSource?.deletedAt);
+                    const canDeleteDirect = Boolean(!deleted && isDirectConversation && message.author === "me" && message.source?.permissions.canDelete);
+                    const canDeleteGroup = Boolean(!deleted && isGroupConversation && message.groupSource && (message.author === "me" || selectedGroup?.canManage));
+                    const canDelete = canDeleteDirect || canDeleteGroup;
+                    const canReportDirect = Boolean(message.author === "them" && isDirectConversation && message.source && !deleted);
+                    const canReportGroup = Boolean(message.author === "them" && isGroupConversation && message.groupSource && !deleted);
+                    const canReport = canReportDirect || canReportGroup;
+                    const isReported = canReportDirect ? reportedDirectMessageIds.has(message.id) : reportedGroupMessageIds.has(message.id);
+                    const hasActions = canDelete || canReport;
+
+                    return (
+                      <article key={message.id} className={message.author === "me" ? "message-bubble is-mine" : "message-bubble"}>
+                        {hasActions ? (
+                          <div className="message-actions">
+                            <button
+                              className="message-actions-trigger"
+                              type="button"
+                              aria-label="Actions du message"
+                              aria-expanded={openMessageMenuId === message.id}
+                              onClick={() => setOpenMessageMenuId((current) => current === message.id ? null : message.id)}
+                            >
+                              <MoreVertical aria-hidden="true" strokeWidth={1.8} />
+                            </button>
+                            {openMessageMenuId === message.id ? (
+                              <div className="message-actions-menu" role="menu">
+                                {canDelete ? (
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="is-danger"
+                                    disabled={deletingMessageId === message.id}
+                                    onClick={() => isDirectConversation ? handleDeleteDirectMessage(message) : handleDeleteGroupMessage(message)}
+                                  >
+                                    {deletingMessageId === message.id ? <LoaderCircle aria-hidden="true" className="spin-icon" /> : <Trash2 aria-hidden="true" strokeWidth={1.8} />}
+                                    Supprimer
+                                  </button>
+                                ) : null}
+                                {canReport ? (
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    disabled={isReported}
+                                    onClick={() => openReportPanel({ kind: canReportDirect ? "direct" : "group", messageId: message.id })}
+                                  >
+                                    <Flag aria-hidden="true" strokeWidth={1.8} />
+                                    {isReported ? "Signalé" : "Signaler"}
+                                  </button>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </div>
                         ) : null}
-                      </small>
-                    </article>
-                  ))}
+                        <p>{message.body}</p>
+                        {message.attachment ? <MessageAttachment attachment={message.attachment} onPreview={setPreviewAttachment} /> : null}
+                        {reportTarget?.messageId === message.id ? (
+                          <MessageReportPanel
+                            reason={reportReason}
+                            note={reportNote}
+                            isSubmitting={reportingMessageId === message.id}
+                            onReasonChange={setReportReason}
+                            onNoteChange={setReportNote}
+                            onCancel={closeReportPanel}
+                            onSubmit={() => reportTarget.kind === "direct" ? handleReportDirectMessage(message) : handleReportGroupMessage(message)}
+                          />
+                        ) : null}
+                        <small>
+                          {message.time}
+                          {message.author === "me" && isDirectConversation ? (
+                            <em>{message.readAt ? "Vu" : "Envoyé"}</em>
+                          ) : null}
+                        </small>
+                      </article>
+                    );
+                  })}
                   {activeTypingLabel ? (
                     <div className="messages-typing-indicator">
                       <span />

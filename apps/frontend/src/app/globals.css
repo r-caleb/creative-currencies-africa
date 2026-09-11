@@ -11625,13 +11625,14 @@ img.member-profile-avatar {
 }
 
 .message-bubble {
+  position: relative;
   max-width: min(560px, 78%);
   justify-self: start;
   display: grid;
   gap: 6px;
   border: 1px solid var(--member-line);
   border-radius: 8px;
-  padding: 11px 12px;
+  padding: 11px 38px 11px 12px;
   background: var(--member-bg-soft);
 }
 
@@ -11647,21 +11648,76 @@ img.member-profile-avatar {
   line-height: 1.5;
 }
 
-.message-report-button {
-  justify-self: start;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border: 0;
-  padding: 0;
-  color: var(--member-muted);
-  background: transparent;
-  font-size: 0.72rem;
-  font-weight: 900;
+.message-actions {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 3;
 }
 
-.message-report-button:disabled {
-  opacity: 0.7;
+.message-actions-trigger {
+  display: inline-grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: color-mix(in srgb, currentColor 66%, transparent);
+  background: transparent;
+  cursor: pointer;
+}
+
+.message-actions-trigger:hover,
+.message-actions-trigger:focus-visible {
+  border-color: color-mix(in srgb, currentColor 20%, transparent);
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.message-actions-menu {
+  position: absolute;
+  top: 30px;
+  right: 0;
+  display: grid;
+  min-width: 150px;
+  border: 1px solid var(--member-line);
+  border-radius: 8px;
+  padding: 5px;
+  color: var(--member-text);
+  background: var(--member-surface);
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.16);
+}
+
+.message-actions-menu button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 6px;
+  padding: 8px 9px;
+  color: var(--member-text);
+  background: transparent;
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-align: left;
+  cursor: pointer;
+}
+
+.message-actions-menu button:hover,
+.message-actions-menu button:focus-visible {
+  background: var(--member-bg-soft);
+}
+
+.message-actions-menu button.is-danger {
+  color: #991b1b;
+}
+
+.message-actions-menu button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.message-actions-menu button:disabled:hover {
+  background: transparent;
 }
 
 .message-report-panel {
