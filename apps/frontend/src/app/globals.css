@@ -11643,9 +11643,34 @@ img.member-profile-avatar {
   background: linear-gradient(135deg, #6d28d9, #9333ea);
 }
 
+.message-bubble.is-system {
+  justify-self: center;
+  max-width: min(520px, 88%);
+  border: 0;
+  padding: 3px 8px;
+  color: var(--member-muted);
+  background: transparent;
+  text-align: center;
+}
+
 .message-bubble p {
   margin: 0;
   line-height: 1.5;
+}
+
+.message-bubble.is-system p {
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.message-system-label {
+  justify-content: center;
+  color: color-mix(in srgb, var(--member-muted) 82%, transparent);
+  font-size: 0.62rem;
+  font-weight: 950;
+  letter-spacing: 0;
+  text-transform: uppercase;
 }
 
 .message-actions {
@@ -11689,7 +11714,7 @@ img.member-profile-avatar {
   border-radius: 8px;
   padding: 5px;
   color: var(--member-text);
-  background: var(--member-surface);
+  background: #fff;
   box-shadow: 0 18px 38px rgba(15, 23, 42, 0.16);
 }
 
@@ -11715,7 +11740,7 @@ img.member-profile-avatar {
 
 .message-actions-menu button:hover,
 .message-actions-menu button:focus-visible {
-  background: var(--member-bg-soft);
+  background: color-mix(in srgb, var(--member-purple) 10%, #fff);
 }
 
 .message-actions-menu button.is-danger {
@@ -11846,6 +11871,19 @@ img.member-profile-avatar {
   color: color-mix(in srgb, currentColor 76%, transparent);
   font-size: 0.72rem;
   font-weight: 800;
+}
+
+.message-bubble .message-system-label {
+  justify-content: center;
+  color: color-mix(in srgb, var(--member-muted) 82%, transparent);
+  font-size: 0.62rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.message-bubble.is-system small {
+  justify-content: center;
+  font-size: 0.65rem;
 }
 
 .messages-composer {
@@ -15003,6 +15041,14 @@ img.member-profile-avatar {
   background: color-mix(in srgb, var(--member-bg-soft) 88%, var(--member-surface));
 }
 
+.member-shell .message-bubble.is-system {
+  justify-self: center;
+  max-width: min(520px, 88%);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 .member-shell .message-attachment {
   display: grid;
   grid-template-columns: 22px minmax(0, 1fr);
@@ -15735,6 +15781,10 @@ img.member-profile-avatar {
 
   .member-shell .message-bubble {
     max-width: 92%;
+  }
+
+  .member-shell .message-bubble.is-system {
+    max-width: 86%;
   }
 }
 
@@ -19061,6 +19111,10 @@ img.member-profile-avatar {
 
   .member-shell .message-bubble {
     max-width: 96%;
+  }
+
+  .member-shell .message-bubble.is-system {
+    max-width: 88%;
   }
 
   .message-attachment-lightbox {
