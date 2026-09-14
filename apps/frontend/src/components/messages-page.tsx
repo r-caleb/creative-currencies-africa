@@ -1362,6 +1362,7 @@ export function MessagesPage() {
                 <>
                   {messages.map((message) => {
                     const deleted = Boolean(message.source?.deletedAt || message.groupSource?.deletedAt);
+                    const isSystemMessage = message.groupSource?.type === "SYSTEM";
                     const canDeleteDirect = Boolean(!deleted && isDirectConversation && message.author === "me" && message.source?.permissions.canDelete);
                     const canDeleteGroup = Boolean(!deleted && isGroupConversation && message.groupSource && (message.author === "me" || selectedGroup?.canManage));
                     const canDelete = canDeleteDirect || canDeleteGroup;
@@ -1369,10 +1370,17 @@ export function MessagesPage() {
                     const canReportGroup = Boolean(message.author === "them" && isGroupConversation && message.groupSource && !deleted);
                     const canReport = canReportDirect || canReportGroup;
                     const isReported = canReportDirect ? reportedDirectMessageIds.has(message.id) : reportedGroupMessageIds.has(message.id);
-                    const hasActions = canDelete || canReport;
+                    const hasActions = !isSystemMessage && (canDelete || canReport);
 
                     return (
-                      <article key={message.id} className={message.author === "me" ? "message-bubble is-mine" : "message-bubble"}>
+                      <article
+                        key={message.id}
+                        className={[
+                          "message-bubble",
+                          message.author === "me" ? "is-mine" : "",
+                          isSystemMessage ? "is-system" : "",
+                        ].filter(Boolean).join(" ")}
+                      >
                         {hasActions ? (
                           <div className="message-actions">
                             <button
@@ -1413,6 +1421,7 @@ export function MessagesPage() {
                             ) : null}
                           </div>
                         ) : null}
+                        {isSystemMessage ? <span className="message-system-label">Message système</span> : null}
                         <p>{message.body}</p>
                         {message.attachment ? <MessageAttachment attachment={message.attachment} onPreview={setPreviewAttachment} /> : null}
                         {reportTarget?.messageId === message.id ? (
