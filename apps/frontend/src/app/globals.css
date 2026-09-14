@@ -10444,6 +10444,10 @@ img.member-profile-avatar {
   background: color-mix(in srgb, var(--member-purple) 9%, var(--member-surface));
 }
 
+.network-card-profile-mobile {
+  display: none;
+}
+
 .network-detail-card,
 .network-insight-card {
   display: grid;
@@ -11238,6 +11242,10 @@ img.member-profile-avatar {
     grid-template-columns: 1fr;
   }
 
+  .network-card-profile-mobile {
+    display: inline-flex;
+  }
+
   .network-profile-identity {
     grid-template-columns: 1fr;
     justify-items: start;
@@ -11259,6 +11267,10 @@ img.member-profile-avatar {
 @media (max-width: 640px) {
   .network-member-list {
     grid-template-columns: 1fr;
+  }
+
+  .network-detail-card {
+    display: none;
   }
 }
 
@@ -11704,7 +11716,7 @@ img.member-profile-avatar {
   border: 1px solid var(--member-line);
   border-radius: 8px;
   padding: 5px;
-  color: var(--member-text);
+  color: #151923;
   background: #fff;
   box-shadow: 0 18px 38px rgba(15, 23, 42, 0.16);
 }
@@ -11721,7 +11733,7 @@ img.member-profile-avatar {
   border: 0;
   border-radius: 6px;
   padding: 8px 9px;
-  color: var(--member-text);
+  color: #151923;
   background: transparent;
   font-size: 0.78rem;
   font-weight: 900;
@@ -11731,7 +11743,7 @@ img.member-profile-avatar {
 
 .message-actions-menu button:hover,
 .message-actions-menu button:focus-visible {
-  background: color-mix(in srgb, var(--member-purple) 10%, #fff);
+  background: #f3edff;
 }
 
 .message-actions-menu button.is-danger {
@@ -15753,9 +15765,28 @@ img.member-profile-avatar {
   }
 
   .member-shell .messages-thread-actions {
+    align-items: stretch;
     flex-wrap: nowrap;
     overflow-x: auto;
     padding-bottom: 2px;
+  }
+
+  .member-shell .messages-thread-actions .member-secondary-button,
+  .member-shell .messages-thread-header > .member-secondary-button {
+    flex: 0 0 88px;
+    min-height: 58px;
+    flex-direction: column;
+    gap: 5px;
+    padding: 7px 8px;
+    font-size: 0.72rem;
+    line-height: 1.1;
+    white-space: normal;
+  }
+
+  .member-shell .messages-thread-actions .member-secondary-button svg,
+  .member-shell .messages-thread-header > .member-secondary-button svg {
+    width: 18px;
+    height: 18px;
   }
 
   .member-shell .messages-thread-body {

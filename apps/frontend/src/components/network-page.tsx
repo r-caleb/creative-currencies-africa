@@ -401,6 +401,10 @@ export function NetworkPage() {
                               <MessageCircle aria-hidden="true" strokeWidth={1.8} />
                               Message
                             </Link>
+                            <Link className="member-secondary-button network-card-profile-mobile" href={`/espace-membre/reseau/membre/${encodeURIComponent(member.memberNumber)}`}>
+                              <UserRound aria-hidden="true" strokeWidth={1.8} />
+                              Profil
+                            </Link>
                           </>
                         )}
                       </div>
