@@ -1421,7 +1421,6 @@ export function MessagesPage() {
                             ) : null}
                           </div>
                         ) : null}
-                        {isSystemMessage ? <span className="message-system-label">Message système</span> : null}
                         <p>{message.body}</p>
                         {message.attachment ? <MessageAttachment attachment={message.attachment} onPreview={setPreviewAttachment} /> : null}
                         {reportTarget?.messageId === message.id ? (
