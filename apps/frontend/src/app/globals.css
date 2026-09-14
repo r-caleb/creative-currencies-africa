@@ -11664,15 +11664,6 @@ img.member-profile-avatar {
   line-height: 1.45;
 }
 
-.message-system-label {
-  justify-content: center;
-  color: color-mix(in srgb, var(--member-muted) 82%, transparent);
-  font-size: 0.62rem;
-  font-weight: 950;
-  letter-spacing: 0;
-  text-transform: uppercase;
-}
-
 .message-actions {
   position: absolute;
   top: 6px;
@@ -11871,14 +11862,6 @@ img.member-profile-avatar {
   color: color-mix(in srgb, currentColor 76%, transparent);
   font-size: 0.72rem;
   font-weight: 800;
-}
-
-.message-bubble .message-system-label {
-  justify-content: center;
-  color: color-mix(in srgb, var(--member-muted) 82%, transparent);
-  font-size: 0.62rem;
-  font-weight: 950;
-  text-transform: uppercase;
 }
 
 .message-bubble.is-system small {
