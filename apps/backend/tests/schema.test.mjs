@@ -9,8 +9,8 @@ test("defines the PostgreSQL Prisma datasource", async () => {
   ]);
 
   assert.match(schema, /provider\s+=\s+"postgresql"/);
-  assert.doesNotMatch(schema, /url\s+=\s+env/);
-  assert.match(config, /env\("DATABASE_URL"\)/);
+  assert.match(schema, /url\s+=\s+env\("DATABASE_URL"\)/);
+  assert.match(config, /import "dotenv\/config"/);
 });
 
 test("defines core Creative Currencies platform models", async () => {
