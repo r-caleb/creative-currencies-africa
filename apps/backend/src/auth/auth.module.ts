@@ -1,6 +1,7 @@
-import { Module } from "@nestjs/common";
+import { Global, Module } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { JwtModule } from "@nestjs/jwt";
+import { PassportModule } from "@nestjs/passport";
 import type { StringValue } from "ms";
 import { AuthRateLimitService } from "./auth-rate-limit.service";
 import { AuthController } from "./auth.controller";
@@ -10,9 +11,11 @@ import { JwtStrategy } from "./jwt.strategy";
 import { EmailService } from "../email/email.service";
 import { VerificationService } from "./verification.service";
 
+@Global()
 @Module({
   imports: [
     ConfigModule,
+    PassportModule.register({ defaultStrategy: "jwt" }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -26,6 +29,6 @@ import { VerificationService } from "./verification.service";
   ],
   controllers: [AuthController],
   providers: [AuthService, AuthUserService, AuthRateLimitService, JwtStrategy, VerificationService, EmailService],
-  exports: [AuthUserService, JwtModule],
+  exports: [AuthUserService, JwtModule, PassportModule],
 })
 export class AuthModule {}
